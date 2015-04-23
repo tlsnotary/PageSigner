@@ -207,26 +207,22 @@ function startListening(){
 }
 
 
-//callback is used in testing to signal when this page's n10n finished
-function startNotarizing(callback){
-	if (! oracles_intact){
-		alert('Cannot notarize because something is wrong with PageSigner server. Please try again later');
-		return;
-	}
-    var audited_browser = gBrowser.selectedBrowser;
+function getHeaders(){
+	var audited_browser = gBrowser.selectedBrowser;
     var tab_url_full = audited_browser.contentWindow.location.href;
     
     //remove hashes - they are not URLs but are used for internal page mark-up
-    sanitized_url = tab_url_full.split("#")[0];
+    var sanitized_url = tab_url_full.split("#")[0];
     
     if (!sanitized_url.startsWith("https://")){
 		alert('"ERROR You can only audit pages which start with https://');
-		return;
+		return false;
     }
     //XXX this check is not needed anymore
     if (dict_of_status[sanitized_url] != "secure"){
-	alert("The page does not have a valid SSL certificate. Refresh the page and then try to notarize it again");
-	return;
+		alert("The page does not have a valid SSL certificate. \
+			Refresh the page and then try to notarize it again");
+		return false;
     }
     
     //passed tests, secure, grab headers, update status bar and start audit:
@@ -255,6 +251,22 @@ function startNotarizing(callback){
 		//FF's uploaddata contains Content-Type and Content-Length headers + '\r\n\r\n' + http body
 		headers += uploaddata;
 	}
+	return headers;
+}
+
+
+//callback is used in testing to signal when this page's n10n finished
+function startNotarizing(callback){
+	if (! oracles_intact){
+		alert('Cannot notarize because something is wrong \
+			with PageSigner server. Please try again later');
+		return;
+	}
+	var retval = getHeaders();
+	if (retval === false){
+		return; //there was an error
+	}
+	var headers = retval;
 	var server = headers.split('\r\n')[1].split(':')[1].replace(/ /g,'');
 	
 	loadBusyIcon();
