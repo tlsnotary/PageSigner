@@ -540,8 +540,7 @@ function start_audit(modulus, certhash, name, headers, ee_secret, ee_pad_secret,
 				tlsn_session.server_random,
 				tlsn_session.pms1,
 				tlsn_session.pms2,
-				tlsn_session.server_certificate.asn1cert.length,
-				tlsn_session.server_certificate.asn1cert,
+				tlsn_session.server_certificate.chain,
 				tlsn_session.tlsver,
 				tlsn_session.initial_tlsver,
 				fullresp.length,
@@ -862,15 +861,25 @@ TLSCertificate.prototype.__init__ = function(args){
 	var serialized = args.serialized;
 	if (serialized){
 		TLSHandshake.prototype.__init__.call(this, serialized, h_cert);
-		/*#TODO we are currently reading *only* the first certificate
-        #in the list (tlsnotary code compares this with the browser
-        #as a re-use of browser PKI). It may be necessary to do a 
-        #more detailed parsing.
-        #This handshake message has format: hs_cert(1), hs_msg_len(3),
+        /*#This handshake message has format: hs_cert(1), hs_msg_len(3),
         #certs_list_msg_len(3), [cert1_msg_len(3), cert1, cert_msg_len(3), cert2...]
         #so the first cert data starts at byte position 10 */
         this.cert_len = ba2int(this.serialized.slice(7,10));
         this.asn1cert = this.serialized.slice(10,10+this.cert_len);
+        var listlen = ba2int(this.serialized.slice(4,7))
+		assert(this.serialized.length === listlen+7);
+		var offset = 7;
+		var certlen;
+		var cert;
+		var chain = [];
+		while (offset < this.serialized.length-1){
+		  certlen = ba2int(this.serialized.slice(offset, offset+3));
+		  offset += 3;
+		  cert = this.serialized.slice(offset, offset+certlen);
+		  offset += certlen;
+		  chain.push(cert); 
+		}
+		this.chain = chain;
         this.typename = "TLSCertificate";
 	}
         

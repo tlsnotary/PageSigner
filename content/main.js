@@ -351,27 +351,35 @@ function create_final_html(html_with_headers, server_name, is_imported){
 }
 
 function save_session_and_open_html(args, server){
-	assert (args.length === 18, "wrong args length");
+	assert (args.length === 17, "wrong args length");
 	var cipher_suite = args[0];
 	var client_random = args[1];
 	var server_random = args[2];
 	var pms1 = args[3];
 	var pms2 = args[4];
-	var server_cert_length = args[5];
-	var server_cert = args[6];
-	var tlsver = args[7];
-	var initial_tlsver = args[8];
-	var fullresp_length = args[9];
-	var fullresp = args[10];
-	var IV_after_finished_length = args[11];
-	var IV_after_finished = args[12];
-	var waxwing_webnotary_modulus_length = args[13];
-	var signature = args[14];
-	var commit_hash = args[15];
-	var waxwing_webnotary_modulus = args[16];
-	var html_with_headers = args[17];
+	var server_certchain = args[5];
+	var tlsver = args[6];
+	var initial_tlsver = args[7];
+	var fullresp_length = args[8];
+	var fullresp = args[9];
+	var IV_after_finished_length = args[10];
+	var IV_after_finished = args[11];
+	var waxwing_webnotary_modulus_length = args[12];
+	var signature = args[13];
+	var commit_hash = args[14];
+	var waxwing_webnotary_modulus = args[15];
+	var html_with_headers = args[16];
+	
+	var server_chain_serialized = []; //3-byte length prefix followed by cert
+	for (var i=0; i < server_certchain.length; i++){
+		var cert = server_certchain[i];
+		server_chain_serialized = [].concat(
+			server_chain_serialized,
+			bi2ba(cert.length, {'fixed':3}),
+			cert);
+	}
 
-	var commonName = getCertObject(server_cert).commonName;
+	var commonName = getCertObject(server_certchain[0]).commonName;
 	var localDir;
 	create_final_html(html_with_headers, commonName)
 	.then(function(dir){
@@ -387,8 +395,8 @@ function save_session_and_open_html(args, server){
 			server_random,
 			pms1,
 			pms2,
-			bi2ba(server_cert_length, {'fixed':3}),
-			server_cert,
+			bi2ba(server_chain_serialized.length, {'fixed':3}),
+			server_chain_serialized,
 			tlsver,
 			initial_tlsver,
 			bi2ba(fullresp_length, {'fixed':8}),
@@ -429,8 +437,8 @@ var data = ua2ba(imported_data);
 	var sr = data.slice(offset, offset+=32);
 	var pms1 = data.slice(offset, offset+=24);
 	var pms2 = data.slice(offset, offset+=24);
-	var cert_len = ba2int(data.slice(offset, offset+=3));
-	var cert = data.slice(offset, offset+=cert_len);
+	var chain_serialized_len = ba2int(data.slice(offset, offset+=3));
+	var chain_serialized = data.slice(offset, offset+=chain_serialized_len);
 	var tlsver = data.slice(offset, offset+=2);
 	var tlsver_initial = data.slice(offset, offset+=2);
 	var response_len = ba2int(data.slice(offset, offset+=8));
@@ -442,7 +450,16 @@ var data = ua2ba(imported_data);
 	var commit_hash = data.slice(offset, offset+=32);
 	var notary_pubkey = data.slice(offset, offset+=sig_len);
 	assert (data.length === offset, 'invalid .pgsg length');
-	var cert_obj = getCertObject(cert);
+	
+	offset = 0;
+	var chain = []; //For now we only use the 1st cert in the chain
+	while(offset < chain_serialized.length){
+		var len = ba2int(chain_serialized.slice(offset, offset+=3));
+		var cert = chain_serialized.slice(offset, offset+=len);
+		chain.push(cert);
+	}
+	
+	var cert_obj = getCertObject(chain[0]);
 	var commonName = cert_obj.commonName;
 	//verify cert
 	if (!verifyCert(cert_obj)){

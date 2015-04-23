@@ -31,7 +31,7 @@ var waxwing =
 
 
 var oracle = 
-{'name':'oracle1',
+{'name':'tlsnotarygroup1',
 'main': {
 	"IP":"52.74.29.34",
 	"port":"10011",
