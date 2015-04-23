@@ -16,17 +16,32 @@ function tableRefresher(){
 	return;
     }
     //table is ready to be drawn
-    for (var d in tdict){
-	if (!(d in tdict_prev)){
-	    //entirely new entry
-	    addNewRow(tdict[d][0],d,tdict[d][2],'none',"none","none");
-	    verifyEntry(d, tdict[d][0].path); //populates validation fields
-	}
-	else if (tdict[d][1].toString() != tdict_prev[d][1].toString()){
-	    //file is modified; reverify
-	    verifyEntry(d, tdict[d][0].path);
-	}
+    //create sort order based on names (more intuitive than time,
+    //but should really be user-configurable sort of course...
+    var tindex=[];
+    for (var x in tdict){
+	tindex.push({'key': x, 'name': tdict[x][0].name});
     }
+    tindex.sort(function (a,b){
+	var as = a['name'], bs = b['name'];
+	return as == bs ? 0: (as > bs ? 1 : -1);
+    });
+    for (var i=0;i<tindex.length; i++){
+	var sk = tindex[i]['key'];
+	var row = tdict[sk][3];
+	var tb = row.parentNode;
+	tb.removeChild(row);
+	tb.appendChild(row);
+	if (!( sk in tdict_prev)){
+	    //entirely new entry
+	    addNewRow(tdict[sk][0],sk,tdict[sk][2],'none',"none","none");
+	    verifyEntry(sk, tdict[sk][0].path); //populates validation fields
+	}
+	else if (tdict[sk][1].toString() != tdict_prev[sk][1].toString()){
+	    //file is modified; reverify
+	    verifyEntry(sk, tdict[sk][0].path);
+	}    
+    }    
     tloaded = false; //wait for next change
     setTimeout(tableRefresher, 500);
 }
