@@ -19,7 +19,7 @@ var local1 =
 
 
 var waxwing =
-{'name':'waxwing',
+{'name':'tlsnotary test server',
 'main':{
 	"IP":"109.169.23.122",
 	"port":"8080"
