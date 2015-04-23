@@ -132,66 +132,70 @@ function init(){
 }
 
 
-function import_reliable_sites(){
-	var pubkey_path = thisaddon.getResourceURI("content/pubkeys.txt").path;
-	OS.File.read(pubkey_path, { encoding: "utf-8" }).then(
-	  function onSuccess(text) {
-		var lines = text.split('\n');
-		var name = "";
-		var expires = "";
-		var modulus = [];
-		var i = -1;
-		var x;
-		var mod_str;
-		var line;
-		while (true){
-			i += 1;
-			if (i >= lines.length){
-				break;
-			}
-			x = lines[i];
-			if (x.startsWith('#')){
-				continue;
-			}
-			else if (x.startsWith('Name=')){
-				name = x.slice('Name='.length);
-			}
-			else if (x.startsWith('Expires=')){
-				expires = x.slice('Expires='.length);
-			}
-			else if (x.startsWith('Modulus=')){
-				mod_str = '';
-				while (true){
-					i += 1;
-					if (i >= lines.length){
-						break;
-					}
-					line = lines[i];
-					if (line === ''){
-						break;
-					}
-					mod_str += line;
+function parse_reliable_sites(text){
+	var lines = text.split('\n');
+	var name = "";
+	var expires = "";
+	var modulus = [];
+	var i = -1;
+	var x;
+	var mod_str;
+	var line;
+	while (true){
+		i += 1;
+		if (i >= lines.length){
+			break;
+		}
+		x = lines[i];
+		if (x.startsWith('#')){
+			continue;
+		}
+		else if (x.startsWith('Name=')){
+			name = x.slice('Name='.length);
+		}
+		else if (x.startsWith('Expires=')){
+			expires = x.slice('Expires='.length);
+		}
+		else if (x.startsWith('Modulus=')){
+			mod_str = '';
+			while (true){
+				i += 1;
+				if (i >= lines.length){
+					break;
 				}
-				modulus = [];
-				var bytes = mod_str.split(' ');
-				for (var j=0; j < bytes.length; j++){
-					if (bytes[j] === ''){
-						continue;
-					}
-					modulus.push( hex2ba(bytes[j])[0] );
+				line = lines[i];
+				if (line === ''){
+					break;
 				}
-				//Don't use pubkeys which expire less than 3 months from now
-				var ex = expires.split('/');
-				var extime = new Date(parseInt(ex[2]), parseInt(ex[0])-1, parseInt(ex[1]) ).getTime();
-				var now = new Date().getTime();
-				if ( (extime - now) < 1000*60*60*24*90){
+				mod_str += line;
+			}
+			modulus = [];
+			var bytes = mod_str.split(' ');
+			for (var j=0; j < bytes.length; j++){
+				if (bytes[j] === ''){
 					continue;
 				}
-				reliable_sites.push( {'name':name, 'expires':expires, 'modulus':modulus} );		
+				modulus.push( hex2ba(bytes[j])[0] );
 			}
-		}
-	  }
-	);
+			//Don't use pubkeys which expire less than 3 months from now
+			var ex = expires.split('/');
+			var extime = new Date(parseInt(ex[2]), parseInt(ex[0])-1, parseInt(ex[1]) ).getTime();
+			var now = new Date().getTime();
+			if ( (extime - now) < 1000*60*60*24*90){
+				continue;
+			}
+			reliable_sites.push( {'name':name, 'expires':expires, 'modulus':modulus} );		
+			}
+		}	
+}
+
+
+function import_reliable_sites(){
+	var pubkey_path = thisaddon.getResourceURI("content/pubkeys.txt").path;
+	OS.File.read(pubkey_path, { encoding: "utf-8" }).
+	then(function onSuccess(text) {
+		parse_reliable_sites(text); 
+	});
 }
 
 
