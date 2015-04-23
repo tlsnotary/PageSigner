@@ -1,0 +1,12 @@
+To create a firefox addon:
+
+1. Add all files to a zip archive. Something like Select All -> Compress
+N.B. DO NOT zip up the folder in which these files are located. Just zip up the files.
+
+2. Rename the zip extension to .xpi
+
+3. Drag and drop the .xpi into Firefox
+
+Put the RSA publickey of the webnotary server at the top of tlsn.js in var notaryserver_modulus.
+The pubkey must be an array of numbers. 
+The webnotary is expected on localhost:8081
