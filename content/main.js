@@ -54,26 +54,44 @@ function savePGSGFile(existing_file){
 }
 
 
+function getPref(prefname, type){
+	var branch = Services.prefs.getBranch("extensions.pagesigner.");
+	if (branch.prefHasUserValue(prefname)){
+		if (type === 'bool'){
+			return branch.getBoolPref(prefname);
+		}
+		else if (type === 'string'){
+			return branch.getCharPref(prefname);	
+		}
+	}
+	return 'not found';
+}
+
+function setPref(prefname, type, value){
+	var branch = Services.prefs.getBranch("extensions.pagesigner.");
+	if (type === 'bool'){
+		branch.setBoolPref(prefname, value);
+	}
+	else if (type === 'string'){
+		branch.getCharPref(prefname, value);	
+	}
+}
+
 
 
 function init(){
 	//sometimes gBrowser is not available
 	if (gBrowser === null || typeof(gBrowser) === "undefined"){
-		gBrowser = win.gBrowser;
-		setTimeout(init, 100);
-		return;
+	   gBrowser = win.gBrowser;
+	   setTimeout(init, 100);
+	   return;
 	}
-	
-	var branch = Services.prefs.getBranch("extensions.pagesigner.");
-	if (branch.prefHasUserValue('verbose')){
-		if (branch.getBoolPref('verbose') === true){
-			verbose = true;	
-		}
+
+	if (getPref('verbose', 'bool') === true){
+		verbose = true;
 	}
-	
 	//check if user wants to use a fallback
-	branch = Services.prefs.getBranch("extensions.pagesigner.");
-	if (branch.prefHasUserValue('fallback')){
+	if (getPref('fallback', 'bool') === true){
 		oracles_intact = true;
 		//TODO this should be configurable, e.g. choice from list
 		//or set in prefs
@@ -82,12 +100,9 @@ function init(){
 	else {
 		chosen_notary = oracles[Math.random()*(oracles.length) << 0];
 		var oracle_hash = ba2hex(sha256(JSON.stringify(chosen_notary)));
-		branch = Services.prefs.getBranch("extensions.pagesigner.verifiedOracles.");
 		var was_oracle_verified = false;
-		if (branch.prefHasUserValue(oracle_hash)){
-			if (branch.getBoolPref(oracle_hash) === true){
-				was_oracle_verified = true;	
-			}
+		if (getPref('verifiedOracles.'+oracle_hash, 'bool') === true){
+			was_oracle_verified = true;	
 		}
 		if (! was_oracle_verified){
 			//async check oracles and if the check fails, sets a global var
@@ -99,7 +114,7 @@ function init(){
 				check_oracle(chosen_notary.sig, 'sig',  main_pubkey);
 			}).
 			then(function success(){
-				branch.setBoolPref(oracle_hash, true);
+				setPref('verifiedOracles.'+oracle_hash, 'bool', true);
 				oracles_intact = true;
 			}).
 			catch(function(err){
