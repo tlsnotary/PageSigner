@@ -125,6 +125,7 @@ function deleteFile(basename){
 
 function loadManager() {
    //this function will rebuild the tdict and compare to the old version
+   var sdc = 0;
    tdict_prev = tdict;
    tdict = {}  
    pgsg_subdirs = [];
@@ -165,24 +166,25 @@ function loadManager() {
 			row = tdict_prev[dirname][3];
 		    } 
 		    tdict[dirname]=[entry2, file_hash, imported, row];
-		    if (Object.keys(tdict).length == pgsg_subdirs.length){
-			//remove rows that refer to subdirs no longer existing 
-			//(will only happen if user manually deletes that subdirectory).
-			Array.prototype.diff = function(a) {
-			return this.filter(function(i) {return a.indexOf(i) < 0;});
-			};
-			var dict_diff = Object.keys(tdict_prev).diff(Object.keys(tdict));
-			for (var i=0; i<dict_diff.length; i++){
-			    var row = tdict_prev[dict_diff[i]][3];
-			    row.parentNode.removeChild(row);
-			}
-			tloaded = true;
-		    }
 		});
 	   }
 	});
 	promise2.then(
 	   function() {
+	    sdc += 1;
+	    if (sdc == pgsg_subdirs.length){ //all subdir scans have completed
+		//remove rows that refer to subdirs no longer existing 
+		//(will only happen if user manually deletes that subdirectory).
+		Array.prototype.diff = function(a) {
+		return this.filter(function(i) {return a.indexOf(i) < 0;});
+		};
+		var dict_diff = Object.keys(tdict_prev).diff(Object.keys(tdict));
+		for (var i=0; i<dict_diff.length; i++){
+		    var row = tdict_prev[dict_diff[i]][3];
+		    row.parentNode.removeChild(row);
+		}
+		tloaded = true;
+	    }
 	    iterator2.close();
       } ,
     function (reason) {
