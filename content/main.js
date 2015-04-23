@@ -238,9 +238,7 @@ function startNotarizing(callback){
 	}
 	var server = headers.split('\r\n')[1].split(':')[1].replace(/ /g,'');
 	
-	eachWindow(unloadFromWindow);
-	icon =  "chrome://pagesigner/content/icon_spin.gif";
-	eachWindow(loadIntoWindow);
+	loadBusyIcon();
 	  
 	var modulus;
 	var certsha256;
@@ -295,15 +293,11 @@ function startNotarizing(callback){
 		if (testing){
 			callback();
 		}
-		eachWindow(unloadFromWindow);
-		icon = "chrome://pagesigner/content/icon.png";
-		eachWindow(loadIntoWindow);
+		loadNormalIcon();
 	})
 	.catch(function(err){
 	 //TODO need to get a decent stack trace
-	 	eachWindow(unloadFromWindow);
-		icon =  "chrome://pagesigner/content/icon.png";
-		eachWindow(loadIntoWindow);
+	 	loadNormalIcon();
 		log('There was an error: ' + err);
 		if (err.startsWith('Timed out waiting for notary server to respond') &&
 			((new Date().getTime() - previous_session_start_time) < 60*1000) ){

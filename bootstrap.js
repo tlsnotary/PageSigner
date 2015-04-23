@@ -9,7 +9,8 @@ const {classes: Cc, interfaces: Ci, utils: Cu} = Components;
 Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/AddonManager.jsm");
 
-var self = this, icon;
+var self = this;
+var busy = false;
 
 function include(addon, path) {
   Services.scriptloader.loadSubScript("chrome://pagesigner/content/"+path, self);
@@ -23,8 +24,20 @@ function $(node, childId) {
   }
 }
 
-var button;
-var menupopup;
+
+function loadNormalIcon(){
+	eachWindow(unloadFromWindow);
+	busy = false;
+	eachWindow(loadIntoWindow);
+}
+
+function loadBusyIcon(){
+	eachWindow(unloadFromWindow);
+	busy = true;
+	eachWindow(loadIntoWindow);
+}
+
+
 function loadIntoWindow(window) {
   if (!window) return;
   
@@ -33,13 +46,24 @@ function loadIntoWindow(window) {
   
   if (toolbox) { // navigator window
     // add to palette
-    button = doc.createElement("toolbarbutton");
+    var button = doc.createElement("toolbarbutton");
     button.setAttribute("id", BUTTON_ID);
     button.setAttribute("label", "PageSigner");
     button.setAttribute("type", "menu");
     button.setAttribute("class", "toolbarbutton-1 chromeclass-toolbar-additional");
     button.setAttribute("tooltiptext", "PageSigner menu");
-    button.style.listStyleImage = "url(" + icon + ")";
+    
+    if (busy === true){
+		button.style.listStyleImage = "url(" + "chrome://pagesigner/content/icon_spin.gif" + ")";
+		toolbox.palette.appendChild(button);
+		let mpu = doc.createElement("menupopup");
+		let mi1 = doc.createElement("menuitem");
+		mi1.setAttribute("label", 'Please wait. Signing webpage...');
+		mpu.appendChild(mi1);
+		button.appendChild(mpu);
+	}
+	else {
+    button.style.listStyleImage = "url(" + "chrome://pagesigner/content/icon.png" + ")";
     button.addEventListener("command", main.action, false);
     toolbox.palette.appendChild(button);
     
@@ -67,8 +91,9 @@ function loadIntoWindow(window) {
 	mi3.setAttribute("image", 'chrome://pagesigner/content/manage.png');
 	mi3.addEventListener("command",main.manage, false)
 	mpu.appendChild(mi3);
-    
 	button.appendChild(mpu);
+	}
+    
     
     // move to saved toolbar position
     let {toolbarId, nextItemId} = main.getPrefs(),
@@ -140,8 +165,6 @@ function windowWatcher (subject, topic) {
 
 function startup(data, reason) AddonManager.getAddonByID(data.id, function(addon) {
   thisaddon = addon;
-  //icon = addon.getResourceURI("icon.png").spec;
-  icon = "chrome://pagesigner/content/icon.png";
   // existing windows
   eachWindow(loadIntoWindow);
   // new windows
