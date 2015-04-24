@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://global/skin/global.css" type="text/css"?>
+
+<dialog 
+ xmlns:html="http://www.w3.org/1999/xhtml"
+xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+	id="about-dialog" title="About PageSigner"
+	buttons="accept">
+
+<script  type="text/javascript;version=1.8" src="main.js"></script>
+<html:link rel="stylesheet" href="manager.css" type="text/css" media="screen"/>
+<html:h1 align="center">PageSigner</html:h1>
+
+<html:hbox flex="1" style="overflow: auto">
+
+   <html:vbox>
+      <html:p align="center">Using <html:a href="#" 
+      onclick="openT('https://www.tlsnotary.org')">TLSNotary</html:a> technology.</html:p>
+   </html:vbox>
+   <html:vbox>
+      <html:p align="center">For help and information, go to </html:p>
+      <html:p align="center">
+      <html:a href="#" onclick="openT('https://www.tlsnotary.org/pagesigner/faq')">the PageSigner FAQ</html:a></html:p>
+   </html:vbox>
+   
+   <html:vbox>
+      <html:p align="center">Email the developers: </html:p>
+      <html:p align="center">      
+      <html:a href="mailto:tlsnotarygroup@gmail.com">tlsnotarygroup@gmail.com</html:a></html:p>
+   </html:vbox>
+   <html:vbox>
+      <html:p align="center">Donations welcome:</html:p>
+      <html:p align="center"> <html:a href="bitcoin:35q65MQPVSi9TYMKxNYmpSyhWj7FkzTjzQ">35q65MQPVSi9TYMKxNYmpSyhWj7FkzTjzQ</html:a></html:p>
+   </html:vbox>
+</html:hbox>
+<script  type="text/javascript;version=1.8">
+function openT(url){
+   gBrowser.addTab(url);
+   gBrowser.selectedTab = t;
+}
+</script>
+</dialog>
+
+

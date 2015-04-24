@@ -1,3 +1,26 @@
+a:link {
+    text-decoration: none;
+    color:#0000ff
+}
+
+a:visited {
+    text-decoration: none;
+    color:#0000ff;
+}
+
+a:hover {
+    text-decoration: underline;
+    color: #aa00aa;
+}
+
+a:active {
+    text-decoration: underline;
+}
+
+h1 {
+ text-shadow: 4px 4px 4px #CCCCCC;
+}
+
 /* Table 1 Style */
 table.table1{
     font-family: "Trebuchet MS", sans-serif;

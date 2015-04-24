@@ -69,6 +69,7 @@ function loadIntoWindow(window) {
     
     let sep1 = doc.createElement("menuseparator");
     let sep2 = doc.createElement("menuseparator");
+    let sep3 = doc.createElement("menuseparator");
     let mpu = doc.createElement("menupopup");
     mpu.setAttribute("id","tlsnmpu");
      let mi1 = doc.createElement("menuitem");
@@ -91,6 +92,13 @@ function loadIntoWindow(window) {
 	mi3.setAttribute("image", 'chrome://pagesigner/content/manage.png');
 	mi3.addEventListener("command",main.manage, false)
 	mpu.appendChild(mi3);
+	mpu.appendChild(sep3);
+	let mi4 = doc.createElement("menuitem");
+	mi4.setAttribute("label", 'About');
+	mi4.setAttribute("class","menuitem-with-favicon");
+	mi4.setAttribute("image",'chrome://pagesigner/content/icon.png');
+	mi4.addEventListener("command",main.about, false)
+	mpu.appendChild(mi4);
 	button.appendChild(mpu);
 	}
     

@@ -55,6 +55,9 @@ function savePGSGFile(existing_file){
    }
 }
 
+function showAboutInfo(){
+window.openDialog("chrome://pagesigner/content/about.xul","","chrome, dialog, modal").focus();
+}
 
 function getPref(prefname, type){
 	var branch = Services.prefs.getBranch("extensions.pagesigner.");

@@ -40,6 +40,9 @@ let main = {
       openManager();
   },
   
+  about: function() {
+    showAboutInfo();
+  },
   
   /*
    * @return {toolbarId, nextItemId}
