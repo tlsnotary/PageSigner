@@ -28,7 +28,7 @@ let main = {
 	const nsIFilePicker = Components.interfaces.nsIFilePicker;
 	var fp = Components.classes["@mozilla.org/filepicker;1"]
 				   .createInstance(nsIFilePicker);
-	fp.init(window, "Select the .pgsg file you want to verify", nsIFilePicker.modeOpen);
+	fp.init(window, "Select the .pgsg file you want to import and verify", nsIFilePicker.modeOpen);
 	fp.displayDirectory = dispdir;
 	var rv = fp.show();
 	if (rv == nsIFilePicker.returnOK || rv == nsIFilePicker.returnReplace) {

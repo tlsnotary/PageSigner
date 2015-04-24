@@ -80,7 +80,7 @@ function loadIntoWindow(window) {
 	mpu.appendChild(mi1);
 	mpu.appendChild(sep1);
 	 let mi2 = doc.createElement("menuitem");
-	mi2.setAttribute("label", 'Verify tlsn file');
+	mi2.setAttribute("label", 'Import .pgsg file');
 	mi2.setAttribute("class","menuitem-with-favicon");
 	mi2.setAttribute("image", 'chrome://pagesigner/content/verify.png');
 	mi2.addEventListener("command",main.verify, false)
