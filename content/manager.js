@@ -82,8 +82,8 @@ function doRename(t){
 }
 
 function doSave(t){
-    filename = tdict[t.id][0].path;
-    savePGSGFile(filename);
+    fileobj = tdict[t.id][0];
+    savePGSGFile(fileobj);
     //no need to reload here
 }
 

@@ -36,13 +36,15 @@ function openManager(){
 function savePGSGFile(existing_file){
     var nsIFilePicker = Ci.nsIFilePicker;
 	var fp = Cc["@mozilla.org/filepicker;1"].createInstance(nsIFilePicker);
-	fp.init(window, "Save your notification file", nsIFilePicker.modeSave);
+	fp.init(window, "Save PageSigner file As", nsIFilePicker.modeSave);
 	//don't set the display directory; leave as default
+	fp.defaultExtension = "pgsg";
+	fp.defaultString = existing_file.name;
 	var rv = fp.show();
 	if (rv == nsIFilePicker.returnOK || rv == nsIFilePicker.returnReplace) {
 		var path = fp.file.path;
 		//write the file
-		let promise = OS.File.copy(existing_file, fp.file.path);
+		let promise = OS.File.copy(existing_file.path, fp.file.path);
 		promise.then(function(){
 			log("File write OK");
 		},
