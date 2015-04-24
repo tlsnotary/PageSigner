@@ -92,19 +92,25 @@ function addNewRow(fileEntry, dirname, imported,verified,verifier,html_link){
     if (imported){ sname = sname.slice(0,-9);}
     tstamp = dirname.substr(0,19);
     var row = tdict[dirname][3];
-    var x = jsonToDOM([ "td", {}, fileEntry.name.slice(0,-5)],document,{});
+    var d1 = jsonToDOM(["div", {style: 'float: left; width: 35%;', title: fileEntry.name.slice(0,-5)},fileEntry.name.slice(0,-5)],document,{});
+    var d2 = jsonToDOM(["div", {style: 'float: right; width: 65%'},""],document,{});
+    var x = jsonToDOM([ "td", {}, ""],document,{});
     var y = jsonToDOM(["button",
 		{id: fileEntry.path,
+		 title: "Give the file a more memorable name",
 		 style: 'float: right',
 		 onclick: function (event){doRename(event.target);}
 		 }, "Rename"], document,{});
     var z = jsonToDOM(["button",
 		{id: dirname,
+		 title: 'Save the file so you can transfer it to others',
 		 style: 'float: right',
 		 onclick: function (event){doSave(event.target);}
 		 }, "Export"], document,{});
-    x.appendChild(y);
-    x.appendChild(z);
+    d2.appendChild(y);
+    d2.appendChild(z);
+    x.appendChild(d1);
+    x.appendChild(d2);
     row.appendChild(x);
     row.appendChild(jsonToDOM([ "td", {}, tstamp + ' , ' + sname],document,{}));
     if (!imported){
