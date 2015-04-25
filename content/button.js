@@ -21,15 +21,10 @@ let main = {
 	}
   },
   verify: function() {
-	var dispdir = Components.classes["@mozilla.org/file/directory_service;1"].
-     getService(Components.interfaces.nsIProperties).
-     get("ProfD", Components.interfaces.nsIFile);
-        dispdir.append("pagesigner")
 	const nsIFilePicker = Components.interfaces.nsIFilePicker;
 	var fp = Components.classes["@mozilla.org/filepicker;1"]
 				   .createInstance(nsIFilePicker);
 	fp.init(window, "Select the .pgsg file you want to import and verify", nsIFilePicker.modeOpen);
-	fp.displayDirectory = dispdir;
 	var rv = fp.show();
 	if (rv == nsIFilePicker.returnOK || rv == nsIFilePicker.returnReplace) {
 	  var path = fp.file.path;
