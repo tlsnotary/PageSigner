@@ -99,7 +99,7 @@ table.table1{
     color:#666;
 }
 .table1 tbody td{
-    padding:10px;
+    padding:0px;
     text-align:center;
     background-color:#DEF3CA;
     border: 2px solid #E7EFE0;
@@ -108,14 +108,20 @@ table.table1{
     border-radius:2px;
     color:#666;
     text-shadow:1px 1px 1px #fff;
+    height: 10px !important;
 }
+
+.table1 tbody tr{
+    height: 10px;
+}
+
 .table1 tbody span.check::before{
     content : url(chrome://pagesigner/content/check.png)
 }
 
 
 
-/*button{
+button{
     margin: 0px;
     padding: 0px;
     font-family:Lucida Sans MS, Tahoma;
@@ -127,41 +133,11 @@ table.table1{
     height:auto;
 }
 
-*/
 
 
 
-button {
-   border-top: 1px solid #97f7b1;
-   background: #5ec73b;
-   background: -webkit-gradient(linear, left top, left bottom, from(#0b912b), to(#5ec73b));
-   background: -webkit-linear-gradient(top, #0b912b, #5ec73b);
-   background: -moz-linear-gradient(top, #0b912b, #5ec73b);
-   background: -ms-linear-gradient(top, #0b912b, #5ec73b);
-   background: -o-linear-gradient(top, #0b912b, #5ec73b);
-   padding: 5px 10px;
-   -webkit-border-radius: 8px;
-   -moz-border-radius: 8px;
-   border-radius: 8px;
-   -webkit-box-shadow: rgba(0,0,0,1) 0 1px 0;
-   -moz-box-shadow: rgba(0,0,0,1) 0 1px 0;
-   box-shadow: rgba(0,0,0,1) 0 1px 0;
-   text-shadow: rgba(0,0,0,.4) 0 1px 0;
-   color: white;
-   font-size: 13px;
-   font-family: Georgia, serif;
-   text-decoration: none;
-   vertical-align: middle;
-   }
-button:hover {
-   border-top-color: #0d6309;
-   background: #0d6309;
-   color: #ede6ed;
-   }
-button:active {
-   border-top-color: #1b435e;
-   background: #1b435e;
-   }
+
+
    
 button em{
     /*vertical-align:middle;

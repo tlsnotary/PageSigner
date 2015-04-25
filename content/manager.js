@@ -92,44 +92,48 @@ function addNewRow(fileEntry, dirname, imported,verified,verifier,html_link){
     if (imported){ sname = sname.slice(0,-9);}
     tstamp = dirname.substr(0,19);
     var row = tdict[dirname][3];
-    var d1 = jsonToDOM(["div", {style: 'float: left; width: 35%;', title: fileEntry.name.slice(0,-5)},fileEntry.name.slice(0,-5)],document,{});
-    var d2 = jsonToDOM(["div", {style: 'float: right; width: 65%'},""],document,{});
-    var x = jsonToDOM([ "td", {}, ""],document,{});
-    var y = jsonToDOM(["button",
+    var x = j2D(["td", {title: fileEntry.name.slice(0,-5)},fileEntry.name.slice(0,-5)]);
+    row.appendChild(x);
+    var y = j2D(["a",
 		{id: fileEntry.path,
+		 href: "#",
 		 title: "Give the file a more memorable name",
 		 style: 'float: right',
 		 onclick: function (event){doRename(event.target);}
-		 }, "Rename"], document,{});
-    var z = jsonToDOM(["button",
-		{id: dirname,
-		 title: 'Save the file so you can transfer it to others',
-		 style: 'float: right',
-		 onclick: function (event){doSave(event.target);}
-		 }, "Export"], document,{});
-    d2.appendChild(y);
-    d2.appendChild(z);
-    x.appendChild(d1);
-    x.appendChild(d2);
-    row.appendChild(x);
-    row.appendChild(jsonToDOM([ "td", {}, tstamp + ' , ' + sname],document,{}));
-    if (!imported){
-	row.appendChild(jsonToDOM([ "td", {}, "mine"],document,{}));
-    }
-    else {
-	row.appendChild(jsonToDOM([ "td", {}, "imported"],document,{}));
-	}
-    row.appendChild(jsonToDOM([ "td", {}, verified],document,{}));
-    row.appendChild(jsonToDOM([ "td", {}, verifier],document,{}));
-    row.appendChild(jsonToDOM([ "td", {}, html_link],document,{}));
-    x = jsonToDOM([ "td", {}, ""],document,{});
-    y = jsonToDOM(["button",
-		{id: dirname,
-		 title: 'permanently remove this set of files from disk',
-		 onclick: function (event){deleteFile(event.target);}
-		 }, "Delete"], document,{});
+		 }, "Rename"]);
+    x = j2D(["td", {}, ""]);
     x.appendChild(y);
     row.appendChild(x);
+    y = j2D(["a",
+	{id: dirname,
+	 href: "#",
+	 title: 'Save the file so you can transfer it to others',
+	 style: 'float: right',
+	 onclick: function (event){doSave(event.target);}
+	 }, "Export"]);
+    x = j2D(["td", {}, ""]);
+    x.appendChild(y);
+    row.appendChild(x);
+    y = j2D(["a",{
+	id: dirname,
+	href: "#",
+       style: 'float: right',
+	title: 'permanently remove this set of files from disk',
+       onclick: function (event){deleteFile(event.target);}
+       },"Delete"]);
+    x = j2D(["td", {}, ""]);
+    x.appendChild(y);
+    row.appendChild(x);
+    row.appendChild(j2D([ "td", {}, tstamp + ' , ' + sname]));
+    if (!imported){
+	row.appendChild(j2D([ "td", {}, "mine"]));
+    }
+    else {
+	row.appendChild(j2D([ "td", {}, "imported"]));
+	}
+    row.appendChild(j2D([ "td", {}, verified]));
+    row.appendChild(j2D([ "td", {}, verifier]));
+    row.appendChild(j2D([ "td", {}, html_link]));
 }
 
 
@@ -223,7 +227,7 @@ function loadManager() {
 function updateRow(basename, col, x){
 	cell = tdict[basename][3].cells[col];
 	parent = cell.parentNode;
-	new_element = jsonToDOM([ "td", {}, ""],document,{});
+	new_element = j2D([ "td", {}, ""]);
 	new_element.appendChild(x);
 	parent.insertBefore(new_element, cell);
 	parent.removeChild(cell);
@@ -236,20 +240,20 @@ function verifyEntry(basename, path){
 	    displayVerification(basename, a[3]);
 	}).catch( function(error){
 	    log("Error in verifyEntry: "+error);
-	    var x = jsonToDOM([ "td", {}, ""],document,{});
-	    var y = jsonToDOM(["img",
+	    var x = j2D([ "td", {}, ""]);
+	    var y = j2D(["img",
 			{height: '30',
 			 width: '30',
 			 src: 'chrome://pagesigner/content/cross.png',
-			 }, "Not verified"], document,{});
-	    var z = jsonToDOM([ "text", {}, " Not verified: "+error],document,{});
+			 }, "Not verified"]);
+	    var z = j2D([ "text", {}, " Not verified: "+error]);
 	    x.appendChild(y);
 	    x.appendChild(z);
-	    updateRow(basename,3,x);
-	    x = jsonToDOM([ "td", {}, "none"],document,{});
-	    y = jsonToDOM([ "td", {}, "none"],document,{});
-	    updateRow(basename,4,x);
-	    updateRow(basename,5,y);
+	    updateRow(basename,6,x);
+	    x = j2D([ "td", {}, "none"]);
+	    y = j2D([ "td", {}, "none"]);
+	    updateRow(basename,7,x);
+	    updateRow(basename,8,y);
 
 	});	
 }
@@ -265,40 +269,46 @@ function displayVerification(basename, pubkey){
     if (!(used_notary)){ //can happen if the signing notary is not in our trusted list
 	throw ("unknown notary");
     }
-    var x = jsonToDOM([ "td", {}, ""],document,{});
-    var y = jsonToDOM(["img",
+    var x = j2D([ "td", {}, ""]);
+    var y = j2D(["img",
 	    {height: '30',
 	    width: '30',
 	    src: 'chrome://pagesigner/content/check.png',
-	    }, "Valid"], document,{});
-    var z = jsonToDOM(["text",{}," valid"],document,{});
+	    }, "Valid"]);
+    var z = j2D(["text",{}," valid"]);
     x.appendChild(y);
     x.appendChild(z)
-    updateRow(basename,3,x);
-    x = jsonToDOM([ "td", {}, used_notary.name],document,{});
-    updateRow(basename,4,x); //TODO: pretty print pubkey?
+    updateRow(basename,6,x);
+    x = j2D([ "td", {}, used_notary.name]);
+    updateRow(basename,7,x); //TODO: pretty print pubkey?
     var html_link = getPGSGdir();
     html_link.append(basename);
     html_link.append('html.html');
     block_urls.push(html_link.path);
     
-    x = jsonToDOM([ "td", {}, ""],document,{});
-    y = jsonToDOM(["a",
+    x = j2D([ "td", {}, ""]);
+    y = j2D(["a",
 	    {href: 'file://' + html_link.path,
-	    }, "view"], document,{});
-    var q = jsonToDOM(["text",{}," , "],document,{});
-    z = jsonToDOM(["a",
+	    }, "view"]);
+    var q = j2D(["text",{}," , "]);
+    z = j2D(["a",
 	    {href: 'file://' + OS.Path.join(pgsg_dir,basename,"raw.txt"),
-	    }, "raw"], document,{});	    
+	    }, "raw"]);	    
     x.appendChild(y);
     x.appendChild(q);
     x.appendChild(z);
-    updateRow(basename,5,x);
+    updateRow(basename,8,x);
 }
 
 
 //The following code supports dynamically inserting
 //elements into the DOM
+
+//shorter calls
+function j2D(args){
+    return jsonToDOM(args,document,{});
+}
+
 jsonToDOM.namespaces = {
     html: "http://www.w3.org/1999/xhtml",
     xul: "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
