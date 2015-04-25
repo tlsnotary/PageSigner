@@ -63,7 +63,7 @@ function loadIntoWindow(window) {
 		button.appendChild(mpu);
 	}
 	else {
-    button.style.listStyleImage = "url(" + "chrome://pagesigner/content/icon.png" + ")";
+    button.style.listStyleImage = "url(" + "chrome://pagesigner/content/icon16.png" + ")";
     button.addEventListener("command", main.action, false);
     toolbox.palette.appendChild(button);
     
@@ -75,7 +75,7 @@ function loadIntoWindow(window) {
      let mi1 = doc.createElement("menuitem");
 	mi1.setAttribute("label", 'Notarize this page');
 	mi1.setAttribute("class","menuitem-with-favicon");
-	mi1.setAttribute("image", 'chrome://pagesigner/content/icon.png');
+	mi1.setAttribute("image", 'chrome://pagesigner/content/icon16.png');
 	mi1.addEventListener("command",main.notarize, false)
 	mpu.appendChild(mi1);
 	mpu.appendChild(sep1);
@@ -96,7 +96,7 @@ function loadIntoWindow(window) {
 	let mi4 = doc.createElement("menuitem");
 	mi4.setAttribute("label", 'About');
 	mi4.setAttribute("class","menuitem-with-favicon");
-	mi4.setAttribute("image",'chrome://pagesigner/content/icon.png');
+	mi4.setAttribute("image",'chrome://pagesigner/content/icon16.png');
 	mi4.addEventListener("command",main.about, false)
 	mpu.appendChild(mi4);
 	button.appendChild(mpu);

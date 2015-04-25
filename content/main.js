@@ -724,7 +724,7 @@ function install_notification(t, commonName, raw_path){
 		var box = gBrowser.getNotificationBox();
 		var priority = box.PRIORITY_INFO_HIGH;
 		var message = 'PageSigner successfully verified that the webpage below was received from '+commonName;
-		var icon = 'chrome://pagesigner/content/icon.png';
+		var icon = 'chrome://pagesigner/content/icon16.png';
 		var buttons = [{
 			label: 'View raw HTML with HTTP headers',
 			accessKey: '',
