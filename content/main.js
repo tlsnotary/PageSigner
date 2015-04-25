@@ -541,7 +541,7 @@ var data = ua2ba(imported_data);
 
 function verify_tlsn_and_show_html(path, create){
 	OS.File.read(path).then( function(imported_data){
-		return verify_tlsn(imported_data);
+		return verify_tlsn(imported_data, create);
 	}).then(function (a){
 	if (create){
 		var localDir;
