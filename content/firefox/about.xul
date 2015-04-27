@@ -8,7 +8,7 @@ xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
 	buttons="accept">
 
 <script  type="text/javascript;version=1.8" src="main.js"></script>
-<html:link rel="stylesheet" href="manager.css" type="text/css" media="screen"/>
+<html:link rel="stylesheet" href="../manager.css" type="text/css" media="screen"/>
 <html:h1 align="center">PageSigner</html:h1>
 
 <html:hbox flex="1" style="overflow: auto">

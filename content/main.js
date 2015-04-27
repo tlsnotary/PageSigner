@@ -3,53 +3,62 @@ try {
 var random_uid; //we get a new uid for each notarized page
 var reliable_sites = []; //read from content/pubkeys.txt
 var previous_session_start_time; // used to make sure user doesnt exceed rate limiting
-var verbose = false; //trigger littering of the browser console
 var chosen_notary;
+var tdict = {}; 
+var valid_hashes = [];
+var os_win = false; //is OS windows? used to fix / in paths
 
 
 function init(){
-	if (getPref('verbose', 'bool') === true){
-		verbose = true;
-	}
-	//check if user wants to use a fallback
-	if (getPref('fallback', 'bool') === true){
-		oracles_intact = true;
-		//TODO this should be configurable, e.g. choice from list
-		//or set in prefs
-		chosen_notary = pagesigner_servers[1];
-	}
-	else {
-		chosen_notary = oracles[Math.random()*(oracles.length) << 0];
-		var oracle_hash = ba2hex(sha256(JSON.stringify(chosen_notary)));
-		var was_oracle_verified = false;
-		if (getPref('verifiedOracles.'+oracle_hash, 'bool') === true){
-			was_oracle_verified = true;	
+	getPref('verbose', 'bool')
+	.then(function(value){
+		if (value !== true){
+			console.log = function(){};
 		}
-		if (! was_oracle_verified){
-			//async check oracles and if the check fails, sets a global var
-			//which prevents notarization session from running
-			log('oracle not verified');
-			var main_pubkey = {pubkey:''};
-			check_oracle(chosen_notary.main, 'main', main_pubkey).
-			then(function(){
-				check_oracle(chosen_notary.sig, 'sig',  main_pubkey);
-			}).
-			then(function success(){
-				setPref('verifiedOracles.'+oracle_hash, 'bool', true);
-				oracles_intact = true;
-			}).
-			catch(function(err){
-				log('caught error', err);
-				//query for a new oracle
-				//TODO fetch backup oracles list
-			});
-		}
-		else {
+		return getPref('fallback', 'bool');
+	})
+	.then(function(value){
+		if (value === true){
+			//TODO this should be configurable, e.g. choice from list
+			//or set in prefs
+			chosen_notary = pagesigner_servers[1];
 			oracles_intact = true;
 		}
-	}
-	import_reliable_sites();
-	startListening();
+		else {
+			chosen_notary = oracles[Math.random()*(oracles.length) << 0];
+			var oracle_hash = ba2hex(sha256(JSON.stringify(chosen_notary)));
+			var was_oracle_verified = false;
+			getPref('verifiedOracles.'+oracle_hash, 'bool')
+			.then(function(value){
+				if (value === true){
+					oracles_intact = true;
+				}
+				else {
+					//async check oracles and if the check fails, sets a global var
+					//which prevents notarization session from running
+					console.log('oracle not verified');
+					var main_pubkey = {pubkey:''};
+					check_oracle(chosen_notary.main, 'main', main_pubkey)
+					.then(function(){
+						check_oracle(chosen_notary.sig, 'sig',  main_pubkey);
+					})
+					.then(function success(){
+						return setPref('verifiedOracles.'+oracle_hash, 'bool', true);
+					})
+					.then(function (){
+						oracles_intact = true;
+					})
+					.catch(function(err){
+						console.log('caught error', err);
+						//query for a new oracle
+						//TODO fetch backup oracles list
+					});
+				}
+			});
+		}
+		import_reliable_sites();
+		startListening();
+	});
 }
 
 
@@ -120,25 +129,25 @@ function startNotarizing(callback){
 			with PageSigner server. Please try again later');
 		return;
 	}
-	var retval = getHeaders();
-	if (retval === false){
-		return; //there was an error
-	}
-	var headers = retval;
-	var server = headers.split('\r\n')[1].split(':')[1].replace(/ /g,'');
-	
-	loadBusyIcon();
-	  
 	var modulus;
 	var certsha256;
-	get_certificate(server).then(function(cert){
-		log('got certificate');
-		if (! verifyCert(cert)){
+	var headers;
+	var server;
+	getHeaders()
+	.then(function(obj){
+		headers = obj.headers;
+		server = obj.server;
+		loadBusyIcon();
+		return get_certificate(server);
+	})
+	.then(function(chain){
+		console.log('got certificate');
+		if (! verifyCert(chain)){
 			alert("This website cannot be audited by PageSigner because it presented an untrusted certificate");
 			return;
 		}
-		modulus = getModulus(cert);
-		certsha256 = sha256(cert);
+		modulus = getModulus(chain[0]);
+		certsha256 = sha256(chain[0]);
 		random_uid = Math.random().toString(36).slice(-10);
 		previous_session_start_time = new Date().getTime();
 		//loop prepare_pms 10 times until succeeds
@@ -149,7 +158,7 @@ function startNotarizing(callback){
 				prepare_pms(modulus).then(function(args){
 					resolve(args);
 				}).catch(function(error){
-					log('caught error', error);
+					console.log('caught error', error);
 					if (error.startsWith('Timed out')){
 						reject(error);
 						return;
@@ -181,12 +190,16 @@ function startNotarizing(callback){
 			callback();
 		}
 		loadNormalIcon();
+		populateTable();
 	})
 	.catch(function(err){
 	 //TODO need to get a decent stack trace
 	 	loadNormalIcon();
-		log('There was an error: ' + err);
-		if (err.startsWith('Timed out waiting for notary server to respond') &&
+		console.log('There was an error: ' + err);
+		if (err === "Server sent alert 2,40"){
+			alert('Pagesigner is not compatible with this website because the website does not use RSA ciphersuites.');
+		}
+		else if (err.startsWith('Timed out waiting for notary server to respond') &&
 			((new Date().getTime() - previous_session_start_time) < 60*1000) ){
 			alert ('You are signing pages way too fast. Please retry in 60 seconds.');
 		}
@@ -227,7 +240,7 @@ function save_session_and_open_html(args, server){
 			cert);
 	}
 	
-	var pgsg = ba2ua([].concat(
+	var pgsg = [].concat(
 			str2ba('tlsnotary notarization file\n\n'),
 			[0x00, 0x01],
 			bi2ba(cipher_suite, {'fixed':2}),
@@ -246,18 +259,29 @@ function save_session_and_open_html(args, server){
 			bi2ba(notary_modulus_length, {'fixed':2}),
 			signature,
 			commit_hash,
-			notary_modulus));
+			notary_modulus);
 			
 	var commonName = getCommonName(server_certchain[0]);
-	var sdir = makeSessionDir(server);
-	create_final_html(html_with_headers, sdir)
-	.then(writePgsg(pgsg, sdir, commonName))
-	.then(openTabs(sdir, commonName));
+	var sdir;
+	return makeSessionDir(server).
+	then(function(dir){
+		sdir = dir;
+		return create_final_html(html_with_headers, sdir);
+	})
+	.then(function(){
+		return writePgsg(pgsg, sdir, commonName);
+	})
+	.then(function(){
+		return openTabs(sdir, commonName);
+	})
+	.then(function(){
+		updateCache(sha256(pgsg));
+	});
 }
 
 
-function verify_tlsn(imported_data, from_past){
-var data = ua2ba(imported_data);
+//imported_data is an array of numbers
+function verify_tlsn(data, from_past){
 	var offset = 0;
 	if (ba2str(data.slice(offset, offset+=29)) !== "tlsnotary notarization file\n\n"){
 		throw('wrong header');
@@ -294,7 +318,7 @@ var data = ua2ba(imported_data);
 	
 	var commonName = getCommonName(chain[0]);
 	//verify cert
-	if (!verifyCert(chain[0])){
+	if (!verifyCert(chain)){
 		throw ('certificate verification failed');
 	}
 	var modulus = getModulus(chain[0]);
@@ -332,28 +356,197 @@ var data = ua2ba(imported_data);
 	s.server_connection_state.seq_no += 1;
 	s.server_connection_state.IV = s.IV_after_finished;
 	html_with_headers = decrypt_html(s);
-	return [html_with_headers,commonName,imported_data, notary_pubkey];
+	return [html_with_headers,commonName, data, notary_pubkey];
 }
 
 
-function verify_tlsn_and_show_html(path, create){
-	readFile(path)
-	.then( function(imported_data){
-		return verify_tlsn(imported_data, create);
-	})
-	.then(function (a){
+//imported_data is an array of numbers
+function verify_tlsn_and_show_html(imported_data, create){
+	try{
+		var a = verify_tlsn(imported_data, create);
+	}
+	catch (e){
+		alert('Failed to import file. The error was: ' + e);
+		return;
+	}
 	if (create){
 		var html_with_headers = a[0];
 		var commonName = a[1];
 		var imported_data = a[2];
-		var session_dir = makeSessionDir(commonName, true);
-		create_final_html(html_with_headers, session_dir)
-		.then(writePgsg(imported_data, session_dir, commonName))
-		.then(openTabs(session_dir, commonName));
+		var session_dir;
+		makeSessionDir(commonName, true)
+		.then(function(sdir){
+			session_dir = sdir;
+			return create_final_html(html_with_headers, session_dir);
+		})
+		.then(function(){
+			return writePgsg(imported_data, session_dir, commonName);
+		})
+		.then(function(){
+			return openTabs(session_dir, commonName);
+		})
+		.then(function(){
+			updateCache(sha256(imported_data));
+		})
+		.catch( function(error){
+			console.log("got error in vtsh: "+error);
+		});
 	}
-	}).catch( function(error){
-		log("got error in vtsh: "+error);
+}
+
+
+function populateTable(){
+	var prev_tdict = tdict;
+	tdict = {};
+	var entries = [];
+	var promises = [];
+	getDirContents('/')
+	.then(function(results){
+		return new Promise(function(resolve, reject) {
+			
+			var returnPromise = function(dir){
+				return new Promise(function(resolve, reject) {
+					getModTime(dir)
+					.then(function(t){
+						var name = getName(dir);
+						if (t === prev_tdict[name].modtime){
+							tdict[name] = prev_tdict[name];
+						}
+						else {
+							entries.push(name);
+						}
+						resolve();
+					});
+				});
+			};
+			
+			for (var i=0; i < results.length; i++){
+				if (!isDirectory(results[i])) continue;
+				var name = getName(results[i]);
+				if (!(name in prev_tdict)){
+					entries.push(name);
+					continue;
+				}
+				promises.push(returnPromise(results[i]));
+			}
+			resolve(Promise.all(promises));
+		});
+	})
+	.then(function(){
+		//boiled down the entries to new dirs only
+		process_entries(entries);
 	});
+}
+
+
+function process_entries(pgsg_subdirs){
+	
+	var returnPromise = function(dir){
+		return new Promise(function(resolve, reject){
+			getDirEntry(dir)
+			.then(function(dirEntry){
+				console.log('about to process_subdir');
+				resolve(process_subdir(dirEntry));
+			}).
+			catch(function(e){
+				console.log('what:', e);	
+			});
+		});
+	};	
+	
+	var promises = [];
+	for (var i=0; i < pgsg_subdirs.length; i++){
+		var subdir = pgsg_subdirs[i];
+		promises.push(returnPromise(subdir));
+	}
+	Promise.all(promises)
+	.then(function(){
+		console.log('about to sendTable', tdict);
+		sendTable();	
+	})
+	.catch(function(e){
+		console.log('promise rejection', e);
+	});
+}
+
+
+function process_subdir(dirEntry){
+	return new Promise(function(resolve, reject) {	
+		var imported = false;
+		var displayName;
+		var pgsg;
+		var file_hash;
+		var dirname = getName(dirEntry);
+		var dirpath = getFullPath(dirEntry);
+		if (dirname.match("-IMPORTED$")=="-IMPORTED"){ 
+			imported = true;
+		}
+		getFileContent(dirname, 'meta')
+		.then(function(name){
+			console.log('point3', name);
+			displayName = ba2str(name);
+			console.log('point3A');
+			return getFileContent(dirname, 'pgsg.pgsg');
+		})
+		.then(function(raw){
+			pgsg = raw;
+			file_hash = sha256(pgsg);
+			console.log('point4', pgsg, file_hash);
+			return getModTime(dirEntry);
+		})
+		.then(function(modtime){
+			console.log('point5');
+			tdict[dirname] =
+				{'name':displayName,
+				'imported':imported,
+				'dirURL':dirpath,
+				'hash':file_hash,
+				'pgsg':pgsg,
+				'modtime':modtime};
+				resolve('ok');
+		})
+		.catch(function(e){
+			//we must resolve even on error because of Promise.all()
+			resolve(e);
+		});
+	});
+}
+
+
+//Also check validity of pgsg before sending
+function sendTable(){
+	var rows = [];
+	for (var key in tdict){
+		var row = tdict[key];
+		var is_valid = false;
+		if (valid_hashes.indexOf(row.hash.toString()) > -1){
+			is_valid = true;
+		}
+		else { //e.g. for some reason the cache was flushed
+			try{
+				verify_tlsn(row.pgsg, true);
+				//if it doesnt throw - the check passed
+				is_valid = true;
+				updateCache(row.hash);
+			}
+			catch(e){
+				is_valid = false;
+			}
+		}
+		if (os_win) row.dirURL = fixWinPath(row.dirURL);
+		rows.push({'name': row.name,
+			'imported':row.imported,
+			'valid':is_valid,
+			'verifier':'tlsnotarygroup1',
+			'dir':row.dirURL});
+	}
+	sendMessage(rows);
+}
+
+
+//invert all slashes and replace spaces with %20
+function fixWinPath(path){
+	return path.replace(/\\/g,"/").replace(/ /g, "%20");
 }
 
 

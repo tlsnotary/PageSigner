@@ -1,4 +1,14 @@
-const {classes: Cc2, interfaces: Ci2, utils: Cu2} = Components;
+//js native ArrayBuffer to Array of numbers
+function ab2ba(ab){
+	var view = new DataView(ab);
+	var int_array = [];
+	for(var i=0; i < view.byteLength; i++){
+		int_array.push(view.getUint8(i));
+	}
+	return int_array;
+}
+
+
 
 function ba2ua(ba){
 	var ua = new Uint8Array(ba.length);
@@ -173,6 +183,7 @@ function isdefined(obj){
 	assert(typeof(obj) !== "undefined", "obj was undefined");
 }
 
+//Not in use for now
 function log(){
 	if (verbose){
 		console.log( Array.prototype.slice.call(arguments) );
@@ -240,7 +251,7 @@ function gunzip_http(http_data){
         throw('Please set gzip_disabled = 1 in tlsnotary.ini and rerun the audit');
 	}
 	if (http_header.search(/content-encoding:\s*gzip/i) === -1){
-		log('nothing to gunzip');
+		console.log('nothing to gunzip');
         return http_data; //#nothing to gunzip
 	}
     var http_body = http_data.slice(http_header.length);
@@ -258,24 +269,4 @@ function getTime(){
 	var today = new Date();
 	var time = today.getFullYear()+'-'+("00"+(today.getMonth()+1)).slice(-2)+'-'+("00"+today.getDate()).slice(-2)+'-'+ ("00"+today.getHours()).slice(-2)+'-'+("00"+today.getMinutes()).slice(-2)+'-'+("00"+today.getSeconds()).slice(-2);
 	return time;
-}
-
-function getPGSGdir(){
-	var localDir = Cc2["@mozilla.org/file/directory_service;1"].
-			getService(Ci2.nsIProperties).get("ProfD", Ci2.nsIFile);
-
-	localDir.append("pagesigner");
-	 if (!localDir.exists() || !localDir.isDirectory()) {
-		// read and write permissions to owner and group, read-only for others.
-		localDir.create(Ci2.nsIFile.DIRECTORY_TYPE, 0774);
-	}
-	return localDir;
-}
-
-function get_xhr(){
-	/*if (is_chrome){
-		return new XMLHttpRequest();
-	}*/
-	//else firefox addon
-	return Components.classes["@mozilla.org/xmlextras/xmlhttprequest;1"].createInstance();
 }

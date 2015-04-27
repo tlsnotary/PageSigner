@@ -28,7 +28,12 @@ let main = {
 	var rv = fp.show();
 	if (rv == nsIFilePicker.returnOK || rv == nsIFilePicker.returnReplace) {
 	  var path = fp.file.path;
-	  verify_tlsn_and_show_html(path, true);
+	  OS.File.read(path).
+	  then(function(imported_data){
+		var data_ba = ua2ba(imported_data);  
+		verify_tlsn_and_show_html(data_ba, true);
+		populateTable();
+		});
 	}
   },
   manage: function() {

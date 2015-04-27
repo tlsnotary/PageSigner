@@ -74,28 +74,31 @@ function loadIntoWindow(window) {
     mpu.setAttribute("id","tlsnmpu");
      let mi1 = doc.createElement("menuitem");
 	mi1.setAttribute("label", 'Notarize this page');
-	mi1.setAttribute("class","menuitem-with-favicon");
+	mi1.setAttribute("class","menuitem-with-favicon menuitem-iconic bookmark-item");
 	mi1.setAttribute("image", 'chrome://pagesigner/content/icon16.png');
 	mi1.addEventListener("command",main.notarize, false)
 	mpu.appendChild(mi1);
 	mpu.appendChild(sep1);
-	 let mi2 = doc.createElement("menuitem");
-	mi2.setAttribute("label", 'Import .pgsg file');
-	mi2.setAttribute("class","menuitem-with-favicon");
-	mi2.setAttribute("image", 'chrome://pagesigner/content/verify.png');
-	mi2.addEventListener("command",main.verify, false)
-	mpu.appendChild(mi2);
-	mpu.appendChild(sep2);
+	
 	 let mi3 = doc.createElement("menuitem");
 	mi3.setAttribute("label", 'Manage files');
-	mi3.setAttribute("class","menuitem-with-favicon");
+	mi3.setAttribute("class","menuitem-with-favicon menuitem-iconic bookmark-item");
 	mi3.setAttribute("image", 'chrome://pagesigner/content/manage.png');
 	mi3.addEventListener("command",main.manage, false)
 	mpu.appendChild(mi3);
 	mpu.appendChild(sep3);
+	
+	 let mi2 = doc.createElement("menuitem");
+	mi2.setAttribute("label", 'Import .pgsg file');
+	mi2.setAttribute("class","menuitem-with-favicon menuitem-iconic bookmark-item");
+	mi2.setAttribute("image", 'chrome://pagesigner/content/verify.png');
+	mi2.addEventListener("command",main.verify, false)
+	mpu.appendChild(mi2);
+	mpu.appendChild(sep2);
+	
 	let mi4 = doc.createElement("menuitem");
 	mi4.setAttribute("label", 'About');
-	mi4.setAttribute("class","menuitem-with-favicon");
+	mi4.setAttribute("class","menuitem-with-favicon menuitem-iconic bookmark-item");
 	mi4.setAttribute("image",'chrome://pagesigner/content/icon16.png');
 	mi4.addEventListener("command",main.about, false)
 	mpu.appendChild(mi4);
@@ -184,7 +187,7 @@ function startup(data, reason) AddonManager.getAddonByID(data.id, function(addon
 function loadjs(){
   jsloaded = true;
   var addon = thisaddon;
-  include(addon, "button.js");
+  include(addon, "firefox/button.js");
   include(addon, "tlsn_utils.js");
   include(addon, "oracles.js");
   include(addon, "CryptoJS/components/core.js");
@@ -197,7 +200,7 @@ function loadjs(){
   include(addon, "CryptoJS/components/cipher-core.js");
   include(addon, "CryptoJS/components/aes.js");
   include(addon, "CryptoJS/components/pad-nopadding.js");
-  include(addon, "firefox_specific.js");
+  include(addon, "firefox/firefox_specific.js");
   include(addon, "main.js");
   include(addon, "jsbn.js");
   include(addon, "jsbn2.js");

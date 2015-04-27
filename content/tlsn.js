@@ -85,233 +85,6 @@ function check_complete_records(d){
 }
 
 
-function Socket(name, port){
-	this.name = name;
-	this.port = port;
-	this.sckt = null;
-	this.is_open = false;
-	this.buffer = [];
-}
-Socket.prototype.connect = function(){
-	//TCPSocket doesnt like to be wrapped in a Promise. We work around by making the
-	//promise resolve when .is_open is triggered
-	var TCPSocket = Components.classes["@mozilla.org/tcp-socket;1"].createInstance(Components.interfaces.nsIDOMTCPSocket);
-	this.sckt = TCPSocket.open(this.name, this.port, {binaryType:"arraybuffer"});
-	var that = this; //inside .ondata/open etc this is lost
-	this.sckt.ondata = function(event){ 
-		//transform ArrayBuffer into number array
-		var view = new DataView(event.data);
-		var int_array = [];
-		for(var i=0; i < view.byteLength; i++){
-			int_array.push(view.getUint8(i));
-		}
-		log('ondata got bytes:', view.byteLength);
-		that.buffer = [].concat(that.buffer, int_array);
-	}
-	this.sckt.onopen = function() {
-		that.is_open = true;
-		log('onopen');
-	}
-	
-	var that = this;
-	return new Promise(function(resolve, reject) {
-		var timer;
-		var startTime = new Date().getTime();
-		var check = function(){
-			var now = new Date().getTime();
-			if (( (now - startTime) / 1000) >= 20){
-				clearInterval(timer);
-				reject('socket timed out');
-				return;
-			}
-			if (!that.is_open){
-				log('Another timeout');
-				return;
-			}
-			clearInterval(timer);
-			log('promise resolved');
-			resolve('ready');
-		};
-		timer = setInterval(check, 100);
-	});
-	
-};
-Socket.prototype.send = function(data_in){
-	//Transform number array into ArrayBuffer
-	var sock = this.sckt;
-	var ab = new ArrayBuffer(data_in.length);
-	var dv = new DataView(ab);
-	for(var i=0; i < data_in.length; i++){
-		dv.setUint8(i, data_in[i]);
-	}
-	sock.send(ab, 0, ab.byteLength);
-}
-Socket.prototype.recv = function(is_handshake){
-	if (typeof(is_handshake) === "undefined"){
-		is_handshake = false;
-	}
-	var that = this;
-	return new Promise(function(resolve, reject) {
-		log('in recv promise');
-		var timer;
-		var startTime = new Date().getTime();
-		var tmp_buf = [];
-		//keep checking until either timeout or enough data gathered
-		var check_recv = function(){
-			var now = new Date().getTime();
-			if (( (now - startTime) / 1000) >= 20){
-				clearInterval(timer);
-				log('rejecting');
-				reject('socket timed out');
-				return;
-			}
-			if (that.buffer.length === 0){
-				log('Another timeout in recv');
-				return;
-			}
-			tmp_buf = [].concat(tmp_buf, that.buffer);
-			that.buffer = [];
-			if(! check_complete_records(tmp_buf)){
-				log("check_complete_records failed");
-				return;
-			}
-			//else
-			clearInterval(timer);
-			log('promise resolved');
-			resolve(tmp_buf);
-		};
-		timer = setInterval(check_recv, 100);
-	});
-}
-Socket.prototype.close = function(){
-	this.sckt.close();
-};
-
-
-//Socket_proxy is only needed during testing when testing on Chrome
-function Socket_proxy(name, port){
-	this.name = name;
-	this.port = port;
-	this.socketport = '7772';
-	this.busy = false;
-	//this.req = new XMLHttpRequest();
-	//this.req = Cc["@mozilla.org/xmlextras/xmlhttprequest;1"].createInstance();
-	this.req = get_xhr();
-}
-Socket_proxy.prototype.connect = function(){
-	//send to backend to open a new connection
-	var that = this;
-	return new Promise(function(resolve, reject) {
-		var loop = function(resolve, reject){
-			if (! that.busy){
-				resolve('ok');
-				return;
-			}
-			//else busy
-			setTimeout(function(){
-				loop(resolve, reject);
-			}, 100);
-			return;
-		};
-		loop (resolve, reject);
-	})
-	.then(function(){
-		return new Promise(function(resolve, reject) {	
-			var req = that.req;
-			req.open("HEAD", "http://127.0.0.1:"+that.socketport+"/connect?"+that.name+"&"+that.port, true);
-			log('sending connect');
-			req.onload = function(){
-				log('connect onload');
-				req.abort();
-				that.busy = false;
-				resolve('success');
-			};
-			that.busy = true;
-			req.send();
-		});
-	});
-};
-Socket_proxy.prototype.send = function(data_in){
-	var that = this;
-	if (that.busy){
-		setTimeout(function(){
-			that.send.call(that, data_in);
-		}, 100);
-		return;
-	}
-	return new Promise(function(resolve, reject) {
-		var req = that.req;
-		//sending a comma separated array of numbers because we dont want extra base64 code in extension
-		req.open("HEAD", "http://127.0.0.1:"+that.socketport+"/send?"+data_in.toString(), true);
-		log('sending send');
-		req.onabort = function(){
-			log('send abort');
-			reject('rejected');
-		};
-		req.onload = function(){
-			req.abort();
-			log('send onload');
-			that.busy = false;
-			resolve('success');
-		};
-		req.send();
-	});
-};
-Socket_proxy.prototype.recv = function(sckt, is_handshake, callbacks, previous_reply){
-	var that = this;
-	if (that.busy){
-		setTimeout(function(){
-			that.recv.call(that, sckt, is_handshake, callbacks, previous_reply);
-		}, 100);
-		return;
-	}	
-	
-	var reply = [];
-	if (typeof(previous_reply) !== "undefined"){
-		reply = [].concat(reply, previous_reply);
-	}
-	if (typeof(is_handshake) === "undefined"){
-		is_handshake = false;
-	}
-	
-	return new Promise(function(resolve, reject) {
-		var req = that.req;
-		req.open("HEAD", "http://127.0.0.1:"+that.socketport+"/recv", true);
-		req.onerror = function(){
-			log('xhr error');
-			reject('xhr error');
-		};
-		req.onload = function(){
-			log('got reply for recv');
-			that.busy = false;
-			var data = req.getResponseHeader("data");
-			req.abort();
-			var int_ar = data.split(',');
-			//NB: addon sends 'data' with a trailing comma, but chrome removes it 
-			for (var i=0; i < int_ar.length; i++){
-				reply = [].concat(reply, parseInt(int_ar[i]));
-			}
-			log('in recv onload with bytes:' + reply.length);
-			if (is_handshake){
-				if(! check_complete_records(reply)){
-					log("check_complete_records failed");
-					that.recv.call(that, sckt, is_handshake, callbacks, reply);
-					return;
-				}
-			}		
-			resolve(reply);
-		};
-		//give the backend some time
-		log('sending recv');
-		req.send();
-	});
-};
-if (is_chrome){
-	Socket = Socket_proxy;
-}
-
-
-
 function send_and_recv(command, data, expected_response){
 	return new Promise(function(resolve, reject) {
 		var req = get_xhr();
@@ -320,12 +93,15 @@ function send_and_recv(command, data, expected_response){
 		req.setRequestHeader("Data", b64encode(data));
 		req.setRequestHeader("UID", random_uid);
 		//disable headers which Firefox appends by default
-		req.setRequestHeader("Host", "");
-		req.setRequestHeader("User-Agent", "");
-		req.setRequestHeader("Accept", "");
+		//however, Chrome doesnt allow setting certain headers
 		req.setRequestHeader("Accept-Language", "");
-		req.setRequestHeader("Accept-Encoding", "");
-		req.setRequestHeader("Connection", "close");
+		req.setRequestHeader("Accept", "");
+		if (!is_chrome){
+			req.setRequestHeader("Host", "");
+			req.setRequestHeader("User-Agent", "");
+			req.setRequestHeader("Accept-Encoding", "");
+			req.setRequestHeader("Connection", "close");
+		}
 		var timeout = setTimeout(function(){
 			reject ('Timed out waiting for notary server to respond');
 		}, 20*1000);
@@ -338,10 +114,10 @@ function send_and_recv(command, data, expected_response){
 			}
 			var b64data = req.getResponseHeader("Data");
 			var data = b64decode(b64data);
-			log('got from oracle', response);
+			console.log('got from oracle', response);
 			resolve(data);
 		};
-		log('sent to oracle', command);
+		console.log('sent to oracle', command);
 		req.send();
 	});
 }
@@ -355,7 +131,7 @@ function prepare_pms(modulus, tryno){
 	var rsapms2;
 	var random_rs = reliable_sites[Math.random()*(reliable_sites.length) << 0];
 	var rs_choice = random_rs.name;
-	log('random reliable site', rs_choice);
+	console.log('random reliable site', rs_choice);
 	var pms_session = new TLSNClientSession();
 	pms_session.__init__({'server':rs_choice, 'ccs':53, 'tlsver':global_tlsver});
 	pms_session.server_modulus = random_rs.modulus;
@@ -386,7 +162,7 @@ function prepare_pms(modulus, tryno){
 		var record_to_find = new TLSRecord();
 		record_to_find.__init__(chcis, [0x01], global_tlsver);
 		if (response.toString().indexOf(record_to_find.serialized.toString()) < 0){
-			log("PMS trial failed, retrying. ("+response.toString()+")");
+			console.log("PMS trial failed, retrying. ("+response.toString()+")");
 			throw("PMS trial failed");
 		}
 		return( [pms_session.auditee_secret, pms_session.auditee_padding_secret, rsapms2] );	
@@ -435,7 +211,7 @@ function negotiate_crippled_secrets(tlsn_session){
 
 
 function decrypt_html(tlsn_session){
-	log("will decrypt cs:", tlsn_session.server_connection_state.cipher_suite);
+	console.log("will decrypt cs:", tlsn_session.server_connection_state.cipher_suite);
 	var rv = tlsn_session.process_server_app_data_records();
 	var plaintext = rv[0];
 	var bad_mac = rv[1];
@@ -445,12 +221,11 @@ function decrypt_html(tlsn_session){
 	var plaintext_str = ba2str(plaintext);
 	var plaintext_dechunked = dechunk_http(plaintext_str);
 	var plaintext_gunzipped = gunzip_http(plaintext_dechunked);
-	log('returning plaintext of length ' + plaintext_gunzipped.length);
+	console.log('returning plaintext of length ' + plaintext_gunzipped.length);
 	return plaintext_gunzipped;
 }
 
 
-var g_cert;//for testing
 function get_certificate(server){
 	var probe_session = new TLSNClientSession();
 	probe_session.__init__({'server':server, 'tlsver':global_tlsver});
@@ -463,8 +238,7 @@ function get_certificate(server){
 	.then(function(handshake_objects){
 		probe_session.process_server_hello(handshake_objects);
 		probe_session.sckt.close();
-		g_cert = probe_session.server_certificate.asn1cert;
-		return g_cert;
+		return probe_session.server_certificate.chain;
 	});
 }
 
@@ -490,7 +264,7 @@ function start_audit(modulus, certhash, name, headers, ee_secret, ee_pad_secret,
 	})
 	.then(function(handshake_objects){
 		tlsn_session.process_server_hello(handshake_objects);
-		log("negotiate_crippled_secrets");
+		console.log("negotiate_crippled_secrets");
 		return negotiate_crippled_secrets(tlsn_session);
 	})
 	.then(function(){
@@ -501,7 +275,7 @@ function start_audit(modulus, certhash, name, headers, ee_secret, ee_pad_secret,
 		}
 		var headers_ba = str2ba(headers);
 		tlsn_session.build_request(headers_ba);
-		log("sent request");
+		console.log("sent request");
 		return tlsn_session.sckt.recv(false); //#not handshake flag means we wait on timeout
 	})
 	.then(function(response){
@@ -520,11 +294,9 @@ function start_audit(modulus, certhash, name, headers, ee_secret, ee_pad_secret,
 		signature = response.slice(24);
 		var modulus = chosen_notary.sig.modulus;
 		var signed_data = sha256([].concat(commit_hash, pms2, tlsn_session.server_modulus));
-		log('beginning sig verification');
 		if (!verify_commithash_signature(signed_data, signature, modulus)){
 			throw('Failed to verify notary server signature');
 		}
-		log('finished sig verification');
 		tlsn_session.auditor_secret = pms2.slice(0, tlsn_session.n_auditor_entropy);
 		tlsn_session.set_auditor_secret();
 		tlsn_session.set_master_secret_half(); //#without arguments sets the whole MS
@@ -1347,9 +1119,10 @@ TLSNClientSession.prototype.get_server_hello = function(){
 	var sckt = this.sckt;
 	return new Promise(function(resolve, reject) {
 		var loop = function(resolve, reject){      
-			log('get_server_hello next iteration');
-			sckt.recv(true).then(function(rspns){
-				log('returned from sckt.recv with length', rspns.length);
+			console.log('get_server_hello next iteration');
+			sckt.recv(true)
+			.then(function(rspns){
+				console.log('returned from sckt.recv with length', rspns.length);
 				var rv = tls_record_decoder(rspns);
 				var records = rv[0];
 				var remaining = rv[1];
@@ -1365,12 +1138,15 @@ TLSNClientSession.prototype.get_server_hello = function(){
 					handshake_objects = [].concat(handshake_objects, decoded);
 				}
 				if (handshake_objects.length < 3){
-					log('get_server_hello handshake_objects.length < 3');
+					console.log('get_server_hello handshake_objects.length < 3');
 					loop(resolve, reject);
 					return;
 				}
 				//else
 				resolve(handshake_objects);
+			})
+			.catch(function(e){
+				reject(e);
 			});
 		};
 		loop(resolve, reject);
@@ -1522,28 +1298,32 @@ TLSNClientSession.prototype.send_client_finished = function(provided_p_value){
 
 TLSNClientSession.prototype.get_server_finished = function(){
 	//keep recv'ing more data until we get enough records
+	var that = this;
 	var records = [];
 	var sckt = this.sckt;
 	return new Promise(function(resolve, reject) {
-		var loop = function(resolve, reject){      
-			log('get_server_finished next iteration');
+		var loop = function(){      
+			console.log('get_server_finished next iteration');
 			sckt.recv(true).then(function(rspns){
-				log('returned from sckt.recv');
+				console.log('returned from sckt.recv');
 				var rv = tls_record_decoder(rspns);
 				var x = rv[0];
 				var remaining = rv[1];
 				assert(remaining.length === 0, "Server sent spurious non-TLS response");
 				records = [].concat(records, x);
 				if (records.length < 2){
-					log('get_server_finished records.length < 2');
-					loop(resolve, reject);
+					console.log('get_server_finished records.length < 2');
+					loop();
 					return;
 				}
 				//else
 				resolve(records);
+			})
+			.catch(function(e){
+				reject(e);
 			});
 		};
-		loop(resolve, reject);
+		loop();
 	});
 }
 

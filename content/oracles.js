@@ -185,7 +185,6 @@ function checkGetConsoleOutput(xmlDoc, instanceId, launchTime, type, main_pubkey
 	var b64data = xmlDoc.getElementsByTagName('output')[0].textContent;
 	var logstr = ba2str(b64decode(b64data));
 	//now other string starting with xvd except for xvda
-	console.log("Before first assert, logstr is: "+logstr);
 	assert(logstr.search(/xvd[^a]/g) === -1);
 	var mainmark = 'TLSNotary main server pubkey which is embedded into the signing server:';
 	var sigmark = 'TLSNotary siging server pubkey:';
@@ -266,7 +265,6 @@ function check_oracle(o, type, main_pubkey){
 			}
 		};
 		xhr.send();
-		log('sent');
 	})
 	.then(function(args){
 		return new Promise(function(resolve, reject) {
@@ -283,7 +281,6 @@ function check_oracle(o, type, main_pubkey){
 				}
 			};
 			xhr.send();
-			log('sent');
 		});
 	})
 	.then(function(args){
@@ -301,7 +298,6 @@ function check_oracle(o, type, main_pubkey){
 				}
 			};
 			xhr.send();
-			log('sent');
 		});
 	})
 	.then(function(launchTime){
@@ -328,7 +324,6 @@ function check_oracle(o, type, main_pubkey){
 				}
 			};
 			xhr.send();
-			log('sent');
 		});
 	})
 	.then(function(){
@@ -346,7 +341,6 @@ function check_oracle(o, type, main_pubkey){
 				}
 			};
 			xhr.send();
-			log('sent');
 		});
 	})
 	.then(function(){
@@ -355,14 +349,14 @@ function check_oracle(o, type, main_pubkey){
 		var id;
 		var ids = [];
 		//"AWSAccessKeyId" should be the same to prove that the queries are made on behalf of AWS user "root".
-		//The can be a user with limited privileges for whom the API would report only partial information.
+		//The attacker can be a user with limited privileges for whom the API would report only partial information.
 		for (var url in [o.DI, o.DV, o.GU, o.GCO, o.DIA]){
 			start = url.search(mark)+mark.length;
 			id = url.slice(start, start + url.slice(start).search('&'));
 			ids.push(id);
 		}
 		assert(new Set(ids).size === 1);
-		log('oracle verification successfully finished');		
+		console.log('oracle verification successfully finished');		
 	});
 }
 

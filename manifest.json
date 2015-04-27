@@ -1,0 +1,66 @@
+{
+  "manifest_version": 2,
+
+  "name": "PageSigner",
+  "description": "PageSigner - a cryptographically secure webpage screenshot tool",
+  "version": "1.0",
+  "author": "TLSNotary Group",
+
+ "permissions": [
+    "background",
+    //need http to send stuff to oracle and https for amazon
+    "*://*/*",
+    "webRequest",
+    "tabs",
+    "storage",
+    "unlimitedStorage",
+    "management",
+    "downloads",
+    "downloads.shelf",
+    "notifications",
+    "contextMenus"
+  ],
+  
+  "icons": {
+	"16": "icon.png"   //needed for context menu
+  },
+  
+  //this is needed for asn1.js
+  "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'",
+
+  
+  "browser_action": {
+    "default_icon": "icon.png",
+    "default_popup": "content/chrome/popup.html"
+  },
+
+ "background": {
+    "scripts": [
+    "content/chrome/chrome_specific.js",
+    "content/tlsn_utils.js",
+    "content/oracles.js",
+    "content/CryptoJS/components/core.js",
+    "content/CryptoJS/components/md5.js",
+    "content/CryptoJS/components/evpkdf.js",
+    "content/CryptoJS/components/enc-base64.js",
+    "content/CryptoJS/components/sha1.js",
+    "content/CryptoJS/components/sha256.js",
+    "content/CryptoJS/components/hmac.js",
+    "content/CryptoJS/components/cipher-core.js",
+    "content/CryptoJS/components/aes.js",
+    "content/CryptoJS/components/pad-nopadding.js",
+    "content/jsbn.js",
+    "content/jsbn2.js",
+    "content/pako.js",
+    "content/tlsn.js",
+    "content/main.js",
+    "content/verifychain/buffer.js",
+    "content/verifychain/asn1.js",
+    "content/verifychain/jsrsasign-latest-all-min.js",
+    "content/verifychain/rootcertslist.js",
+    "content/verifychain/rootcerts.js",
+    "content/verifychain/verifychain.js"
+    ]
+  }  
+ 
+}
