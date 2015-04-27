@@ -1,7 +1,14 @@
 To create a firefox addon:
 
-1. Add all files to a zip archive. Something like Select All -> Compress
-N.B. DO NOT zip up the folder in which these files are located. Just zip up the files.
+1. Create a zip archive which contains the following:
+content (a directory)
+bootstrap.js
+chrome.manifest
+icon.png
+install.rdf
+README
+
+e.g. in Linux you can "Select All" then right-click and choose Compress.
 
 2. Rename the zip extension to .xpi
 
