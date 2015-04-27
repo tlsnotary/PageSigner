@@ -197,6 +197,7 @@ function loadjs(){
   include(addon, "CryptoJS/components/cipher-core.js");
   include(addon, "CryptoJS/components/aes.js");
   include(addon, "CryptoJS/components/pad-nopadding.js");
+  include(addon, "firefox_specific.js");
   include(addon, "main.js");
   include(addon, "jsbn.js");
   include(addon, "jsbn2.js");
