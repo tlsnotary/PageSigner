@@ -22,10 +22,12 @@ function tableRefresher(){
     for (var x in tdict){
 	tindex.push({'key': x, 'name': tdict[x][0].name});
     }
+    
     tindex.sort(function (a,b){
-	var as = a['name'], bs = b['name'];
+	var as = a['name'].toLowerCase(), bs = b['name'].toLowerCase();
 	return as == bs ? 0: (as > bs ? 1 : -1);
     });
+    
     for (var i=0;i<tindex.length; i++){
 	var sk = tindex[i]['key'];
 	var row = tdict[sk][3];
