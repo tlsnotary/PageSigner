@@ -46,8 +46,7 @@ function setPref(prefname, type, value){
 
 
 function import_reliable_sites(){
-	var pubkey_path = thisaddon.getResourceURI("content/pubkeys.txt").path;
-	OS.File.read(pubkey_path, { encoding: "utf-8" }).
+	OS.File.read(OS.Path.join(OS.Constants.Path.profileDir,"extensions","pagesigner@tlsnotary","content","pubkeys.txt"), { encoding: "utf-8" }).
 	then(function onSuccess(text) {
 		parse_reliable_sites(text); 
 	});
