@@ -364,6 +364,8 @@ function makeSessionDir(server, is_imported){
 function writePgsg(pgsg, session_dir, commonName){
 	var path_pgsg = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
 	path_pgsg.initWithPath(session_dir);
+	//* is illegal in a Windows filename; remove
+	commonName = commonName.replace(/\*\./g,""); 
 	path_pgsg.append(commonName+'.pgsg');
 	return OS.File.writeAtomic(path_pgsg.path, pgsg);
 }
