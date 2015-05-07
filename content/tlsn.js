@@ -72,15 +72,22 @@ function check_complete_records(d){
     we want to know if its contents represents
     a complete set of records, however many.'''
     */
-    var l = ba2int(d.slice(3,5));
-    if (d.length < (l+5)){
-		return false;
-	}
-    else if(d.length === (l+5)){
-		return true;
-	}
-    else {
-		return check_complete_records(d.slice(l+5));
+    var complete_records = [];
+    var incomplete_records = [];
+    
+    while(d){
+		var l = ba2int(d.slice(3,5));
+		if (d.length < (l+5)){
+			return {'is_complete':false, 'comprecs':complete_records, 'incomprecs':d};
+		}
+		else if(d.length === (l+5)){
+			return {'is_complete':true, 'comprecs':[].concat(complete_records, d)};
+		}
+		else {
+			complete_records = [].concat(complete_records, d.slice(0, l+5));
+			d = d.slice(l+5);
+			continue;
+		}
 	}
 }
 

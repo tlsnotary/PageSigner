@@ -684,6 +684,9 @@ Socket.prototype.recv = function(is_handshake){
 		var timer;
 		var startTime = new Date().getTime();
 		var tmp_buf = [];
+		
+		var complete_records = [];
+		var buf = [];
 		//keep checking until either timeout or enough data gathered
 		var check_recv = function(){
 			var now = new Date().getTime();
@@ -697,16 +700,19 @@ Socket.prototype.recv = function(is_handshake){
 				console.log('Another timeout in recv');
 				return;
 			}
-			tmp_buf = [].concat(tmp_buf, that.buffer);
+			buf = [].concat(buf, that.buffer);
 			that.buffer = [];
-			if(! check_complete_records(tmp_buf)){
+			var rv = check_complete_records(buf);
+			complete_records = [].concat(complete_records, rv.comprecs);
+			if (! rv.is_complete){
 				console.log("check_complete_records failed");
+				buf = rv.incomprecs;
 				return;
 			}
 			//else
 			clearInterval(timer);
 			console.log('promise resolved');
-			resolve(tmp_buf);
+			resolve(complete_records);
 		};
 		timer = setInterval(check_recv, 100);
 	});
