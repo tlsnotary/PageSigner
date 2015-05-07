@@ -438,7 +438,8 @@ Socket.prototype.recv = function(){
 	var uid = this.uid;
 	return new Promise(function(resolve, reject) {
 		var startTime = new Date().getTime();
-		var tmp_buf = [];
+		var complete_records = [];
+		var buf = [];		
 		var cancelled = false;
 		var timer = setTimeout(function(){
 			reject('recv: socket timed out');
@@ -450,15 +451,18 @@ Socket.prototype.recv = function(){
 			chrome.runtime.sendMessage(appId, {'command':'recv', 'uid':uid}, function(response){
 				if (cancelled) return;
 				if (response.data.length > 0){
-					tmp_buf = [].concat(tmp_buf, response.data);
-					if(! check_complete_records(tmp_buf)){
+					buf = [].concat(buf, response.data);
+					var rv = check_complete_records(buf);
+					complete_records = [].concat(complete_records, rv.comprecs);
+					if (! rv.is_complete){
 						console.log("check_complete_records failed");
+						buf = rv.incomprecs;
 						setTimeout(check, 100);
 						return;
 					}
 					clearTimeout(timer);
 					console.log('recv promise resolved');
-					resolve(tmp_buf);
+					resolve(complete_records);
 					return;
 				}
 				console.log('Another timeout in recv');

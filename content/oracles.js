@@ -168,6 +168,8 @@ function checkDescribeVolumes(xmlDoc, instanceId, volumeId, volAttachTime, type)
 	assert(attVolume.getElementsByTagName('status')[0].textContent === 'attached');
 	var attTime = attVolume.getElementsByTagName('attachTime')[0].textContent;
 	assert(volAttachTime === attTime);
+	//Crucial: volume was created from snapshot and attached at the same instant
+	//this guarantees that there was no time window to modify it
 	assert(getSecondsDelta(attTime, volCreateTime) === 0);	
 	}catch(e){
 		return false;
