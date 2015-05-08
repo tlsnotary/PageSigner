@@ -550,6 +550,15 @@ function fixWinPath(path){
 }
 
 
+//startsWith is a pretty recent method, let's implement it here if it's not provided
+//reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/startsWith
+if (!String.prototype.startsWith) {
+  String.prototype.startsWith = function(searchString, position) {
+    position = position || 0;
+    return this.lastIndexOf(searchString, position) === position;
+  };
+}
+
 
 //This must be at the bottom, otherwise we'd have to define each function
 //before it gets used.
