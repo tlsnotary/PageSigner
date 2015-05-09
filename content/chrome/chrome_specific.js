@@ -91,7 +91,7 @@ function loadBusyIcon(){
 
 
 function loadNormalIcon(){
-	chrome.browserAction.setIcon({path:"icon.png"});
+	chrome.browserAction.setIcon({path:"content/icon128.png"});
 	chrome.browserAction.setPopup({popup:"content/chrome/popup.html"});
 }
 
@@ -351,7 +351,7 @@ function openTabs(sdir, commonName){
 			chrome.notifications.create('', {type:'basic', 
 											title:'',
 											message:notif_msg,
-											 iconUrl:'content/icon64.png',
+											 iconUrl:'content/icon128.png',
 											 priority:2});
 			chrome.contextMenus.create({type:'normal',
 										title:'View this page from ' + commonName + ' as raw HTML',
