@@ -368,7 +368,7 @@ function savePGSGFile(existing_path, name){
 
 
 function showAboutInfo(){
-	window.openDialog("chrome://pagesigner/content/firefox/about.xul","","chrome, dialog, modal").focus();
+	window.openDialog("chrome://pagesigner/content/firefox/about.xul","","chrome, dialog, modal", gBrowser).focus();
 }
 
 
