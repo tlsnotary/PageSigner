@@ -178,7 +178,7 @@ function create_final_html(html_with_headers, session_dir){
 		var headers = rv[0];
 		var html = rv.splice(1).join('\r\n\r\n'); 
 		var dirname = session_dir.split('/').pop();
-		writeFile(dirname, 'html.html', html)
+		writeFile(dirname, 'html.html', ba2ua([].concat([0xef, 0xbb, 0xbf], str2ba(html))))
 		.then(function(){
 			return writeFile(dirname, 'raw.txt', html_with_headers);
 		})
