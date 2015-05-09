@@ -35,8 +35,10 @@ xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
 </html:hbox>
 <script  type="text/javascript;version=1.8">
 function openT(url){
-   gBrowser.addTab(url);
-   gBrowser.selectedTab = t;
+	var gBrowser  = window.arguments[0];
+	var t = gBrowser.addTab(url);
+	gBrowser.selectedTab = t;
+	window.close();
 }
 </script>
 </dialog>
