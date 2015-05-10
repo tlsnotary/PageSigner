@@ -150,7 +150,7 @@ function addRow(args){
 		a.href = '#';
 	}
 	else {
-		a.href = 'file://'+args.dir+'/html.html';
+		a.href = 'file://'+args.dir+'/html';
 	}
 	a.text = "view";
 	td.appendChild(a);
