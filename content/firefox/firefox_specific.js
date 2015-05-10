@@ -379,7 +379,7 @@ function create_final_html(html_with_headers, session_dir){
 	var headers = rv[0];
 	var html = rv.splice(1).join('\r\n\r\n'); 
 		
-	var path_html = OS.Path.join(session_dir, 'html.html');
+	var path_html = OS.Path.join(session_dir, 'html');
 	var raw_response = OS.Path.join(session_dir, 'raw.txt');
 	 //see "Byte order mark"
 	return OS.File.writeAtomic(path_html, ba2ua([].concat([0xef, 0xbb, 0xbf], str2ba(html))))
@@ -583,7 +583,7 @@ function writePgsg(pgsg, session_dir, commonName){
 
 
 function openTabs(sdir, commonName){
-	var html_path = OS.Path.join(sdir, 'html.html');
+	var html_path = OS.Path.join(sdir, 'html');
 	var raw_path = OS.Path.join(sdir, 'raw.txt');
 	try{
 		OS.File.stat(html_path);
