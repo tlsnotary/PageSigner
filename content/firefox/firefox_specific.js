@@ -247,7 +247,9 @@ function openManager(){
 						block_urls.push(path);
 						var t = gBrowser.addTab(path);
 						gBrowser.selectedTab = t;
-						gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
+						setTimeout(function(){
+							gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
+						}, 100);
 					}
 					else if (data.message === 'viewraw'){
 						var path = OS.Path.join(fsRootPath, data.args.dir, 'raw.txt');
