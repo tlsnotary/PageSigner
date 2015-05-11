@@ -190,7 +190,6 @@ function startNotarizing(callback){
 			callback();
 		}
 		loadNormalIcon();
-		populateTable();
 	})
 	.catch(function(err){
 	 //TODO need to get a decent stack trace
@@ -276,6 +275,7 @@ function save_session_and_open_html(args, server){
 	})
 	.then(function(){
 		updateCache(sha256(pgsg));
+		populateTable(); //refresh manager
 	});
 }
 
@@ -387,6 +387,7 @@ function verify_tlsn_and_show_html(imported_data, create){
 		})
 		.then(function(){
 			updateCache(sha256(imported_data));
+			populateTable(); //refresh manager
 		})
 		.catch( function(error){
 			console.log("got error in vtsh: "+error);
@@ -483,19 +484,15 @@ function process_subdir(dirEntry){
 		}
 		getFileContent(dirname, 'meta')
 		.then(function(name){
-			console.log('point3', name);
 			displayName = ba2str(name);
-			console.log('point3A');
 			return getFileContent(dirname, 'pgsg.pgsg');
 		})
 		.then(function(raw){
 			pgsg = raw;
 			file_hash = sha256(pgsg);
-			console.log('point4', pgsg, file_hash);
 			return getModTime(dirEntry);
 		})
 		.then(function(modtime){
-			console.log('point5');
 			tdict[dirname] =
 				{'name':displayName,
 				'imported':imported,

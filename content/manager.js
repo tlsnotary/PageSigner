@@ -67,7 +67,6 @@ function addRow(args){
 	td = document.createElement("td");
 	a = document.createElement("a");
 	a.title = 'Give the file a more memorable name';
-	a.href = '#';
 	a.style = 'float: right';
 	a.onclick = function (event){ doRename(event.target, args.name, dir);};
 	a.text = 'Rename';
@@ -77,7 +76,6 @@ function addRow(args){
 	td = document.createElement("td");
 	a = document.createElement("a");
 	a.title = 'Save the file so you can transfer it to others';
-	a.href = '#';
 	a.style = 'float: right';
 	a.onclick = function (event){
 		console.log('export clicked');
@@ -92,7 +90,6 @@ function addRow(args){
 	td = document.createElement("td");
 	a = document.createElement("a");
 	a.title = 'permanently remove this set of files from disk';
-	a.href = '#';
 	a.style = 'float: right';
 	a.onclick = function (event){
 		var r = confirm("This will remove all notarized data of "+args.name+", including html. Are you sure?");
@@ -142,22 +139,21 @@ function addRow(args){
 	
 	td = document.createElement("td");
 	a = document.createElement("a");
-	if (is_chrome){
-		a.onclick = function (event){
-			sendMessage({'destination':'extension', 'message':'viewhtml',
-							'args':{'dir':dir}});
-		};
-		a.href = '#';
-	}
-	else {
-		a.href = 'file://'+args.dir+'/html.html';
-	}
+	a.onclick = function (event){
+		sendMessage({'destination':'extension', 'message':'viewhtml',
+						'args':{'dir':dir}});
+	};
 	a.text = "view";
 	td.appendChild(a);
 	text = document.createElement("text");
 	text.textContent = ' , ';
 	td.appendChild(text);
 	a = document.createElement("a");
+	a.onclick = function (event){
+		sendMessage({'destination':'extension', 'message':'viewraw',
+						'args':{'dir':dir}});
+	};
+	/*
 	if (is_chrome){
 		a.href = args.dir+'/raw.txt';
 	}
@@ -165,6 +161,7 @@ function addRow(args){
 		//Firefox is smart enough to auto-convert slashes on windows
 		a.href = 'file://'+args.dir+'/raw.txt';
 	}
+	*/
 	a.text = "raw";
 	td.appendChild(a);
 	

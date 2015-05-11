@@ -242,6 +242,14 @@ function openManager(){
 							populateTable();
 						});
 					}
+					else if (data.message === 'viewhtml'){
+						var path = OS.Path.join(fsRootPath, data.args.dir, 'html.html');
+						gBrowser.selectedTab = gBrowser.addTab(path);
+					}
+					else if (data.message === 'viewraw'){
+						var path = OS.Path.join(fsRootPath, data.args.dir, 'raw.txt');
+						gBrowser.selectedTab = gBrowser.addTab(path);
+					}
 				};
 				listener.addEventListener('click', onEvent);
 				onEvent(); //maybe the page asked for refresh before listener installed
@@ -283,7 +291,6 @@ function getDirEntry(dirName){
 		console.log('point1', path);
 		OS.File.stat(path)
 		.then(function(stat){
-			console.log('point2', stat)
 			resolve(stat);
 		});
 	});
@@ -333,12 +340,16 @@ function getModTime(dirEntry){
 
 
 function sendMessage(data){
-	//comment
 	if (typeof(idiv) === "undefined") return;
 	if (!idiv) return;
-	var json = JSON.stringify(data)
-	idiv.textContent = json;
-	idiv.click();
+	try{ //idiv may be a dead object. The only way to find out is by accessing its property
+		var json = JSON.stringify(data)
+		idiv.textContent = json;
+		idiv.click();
+	}
+	catch (e){
+		return;
+	}
 }
 
 
@@ -482,17 +493,21 @@ var httpRequestBlocker = {
 			else if (httpChannel.loadGroup && httpChannel.loadGroup.notificationCallbacks) {
 				notificationCallbacks = httpChannel.loadGroup.notificationCallbacks;        
 			}
-			else return;
+			else {
+				console.log('no notificationCallbacks');
+				return;
+			}
 			var path = notificationCallbacks.getInterface(Components.interfaces.nsIDOMWindow).top.location.pathname;
-		} catch (e){ 
+		} catch (e){
+			console.log('no interface');
 			return; //xhr dont have any interface
 		}
-		for(var i=0; i < block_urls.length; i++){
-			if (block_urls[i] === path){
-				console.log('found matching tab, ignoring request');
-				httpChannel.cancel(Components.results.NS_BINDING_ABORTED);
-			}
+		if (block_urls.indexOf(path) > -1){
+			console.log('found matching tab, blocking request', path);
+			httpChannel.cancel(Components.results.NS_BINDING_ABORTED);
+			return;
 		}
+		console.log('not blocking request', path);
 	}
 };
 
@@ -596,11 +611,10 @@ function openTabs(sdir, commonName){
 		return;
 	}
 	
-	var t = gBrowser.addTab(html_path);
 	block_urls.push(html_path);
+	var t = gBrowser.addTab(html_path);
 	gBrowser.selectedTab = t;
 	install_notification(t, commonName, raw_path);
-	populateTable();
 }
 
 

@@ -146,6 +146,9 @@ function browser_specific_init(){
 		else if (data.message === 'viewhtml'){
 			openTabs(fsRootPath+data.args.dir);
 		}
+		else if (data.message === 'viewraw'){
+			chrome.tabs.create({url:fsRootPath+data.args.dir+'/raw.txt'});
+		}
 		else if (data.message === 'openInstallLink'){
 			chrome.tabs.create({url:'https://chrome.google.com/webstore/detail/pagesigner-helper-app/oclohfdjoojomkfddjclanpogcnjhemd'});
 		}
@@ -359,7 +362,6 @@ function openTabs(sdir, commonName){
 										onclick:function(info){
 											chrome.tabs.create({url:sdir + '/raw.txt'});
 										}});
-			populateTable(); //refresh manager
 		};
 		
 	});
