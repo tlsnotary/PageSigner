@@ -12,7 +12,7 @@ var os_win = false; //is OS windows? used to fix / in paths
 function init(){
 	getPref('verbose', 'bool')
 	.then(function(value){
-		if (value !== true){
+		if (value !== true && !is_chrome){
 			console.log = function(){};
 		}
 		return getPref('fallback', 'bool');
