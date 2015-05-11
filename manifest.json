@@ -11,6 +11,7 @@
     //need http to send stuff to oracle and https for amazon
     "*://*/*",
     "webRequest",
+    "webRequestBlocking",
     "tabs",
     "storage",
     "unlimitedStorage",

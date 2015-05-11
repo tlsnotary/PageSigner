@@ -294,6 +294,7 @@ function writePgsg(pgsg, session_dir, commonName){
 	});
 }
 
+var gtab = null;
 
 function openTabs(sdir, commonName){
 	//Because Chrome tabs crash when opening html from filesystem:chrome-extension:// URI
@@ -331,7 +332,7 @@ function openTabs(sdir, commonName){
 					}
 					//otherwise we are not importing - just open a new tab
 					else {
-						chrome.tabs.create({url:path}, function(t){
+							chrome.tabs.create({url:path}, function(t){
 							block_and_reload(t.id, path);
 						});
 					}
@@ -341,10 +342,14 @@ function openTabs(sdir, commonName){
 		
 		var block_and_reload = function(id, path){
 			chrome.webRequest.handlerBehaviorChanged(); //flush in-memory cache
+			//Blocking listener means it will process each request serially, not in parallel.
+			//There is a Chrome bug that when the listener is not blocking
+			//and a flood of requests happen, some of those requests don't end up in the
+			//listener and thus are allowed to go through.
 			chrome.webRequest.onBeforeRequest.addListener(function(x){
 				console.log('blocking', x.url);
 				return {cancel:true};
-			}, {tabId:id, urls: ["<all_urls>"]});
+			}, {tabId:id, urls: ["<all_urls>"]}, ["blocking"]);
 			chrome.tabs.reload(id, {bypassCache:true});
 			if (typeof(commonName) === "undefined"){
 				//view command from manager. No need for notifications et.al
