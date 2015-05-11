@@ -244,7 +244,10 @@ function openManager(){
 					}
 					else if (data.message === 'viewhtml'){
 						var path = OS.Path.join(fsRootPath, data.args.dir, 'html.html');
-						gBrowser.selectedTab = gBrowser.addTab(path);
+						block_urls.push(path);
+						var t = gBrowser.addTab(path);
+						gBrowser.selectedTab = t;
+						gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
 					}
 					else if (data.message === 'viewraw'){
 						var path = OS.Path.join(fsRootPath, data.args.dir, 'raw.txt');
@@ -614,6 +617,9 @@ function openTabs(sdir, commonName){
 	block_urls.push(html_path);
 	var t = gBrowser.addTab(html_path);
 	gBrowser.selectedTab = t;
+	setTimeout(function(){
+		gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
+	}, 100);
 	install_notification(t, commonName, raw_path);
 }
 

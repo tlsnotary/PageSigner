@@ -308,7 +308,7 @@ function openTabs(sdir, commonName){
 			if (typeof(delta.state) === "undefined") return;
 			if (delta.state.current !== 'complete') return;
 			chrome.downloads.onChanged.removeListener(downloadCompleted);
-			onComplete(id); //download completeds
+			onComplete(id); //download completed
 		});
 		
 		var onComplete = function(id){
