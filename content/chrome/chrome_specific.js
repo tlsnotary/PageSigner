@@ -220,48 +220,7 @@ function browser_specific_init(){
 }
 
 
-function getModulus(cert){
-	  var c = Certificate.decode(new Buffer(cert), 'der');
-		var pk = c.tbsCertificate.subjectPublicKeyInfo.subjectPublicKey.data;
-		var pkba = ua2ba(pk);
-		//expected modulus length 256, 384, 512
-		var modlen = 256;
-		if (pkba.length > 384) modlen = 384;
-		if (pkba.length > 512) modlen = 512;
-		var modulus = pkba.slice(pkba.length - modlen - 5, pkba.length -5);
-		return modulus;
-}
 
-function permutator(inputArr) {
-  var results = [];
-
-  function permute(arr, memo) {
-    var cur, memo = memo || [];
-
-    for (var i = 0; i < arr.length; i++) {
-      cur = arr.splice(i, 1);
-      if (arr.length === 0) {
-        results.push(memo.concat(cur));
-      }
-      permute(arr.slice(), memo.concat(cur));
-      arr.splice(i, 0, cur[0]);
-    }
-
-    return results;
-  }
-
-  return permute(inputArr);
-}
-
-function verifyCert(chain){
-	var chainperms = permutator(chain);
-	for (var i=0; i < chainperms.length; i++){
-		if (verifyCertChain(chainperms[i])){
-			return true;
-		}
-	}
-	return false;
-}
 
 
 function makeSessionDir(server, is_imported){
@@ -412,18 +371,6 @@ function openTabs(sdir){
 			};
 		});
 	});
-}
-
-
-function getCommonName(cert){
-	var c = Certificate.decode(new Buffer(cert), 'der');
-	var fields = c.tbsCertificate.subject.value;
-	for (var i=0; i < fields.length; i++){
-		if (fields[i][0].type.toString() !== [2,5,4,3].toString()) continue;
-		//first 2 bytes are DER-like metadata
-		return ba2str(fields[i][0].value.slice(2));
-	}
-	return 'unknown';
 }
 
 

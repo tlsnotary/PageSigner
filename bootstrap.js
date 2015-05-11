@@ -207,6 +207,12 @@ function loadjs(){
   include(addon, "pako.js");
   include(addon, "tlsn.js");
   include(addon, "testing/testing.js");
+  include(addon, "verifychain/buffer.js");
+  include(addon, "verifychain/asn1.js");
+  include(addon, "verifychain/jsrsasign-latest-all-min.js");
+  include(addon, "verifychain/rootcertslist.js");
+  include(addon, "verifychain/rootcerts.js");
+  include(addon, "verifychain/verifychain.js");
   include(addon, "testdriver.js");
 }
 

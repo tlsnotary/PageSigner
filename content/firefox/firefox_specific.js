@@ -420,56 +420,6 @@ function showAboutInfo(){
 }
 
 
-//extracts modulus from PEM certificate
-function getModulus(cert){
-	const nsIX509Cert = Ci.nsIX509Cert;
-	const nsIX509CertDB = Ci.nsIX509CertDB;
-	const nsX509CertDB = "@mozilla.org/security/x509certdb;1";
-	let certdb = Cc[nsX509CertDB].getService(nsIX509CertDB);
-	let cert_obj = certdb.constructX509FromBase64(b64encode(cert));
-	const nsASN1Tree = "@mozilla.org/security/nsASN1Tree;1";
-	const nsIASN1Tree = Ci.nsIASN1Tree;
-	var hexmodulus = "";
-	
-	var certDumpTree = Cc[nsASN1Tree].createInstance(nsIASN1Tree);
-	certDumpTree.loadASN1Structure(cert_obj.ASN1Structure);
-	var modulus_str = certDumpTree.getDisplayData(12);
-	if (! modulus_str.startsWith( "Modulus (" ) ){
-		//most likely an ECC certificate
-		alert ("Unfortunately this website is not compatible with PageSigner. (could not parse RSA certificate)");
-		return;
-	}
-	var lines = modulus_str.split('\n');
-	var line = "";
-	for (var i = 1; i<lines.length; ++i){
-		line = lines[i];
-		//an empty line is where the pubkey part ends
-		if (line === "") {break;}
-		//remove all whitespaces (g is a global flag)
-		hexmodulus += line.replace(/\s/g, '');
-	}
-	return hex2ba(hexmodulus);
-}
-
-
-//verify the certificate against Firefox's certdb
-function verifyCert(chain){
-	const nsIX509Cert = Ci.nsIX509Cert;
-	const nsIX509CertDB = Ci.nsIX509CertDB;
-	const nsX509CertDB = "@mozilla.org/security/x509certdb;1";
-	let certdb = Cc[nsX509CertDB].getService(nsIX509CertDB);
-	let cert_obj = certdb.constructX509FromBase64(b64encode(chain[0]));
-	let a = {}, b = {};
-	let retval = certdb.verifyCertNow(cert_obj, nsIX509Cert.CERT_USAGE_SSLServerWithStepUp, nsIX509CertDB.FLAG_LOCAL_ONLY, a, b);
-	if (retval === 0){ 		//success
-		return true;
-	}
-	else {
-		return false;
-	}
-}
-
-
 function dumpSecurityInfo(channel,urldata) {
     // Do we have a valid channel argument?
     if (! channel instanceof  Ci.nsIChannel) {
@@ -511,23 +461,19 @@ var httpRequestBlocker = {
 				notificationCallbacks = httpChannel.notificationCallbacks;
 			}
 			else if (httpChannel.loadGroup && httpChannel.loadGroup.notificationCallbacks) {
-				notificationCallbacks = httpChannel.loadGroup.notificationCallbacks;        
+				notificationCallbacks = httpChannel.loadGroup.notificationCallbacks;
 			}
 			else {
-				console.log('no notificationCallbacks');
 				return;
 			}
 			var path = notificationCallbacks.getInterface(Components.interfaces.nsIDOMWindow).top.location.pathname;
 		} catch (e){
-			console.log('no interface');
 			return; //xhr dont have any interface
 		}
 		if (block_urls.indexOf(path) > -1){
-			console.log('found matching tab, blocking request', path);
 			httpChannel.cancel(Components.results.NS_BINDING_ABORTED);
 			return;
 		}
-		console.log('not blocking request', path);
 	}
 };
 
@@ -674,16 +620,6 @@ function openTabs(sdir){
 		}, 500);
 		install_notification(t, commonName, raw_path);
 	});
-}
-
-
-function getCommonName(cert){
-	const nsIX509Cert = Ci.nsIX509Cert;
-	const nsIX509CertDB = Ci.nsIX509CertDB;
-	const nsX509CertDB = "@mozilla.org/security/x509certdb;1";
-	let certdb = Cc[nsX509CertDB].getService(nsIX509CertDB);
-	let cert_obj = certdb.constructX509FromBase64(b64encode(cert));
-	return cert_obj.commonName;
 }
 
 
