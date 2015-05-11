@@ -119,7 +119,7 @@ function browser_specific_init(){
 			deletePGSG(data.args.dir);
 		}
 		else if (data.message === 'import'){
-			verify_tlsn_and_show_html(data.args.data, true);
+			verify_tlsn_and_show_data(data.args.data, true);
 		}
 		else if (data.message === 'export'){
 			chrome.downloads.download({url:fsRootPath+data.args.dir+'/pgsg.pgsg',
@@ -143,7 +143,7 @@ function browser_specific_init(){
 		else if (data.message === 'openLink3'){
 			chrome.tabs.create({url:'bitcoin:35q65MQPVSi9TYMKxNYmpSyhWj7FkzTjzQ'});
 		}
-		else if (data.message === 'viewhtml'){
+		else if (data.message === 'viewdata'){
 			openTabs(fsRootPath+data.args.dir);
 		}
 		else if (data.message === 'viewraw'){
@@ -172,23 +172,6 @@ function browser_specific_init(){
 	});
 	
 	init();
-}
-
-
-function create_final_html(html_with_headers, session_dir){
-	return new Promise(function(resolve, reject) {
-		var rv = html_with_headers.split('\r\n\r\n');
-		var headers = rv[0];
-		var html = rv.splice(1).join('\r\n\r\n'); 
-		var dirname = session_dir.split('/').pop();
-		writeFile(dirname, 'html.html', ba2ua([].concat([0xef, 0xbb, 0xbf], str2ba(html))))
-		.then(function(){
-			return writeFile(dirname, 'raw.txt', html_with_headers);
-		})
-		.then(function(){
-			resolve();
-		});
-	});
 }
 
 
@@ -270,7 +253,7 @@ function writeFile(dirName, fileName, data, is_update){
 							fw.onwriteend = function() {
 								resolve();	
 							};							
-							fw.write(new Blob([data]));
+							fw.write(new Blob([ba2ua(data)]));
 						});
 					});
 				});
@@ -280,19 +263,6 @@ function writeFile(dirName, fileName, data, is_update){
 }
 
 
-function writePgsg(pgsg, session_dir, commonName){
-	return new Promise(function(resolve, reject) {
-		var dirname = session_dir.split('/').pop();
-		var name = commonName.replace(/\*\./g,""); 	
-		writeFile(dirname, 'pgsg.pgsg', ba2ua(pgsg))
-		.then(function(){
-			return writeFile(dirname, 'meta', name);
-		})
-		.then(function(){
-			resolve();
-		});
-	});
-}
 
 var gtab = null;
 
@@ -302,73 +272,77 @@ function openTabs(sdir, commonName){
 	var uid = Math.random().toString(36).slice(-10);
 	chrome.downloads.setShelfEnabled(false);
 	setTimeout(function(){chrome.downloads.setShelfEnabled(true);}, 1000);
-	chrome.downloads.download({url:sdir + '/html.html', filename:'pagesigner.tmp.dir/'+uid+'.html'},
-	function(id){
-		chrome.downloads.onChanged.addListener(function downloadCompleted(delta){
-			if (delta.id != id) return;
-			if (typeof(delta.state) === "undefined") return;
-			if (delta.state.current !== 'complete') return;
-			chrome.downloads.onChanged.removeListener(downloadCompleted);
-			onComplete(id); //download completed
-		});
-		
-		var onComplete = function(id){
-			chrome.downloads.search({id:id}, function(items){
-				var item = items[0];
-				var path = 'file://' + item.filename;
-				if (os_win) path = 'file:///'+fixWinPath(item.filename);
-				chrome.tabs.query({url: 'chrome-extension://*/content/chrome/file_picker.html'}, 
-				function(t){
-					//we want to find the file import tab and reuse it
-					if (t.length === 1){
-						chrome.tabs.update(t[0].id, {url:path}, function(t){
-							chrome.tabs.onUpdated.addListener(function tabUpdated(tabId, info, tab){
-								if (tabId != t.id) return;
-								if (tab.status != "complete") return;
-								chrome.tabs.onUpdated.removeListener(tabUpdated);
-								block_and_reload(t.id, path);
-							})
-						});
-					}
-					//otherwise we are not importing - just open a new tab
-					else {
-							chrome.tabs.create({url:path}, function(t){
-							block_and_reload(t.id, path);
-						});
-					}
-				});
+	var dirname = sdir.split('/').pop();
+	getFileContent(dirname, "metaDataFilename")
+	.then(function(data){
+		var name = ba2str(data);
+		chrome.downloads.download({url:sdir + '/' + name, filename:'pagesigner.tmp.dir/'+uid+name},
+		function(id){
+			chrome.downloads.onChanged.addListener(function downloadCompleted(delta){
+				if (delta.id != id) return;
+				if (typeof(delta.state) === "undefined") return;
+				if (delta.state.current !== 'complete') return;
+				chrome.downloads.onChanged.removeListener(downloadCompleted);
+				onComplete(id); //download completed
 			});
-		};
-		
-		var block_and_reload = function(id, path){
-			chrome.webRequest.handlerBehaviorChanged(); //flush in-memory cache
-			//Blocking listener means it will process each request serially, not in parallel.
-			//There is a Chrome bug that when the listener is not blocking
-			//and a flood of requests happen, some of those requests don't end up in the
-			//listener and thus are allowed to go through.
-			chrome.webRequest.onBeforeRequest.addListener(function(x){
-				console.log('blocking', x.url);
-				return {cancel:true};
-			}, {tabId:id, urls: ["<all_urls>"]}, ["blocking"]);
-			chrome.tabs.reload(id, {bypassCache:true});
-			if (typeof(commonName) === "undefined"){
-				//view command from manager. No need for notifications et.al
-				return;
-			}
-			var notif_msg = 'PageSigner verified that this page was received from '+commonName+'\r\nTip: right-click on the page if you want to see raw HTML';
-			chrome.notifications.create('', {type:'basic', 
-											title:'',
-											message:notif_msg,
-											 iconUrl:'content/icon128.png',
-											 priority:2});
-			chrome.contextMenus.create({type:'normal',
-										title:'View this page from ' + commonName + ' as raw HTML',
-										documentUrlPatterns:[path],
-										onclick:function(info){
-											chrome.tabs.create({url:sdir + '/raw.txt'});
-										}});
-		};
-		
+			
+			var onComplete = function(id){
+				chrome.downloads.search({id:id}, function(items){
+					var item = items[0];
+					var path = 'file://' + item.filename;
+					if (os_win) path = 'file:///'+fixWinPath(item.filename);
+					chrome.tabs.query({url: 'chrome-extension://*/content/chrome/file_picker.html'}, 
+					function(t){
+						//we want to find the file import tab and reuse it
+						if (t.length === 1){
+							chrome.tabs.update(t[0].id, {url:path}, function(t){
+								chrome.tabs.onUpdated.addListener(function tabUpdated(tabId, info, tab){
+									if (tabId != t.id) return;
+									if (tab.status != "complete") return;
+									chrome.tabs.onUpdated.removeListener(tabUpdated);
+									block_and_reload(t.id, path);
+								})
+							});
+						}
+						//otherwise we are not importing - just open a new tab
+						else {
+								chrome.tabs.create({url:path}, function(t){
+								block_and_reload(t.id, path);
+							});
+						}
+					});
+				});
+			};
+			
+			var block_and_reload = function(id, path){
+				chrome.webRequest.handlerBehaviorChanged(); //flush in-memory cache
+				//Blocking listener means it will process each request serially, not in parallel.
+				//There is a Chrome bug that when the listener is not blocking
+				//and a flood of requests happen, some of those requests don't end up in the
+				//listener and thus are allowed to go through.
+				chrome.webRequest.onBeforeRequest.addListener(function(x){
+					console.log('blocking', x.url);
+					return {cancel:true};
+				}, {tabId:id, urls: ["<all_urls>"]}, ["blocking"]);
+				chrome.tabs.reload(id, {bypassCache:true});
+				if (typeof(commonName) === "undefined"){
+					//view command from manager. No need for notifications et.al
+					return;
+				}
+				var notif_msg = 'PageSigner verified that this page was received from '+commonName+'\r\nTip: right-click on the page if you want to see raw HTML';
+				chrome.notifications.create('', {type:'basic', 
+												title:'',
+												message:notif_msg,
+												 iconUrl:'content/icon128.png',
+												 priority:2});
+				chrome.contextMenus.create({type:'normal',
+											title:'View this page from ' + commonName + ' as raw HTML',
+											documentUrlPatterns:[path],
+											onclick:function(info){
+												chrome.tabs.create({url:sdir + '/raw.txt'});
+											}});
+			};
+		});
 	});
 }
 

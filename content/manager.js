@@ -140,7 +140,7 @@ function addRow(args){
 	td = document.createElement("td");
 	a = document.createElement("a");
 	a.onclick = function (event){
-		sendMessage({'destination':'extension', 'message':'viewhtml',
+		sendMessage({'destination':'extension', 'message':'viewdata',
 						'args':{'dir':dir}});
 	};
 	a.text = "view";

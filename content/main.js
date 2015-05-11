@@ -182,7 +182,7 @@ function startNotarizing(callback){
 		return start_audit(modulus, certsha256, server, headers, args[0], args[1], args[2]);
 	})
 	.then(function(args2){
-		return save_session_and_open_html(args2, server);
+		return save_session_and_open_data(args2, server);
 	})
 	.then(function(){
 		//testing only
@@ -210,7 +210,7 @@ function startNotarizing(callback){
 
 
 
-function save_session_and_open_html(args, server){
+function save_session_and_open_data(args, server){
 	assert (args.length === 17, "wrong args length");
 	var cipher_suite = args[0];
 	var client_random = args[1];
@@ -228,7 +228,7 @@ function save_session_and_open_html(args, server){
 	var signature = args[13];
 	var commit_hash = args[14];
 	var notary_modulus = args[15];
-	var html_with_headers = args[16];
+	var data_with_headers = args[16];
 	
 	var server_chain_serialized = []; //3-byte length prefix followed by cert
 	for (var i=0; i < server_certchain.length; i++){
@@ -265,7 +265,7 @@ function save_session_and_open_html(args, server){
 	return makeSessionDir(server).
 	then(function(dir){
 		sdir = dir;
-		return create_final_html(html_with_headers, sdir);
+		return writeDatafile(data_with_headers, sdir);
 	})
 	.then(function(){
 		return writePgsg(pgsg, sdir, commonName);
@@ -278,6 +278,73 @@ function save_session_and_open_html(args, server){
 		populateTable(); //refresh manager
 	});
 }
+
+
+//data_with_headers is a string
+function writeDatafile(data_with_headers, session_dir){
+	return new Promise(function(resolve, reject) {
+		var rv = data_with_headers.split('\r\n\r\n');
+		var headers = rv[0];
+		var data = rv.splice(1).join('\r\n\r\n'); 
+		var dirname = session_dir.split('/').pop();
+		var header_lines = headers.split('\r\n');
+		var type = 'html';
+		for(var i=0; i < header_lines.length; i++){
+			if (header_lines[i].search(/content-type:\s*/i) > -1){
+				if (header_lines[i].search("html") > -1){
+					type = 'html';
+					break;
+				}
+				else if (header_lines[i].search("xml") > -1){
+					type = 'xml';
+					break;
+				}
+				else if (header_lines[i].search("json") > -1){
+					type = 'json';
+					break;
+				}
+				else if (header_lines[i].search("pdf") > -1){
+					type = 'pdf';
+					break;
+				}
+			}
+		}
+		if (type === "html"){
+			//html needs utf-8 byte order mark
+			data = [].concat([0xef, 0xbb, 0xbf], str2ba(data));
+		}
+		else {
+			data = str2ba(data);
+		}
+		writeFile(dirname, 'metaDataFilename', str2ba('data.'+type))
+		.then(function(){
+			return writeFile(dirname, 'data.'+type, data);
+		})
+		.then(function(){
+			return writeFile(dirname, 'raw.txt', str2ba(data_with_headers));
+		})
+		.then(function(){
+			resolve();
+		});
+	});
+}
+
+
+
+function writePgsg(pgsg, session_dir, commonName){
+	return new Promise(function(resolve, reject) {
+		var dirname = session_dir.split('/').pop();
+		var name = commonName.replace(/\*\./g,""); 	
+		writeFile(dirname, 'pgsg.pgsg', pgsg)
+		.then(function(){
+			return writeFile(dirname, 'meta', str2ba(name));
+		})
+		.then(function(){
+			resolve();
+		});
+	});
+}
+
 
 
 //imported_data is an array of numbers
@@ -361,7 +428,7 @@ function verify_tlsn(data, from_past){
 
 
 //imported_data is an array of numbers
-function verify_tlsn_and_show_html(imported_data, create){
+function verify_tlsn_and_show_data(imported_data, create){
 	try{
 		var a = verify_tlsn(imported_data, create);
 	}
@@ -370,14 +437,14 @@ function verify_tlsn_and_show_html(imported_data, create){
 		return;
 	}
 	if (create){
-		var html_with_headers = a[0];
+		var data_with_headers = a[0];
 		var commonName = a[1];
 		var imported_data = a[2];
 		var session_dir;
 		makeSessionDir(commonName, true)
 		.then(function(sdir){
 			session_dir = sdir;
-			return create_final_html(html_with_headers, session_dir);
+			return writeDatafile(data_with_headers, session_dir);
 		})
 		.then(function(){
 			return writePgsg(imported_data, session_dir, commonName);

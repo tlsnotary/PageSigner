@@ -229,27 +229,26 @@ function openManager(){
 						});
 					}
 					else if (data.message === 'rename'){
-						var path = OS.Path.join(fsRootPath, data.args.dir, "meta");
 						//to update dir's modtime, we remove the file and recreate it
-						OS.File.remove(path)
-						.then(function(){
-							return OS.File.open(path, {create:true});
-						})
-						.then(function(){				
-							return OS.File.writeAtomic(path, ba2ua(str2ba(data.args.newname)));
-						})
+						writeFile(data.args.dir, "meta", str2ba(data.args.newname), true)
 						.then(function(){
 							populateTable();
 						});
 					}
-					else if (data.message === 'viewhtml'){
-						var path = OS.Path.join(fsRootPath, data.args.dir, 'html.html');
-						block_urls.push(path);
-						var t = gBrowser.addTab(path);
-						gBrowser.selectedTab = t;
-						setTimeout(function(){
-							gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
-						}, 100);
+					else if (data.message === 'viewdata'){
+						var path = OS.Path.join(fsRootPath, data.args.dir);
+						getFileContent(data.args.dir, "metaDataFilename")
+						.then(function(data){
+							var name = ba2str(data);
+							path = OS.Path.join(path, name);
+							block_urls.push(path);
+							var t = gBrowser.addTab(path);
+							gBrowser.selectedTab = t;
+							setTimeout(function(){
+								gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
+							}, 500);
+
+						});
 					}
 					else if (data.message === 'viewraw'){
 						var path = OS.Path.join(fsRootPath, data.args.dir, 'raw.txt');
@@ -385,23 +384,6 @@ function savePGSGFile(existing_path, name){
 
 function showAboutInfo(){
 	window.openDialog("chrome://pagesigner/content/firefox/about.xul","","chrome, dialog, modal", gBrowser).focus();
-}
-
-
-//create the final html that prover and verifier will see in the tab and return 
-//its path.
-function create_final_html(html_with_headers, session_dir){
-	var rv = html_with_headers.split('\r\n\r\n');
-	var headers = rv[0];
-	var html = rv.splice(1).join('\r\n\r\n'); 
-		
-	var path_html = OS.Path.join(session_dir, 'html.html');
-	var raw_response = OS.Path.join(session_dir, 'raw.txt');
-	 //see "Byte order mark"
-	return OS.File.writeAtomic(path_html, ba2ua([].concat([0xef, 0xbb, 0xbf], str2ba(html))))
-	.then(function(){
-		return OS.File.writeAtomic(raw_response, ba2ua([].concat([0xef, 0xbb, 0xbf], str2ba(html_with_headers))));
-	});
 }
 
 
@@ -602,11 +584,37 @@ function writePgsg(pgsg, session_dir, commonName){
 }
 
 
-function openTabs(sdir, commonName){
-	var html_path = OS.Path.join(sdir, 'html.html');
+function writeFile(dirName, fileName, data, is_update){
+	if(typeof(is_update) === "undefined"){
+		is_update = false;
+	}
+	return new Promise(function(resolve, reject) {
+		var path = OS.Path.join(fsRootPath, dirName, fileName);
+		var promise;
+		if (is_update){
+			promise = OS.File.remove(path);
+		}
+		else {
+			promise = Promise.resolve();
+		}
+		promise
+		.then(function(){
+			return OS.File.open(path, {create:true});
+		})
+		.then(function(){				
+			return OS.File.writeAtomic(path, ba2ua(data));
+		})
+		.then(function(){
+			resolve();
+		});
+	});
+}
+
+
+function openTabs(sdir, commonName){	
 	var raw_path = OS.Path.join(sdir, 'raw.txt');
 	try{
-		OS.File.stat(html_path);
+		OS.File.stat(raw_path);
 	}
 	catch(e){
 		//file hasnt been written yet, sleep a while
@@ -616,13 +624,18 @@ function openTabs(sdir, commonName){
 		return;
 	}
 	
-	block_urls.push(html_path);
-	var t = gBrowser.addTab(html_path);
-	gBrowser.selectedTab = t;
-	setTimeout(function(){
-		gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
-	}, 100);
-	install_notification(t, commonName, raw_path);
+	getFileContent(sdir, "metaDataFilename")
+	.then(function(data){
+		var name = ba2str(data);
+		var data_path = OS.Path.join(sdir, name);
+		block_urls.push(data_path);
+		var t = gBrowser.addTab(data_path);
+		gBrowser.selectedTab = t;
+		setTimeout(function(){
+			gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
+		}, 500);
+		install_notification(t, commonName, raw_path);
+	});
 }
 
 

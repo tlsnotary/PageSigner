@@ -31,7 +31,7 @@ let main = {
 	  OS.File.read(path).
 	  then(function(imported_data){
 		var data_ba = ua2ba(imported_data);  
-		verify_tlsn_and_show_html(data_ba, true);
+		verify_tlsn_and_show_data(data_ba, true);
 		populateTable();
 		});
 	}
