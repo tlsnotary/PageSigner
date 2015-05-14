@@ -79,6 +79,7 @@ function addRow(args){
 	a.style = 'float: right';
 	a.onclick = function (event){
 		console.log('export clicked');
+		alert('Before exporting you MUST LOG OUT of any sessions associated with the data you are about to export. Please LOG OUT NOW if you have any active sessions running and press OK');
 		var dir = args.dir.split('/').pop();
 		sendMessage({'destination':'extension','message':'export',
 			'args':{'dir': dir, 'file': args.name}});
@@ -153,15 +154,6 @@ function addRow(args){
 		sendMessage({'destination':'extension', 'message':'viewraw',
 						'args':{'dir':dir}});
 	};
-	/*
-	if (is_chrome){
-		a.href = args.dir+'/raw.txt';
-	}
-	else {
-		//Firefox is smart enough to auto-convert slashes on windows
-		a.href = 'file://'+args.dir+'/raw.txt';
-	}
-	*/
 	a.text = "raw";
 	td.appendChild(a);
 	

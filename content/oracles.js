@@ -186,7 +186,7 @@ function checkGetConsoleOutput(xmlDoc, instanceId, launchTime, type, main_pubkey
 	assert(getSecondsDelta(timestamp, launchTime) <= 240);
 	var b64data = xmlDoc.getElementsByTagName('output')[0].textContent;
 	var logstr = ba2str(b64decode(b64data));
-	//now other string starting with xvd except for xvda
+	//no other string starting with xvd except for xvda
 	assert(logstr.search(/xvd[^a]/g) === -1);
 	var mainmark = 'TLSNotary main server pubkey which is embedded into the signing server:';
 	var sigmark = 'TLSNotary siging server pubkey:';
