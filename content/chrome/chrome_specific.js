@@ -1,7 +1,6 @@
 var testing = false;
 var tabs = {};
 var appId = "oclohfdjoojomkfddjclanpogcnjhemd"; //id of the helper app
-var dl_dir_path = ''; //path to download/pagesigner dir
 var is_chrome = true;
 var fsRootPath; //path to local storage root, e.g. filesystem:chrome-extension://abcdabcd/persistent
 
@@ -111,7 +110,7 @@ function browser_specific_init(){
 	});
 	//put icon into downloads dir. This is the icon for injected notification
 	chrome.downloads.setShelfEnabled(false);
-	setTimeout(function(){chrome.downloads.setShelfEnabled(true);}, 1000);
+	setTimeout(function(){chrome.downloads.setShelfEnabled(true);}, 2000);
 	chrome.downloads.download({url:chrome.extension.getURL("content/icon16.png"),
 		conflictAction:'overwrite',
 		 filename:'pagesigner.tmp.dir/icon16.png'});
@@ -494,7 +493,7 @@ function deletePGSG(dir){
 
 
 function renamePGSG(dir, newname){
-	writeFile(dir, 'meta', newname, true)
+	writeFile(dir, 'meta', str2ba(newname), true)
 	.then(function(){
 		populateTable();
 	});
@@ -502,13 +501,8 @@ function renamePGSG(dir, newname){
 
 
 function sendMessage(data){
-	if (is_chrome){
-		chrome.runtime.sendMessage({'destination':'manager',
+	chrome.runtime.sendMessage({'destination':'manager',
 									'data':data});
-	}
-	else {
-		
-	}
 }
 
 
@@ -622,6 +616,24 @@ function getFileContent(dirname, filename){
 	});
 }
 
+
+function sendAlert(alertData){
+	chrome.tabs.query({active: true}, function(tabs) {
+		if (!tabs[0].url.startsWith("http")){
+			//we cannot inject out alert into not http & https URLs, use the ugly alert
+			alert("You can only notarize pages which start with https://");
+			return;
+		}
+		chrome.tabs.executeScript(tabs[0].id, {file:"content/sweetalert.min.js"}, function(){
+			chrome.tabs.insertCSS(tabs[0].id, {file:"content/sweetalert.css"}, function(){
+				chrome.tabs.executeScript(tabs[0].id, {code:"swal("+ JSON.stringify(alertData) +")"});
+			});
+		});
+		
+		
+		//chrome.tabs.sendMessage(tabs[0].id, {destination:'sweetalert', args:alertData})
+	});
+}
 
 
 //Used only for testing - empty the filesystem

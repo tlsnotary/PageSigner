@@ -165,12 +165,16 @@ function openManager(){
 	var css  = OS.Path.join(contentDir, "manager.css");
 	var check  = OS.Path.join(contentDir, "check.png");
 	var cross  = OS.Path.join(contentDir, "cross.png");
+	var swalcss  = OS.Path.join(contentDir, "sweetalert.css");
+	var swaljs  = OS.Path.join(contentDir, "sweetalert.min.js");
 
 	var dest_html = OS.Path.join(fsRootPath, "manager.html");
 	var dest_js = OS.Path.join(fsRootPath, "manager.js");
 	var dest_css = OS.Path.join(fsRootPath, "manager.css");
 	var dest_check  = OS.Path.join(fsRootPath, "check.png");
 	var dest_cross  = OS.Path.join(fsRootPath, "cross.png");
+	var dest_swalcss  = OS.Path.join(fsRootPath, "sweetalert.css");
+	var dest_swaljs  = OS.Path.join(fsRootPath, "sweetalert.min.js");
 
 	OS.File.copy(html, dest_html)
 	.then(function(){
@@ -184,6 +188,12 @@ function openManager(){
 	})
 	.then(function(){
 		OS.File.copy(cross, dest_cross, {noOverwrite:true});
+	})
+	.then(function(){
+		OS.File.copy(swalcss, dest_swalcss, {noOverwrite:true});
+	})
+	.then(function(){
+		OS.File.copy(swaljs, dest_swaljs, {noOverwrite:true});
 	})
 	.catch(function(e){
 		console.log('files exist');
@@ -761,4 +771,10 @@ function updateCache(hash){
 		valid_hashes.push(hash.toString());
 		setPref('valid_hashes', 'string', JSON.stringify(valid_hashes));
 	}
+}
+
+
+function sendAlert(alertData){
+	var p = Cc["@mozilla.org/embedcomp/prompt-service;1"].getService(Ci.nsIPromptService);
+	p.alert(null, alertData.title, alertData.text);
 }

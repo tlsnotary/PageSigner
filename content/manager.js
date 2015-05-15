@@ -79,10 +79,15 @@ function addRow(args){
 	a.style = 'float: right';
 	a.onclick = function (event){
 		console.log('export clicked');
-		alert('Before exporting you MUST LOG OUT of any sessions associated with the data you are about to export. Please LOG OUT NOW if you have any active sessions running and press OK');
-		var dir = args.dir.split('/').pop();
-		sendMessage({'destination':'extension','message':'export',
+		swal({
+		title:'You MUST LOG OUT before exporting',
+		text:'Before exporting you MUST LOG OUT of any sessions associated with the data you are about to export. Please LOG OUT NOW if you have any active sessions running and press OK to proceed',
+		type: "warning"}, 
+		function(){
+			sendMessage({'destination':'extension','message':'export',
 			'args':{'dir': dir, 'file': args.name}});
+		});
+		
 	};
 	a.text = 'Export';
 	td.appendChild(a);
@@ -93,11 +98,15 @@ function addRow(args){
 	a.title = 'permanently remove this set of files from disk';
 	a.style = 'float: right';
 	a.onclick = function (event){
-		var r = confirm("This will remove all notarized data of "+args.name+", including html. Are you sure?");
-		if (r){
+		swal({
+			title:'Removing notarization data',
+			text: "This will remove all notarized data of "+args.name+". Are you sure?",
+			type: "warning"
+		},
+		function(){
 			sendMessage({'destination':'extension', 'message':'delete',
 									'args':{'dir':dir}});
-		}
+		});
 	};
 	a.text = 'Delete';
 	td.appendChild(a);
@@ -170,16 +179,26 @@ function doRename(t, oldname, dir){
 		  return rg1.test(fname)&&!rg2.test(fname)&&!rg3.test(fname);
 		};
     })();
-    var new_name = window.prompt("Enter a new name for the notarization file:");
-    if(!(isValid(new_name))){
-		alert("Invalid filename");
-		return;
-    }
-    if (new_name === null) return; //escape pressed
-    sendMessage({'destination':'extension',
-						'message':'rename',
-						'args':{'dir':dir, 'newname':new_name}
-	});
+    swal({
+		title: "Enter a new name for the notarization file", 
+		type: "input",
+		inputPlaceholder: "Write something" 
+	},
+	function(new_name){
+		if(!(isValid(new_name))){
+			//swal glitch - need a timeout
+			setTimeout(function(){
+				swal({title:"Invalid filename", text:'Please only use alphanumerical characters', type:'warning'});
+			}, 200);
+		}
+		else if (new_name === null) return; //escape pressed
+		else {
+			sendMessage({'destination':'extension',
+							'message':'rename',
+							'args':{'dir':dir, 'newname':new_name}
+			});
+		}
+	});    
 }
 
 

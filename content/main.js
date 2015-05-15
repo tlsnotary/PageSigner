@@ -125,8 +125,7 @@ function parse_reliable_sites(text){
 //callback is used in testing to signal when this page's n10n finished
 function startNotarizing(callback){
 	if (! oracles_intact){
-		alert('Cannot notarize because something is wrong \
-			with PageSigner server. Please try again later');
+		sendAlert({title:'PageSigner error', text:'Cannot notarize because something is wrong with PageSigner server. Please try again later'});
 		return;
 	}
 	var modulus;
@@ -141,9 +140,8 @@ function startNotarizing(callback){
 		return get_certificate(server);
 	})
 	.then(function(chain){
-		console.log('got certificate');
 		if (! verifyCert(chain)){
-			alert("This website cannot be audited by PageSigner because it presented an untrusted certificate");
+			sendAlert({title:"PageSigner error", text:"This website cannot be audited by PageSigner because it presented an untrusted certificate"});
 			return;
 		}
 		modulus = getModulus(chain[0]);
@@ -196,14 +194,14 @@ function startNotarizing(callback){
 	 	loadNormalIcon();
 		console.log('There was an error: ' + err);
 		if (err === "Server sent alert 2,40"){
-			alert('Pagesigner is not compatible with this website because the website does not use RSA ciphersuites.');
+			sendAlert({title:'PageSigner error', text:'Pagesigner is not compatible with this website because the website does not use RSA ciphersuites'});
 		}
 		else if (err.startsWith('Timed out waiting for notary server to respond') &&
 			((new Date().getTime() - previous_session_start_time) < 60*1000) ){
-			alert ('You are signing pages way too fast. Please retry in 60 seconds.');
+			sendAlert ({title:'PageSigner error', text:'You are signing pages way too fast. Please retry in 60 seconds'});
 		}
 		else {
-			alert('There was an error: ' + err);
+			sendAlert({title:'PageSigner error', text:err});
 		}
 	});
 }
@@ -436,7 +434,7 @@ function verify_tlsn_and_show_data(imported_data, create){
 		var a = verify_tlsn(imported_data, create);
 	}
 	catch (e){
-		alert('Failed to import file. The error was: ' + e);
+		sendAlert({title:'PageSigner failed to import file', text:'The error was: ' + e});
 		return;
 	}
 	if (create){

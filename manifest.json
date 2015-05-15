@@ -61,6 +61,7 @@
     "content/verifychain/rootcerts.js",
     "content/verifychain/verifychain.js"
     ]
-  }  
+  }
+  
  
 }
