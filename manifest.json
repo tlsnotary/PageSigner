@@ -8,18 +8,17 @@
 
  "permissions": [
     "background",
-    //need http to send stuff to oracle and https for amazon
-    "*://*/*",
+    "*://*/*",  //need https to listen for requests and http to send stuff to oracle
+    "file://*", //ideally we should limit acces only to pagesigner.tmp.dir but Chrome can't do that
     "webRequest",
     "webRequestBlocking",
+    "activeTab",
     "tabs",
     "storage",
     "unlimitedStorage",
     "management",
     "downloads",
-    "downloads.shelf",
-    "notifications",
-    "contextMenus"
+    "downloads.shelf"
   ],
   
   "icons": {

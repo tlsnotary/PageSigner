@@ -271,7 +271,7 @@ function save_session_and_open_data(args, server){
 		return writePgsg(pgsg, sdir, commonName);
 	})
 	.then(function(){
-		return openTabs(sdir, commonName);
+		return openTabs(sdir);
 	})
 	.then(function(){
 		updateCache(sha256(pgsg));
@@ -338,6 +338,9 @@ function writePgsg(pgsg, session_dir, commonName){
 		writeFile(dirname, 'pgsg.pgsg', pgsg)
 		.then(function(){
 			return writeFile(dirname, 'meta', str2ba(name));
+		})
+		.then(function(){
+			return writeFile(dirname, 'metaDomainName', str2ba(commonName));
 		})
 		.then(function(){
 			resolve();
@@ -450,7 +453,7 @@ function verify_tlsn_and_show_data(imported_data, create){
 			return writePgsg(imported_data, session_dir, commonName);
 		})
 		.then(function(){
-			return openTabs(session_dir, commonName);
+			return openTabs(session_dir);
 		})
 		.then(function(){
 			updateCache(sha256(imported_data));

@@ -108,7 +108,14 @@ function browser_specific_init(){
 		if(p.os === "win"){
 			os_win = true;
 		}
-	}); 
+	});
+	//put icon into downloads dir. This is the icon for injected notification
+	chrome.downloads.setShelfEnabled(false);
+	setTimeout(function(){chrome.downloads.setShelfEnabled(true);}, 1000);
+	chrome.downloads.download({url:chrome.extension.getURL("content/icon16.png"),
+		conflictAction:'overwrite',
+		 filename:'pagesigner.tmp.dir/icon16.png'});
+	
 	chrome.runtime.onMessage.addListener(function(data){
 		if (data.destination !== 'extension') return;
 		console.log('ext got msg', data);
@@ -263,17 +270,19 @@ function writeFile(dirName, fileName, data, is_update){
 }
 
 
-
-var gtab = null;
-
-function openTabs(sdir, commonName){
+function openTabs(sdir){
 	//Because Chrome tabs crash when opening html from filesystem:chrome-extension:// URI
 	//we first download the file to /Downloads and then open
 	var uid = Math.random().toString(36).slice(-10);
 	chrome.downloads.setShelfEnabled(false);
 	setTimeout(function(){chrome.downloads.setShelfEnabled(true);}, 1000);
 	var dirname = sdir.split('/').pop();
-	getFileContent(dirname, "metaDataFilename")
+	var commonName;
+	getFileContent(dirname, "metaDomainName")
+	.then(function(data_ba){
+		commonName = ba2str(data_ba);
+		return getFileContent(dirname, "metaDataFilename");
+	})
 	.then(function(data){
 		var name = ba2str(data);
 		chrome.downloads.download({url:sdir + '/' + name, filename:'pagesigner.tmp.dir/'+uid+name},
@@ -298,7 +307,7 @@ function openTabs(sdir, commonName){
 							chrome.tabs.update(t[0].id, {url:path}, function(t){
 								chrome.tabs.onUpdated.addListener(function tabUpdated(tabId, info, tab){
 									if (tabId != t.id) return;
-									if (tab.status != "complete") return;
+									//dont wait for tab to load, reload immediately
 									chrome.tabs.onUpdated.removeListener(tabUpdated);
 									block_and_reload(t.id, path);
 								})
@@ -315,32 +324,27 @@ function openTabs(sdir, commonName){
 			};
 			
 			var block_and_reload = function(id, path){
-				chrome.webRequest.handlerBehaviorChanged(); //flush in-memory cache
 				//Blocking listener means it will process each request serially, not in parallel.
 				//There is a Chrome bug that when the listener is not blocking
 				//and a flood of requests happen, some of those requests don't end up in the
 				//listener and thus are allowed to go through.
 				chrome.webRequest.onBeforeRequest.addListener(function(x){
+					if (x.url.startsWith('file://')) return; //dont block the actual file we are opening
 					console.log('blocking', x.url);
 					return {cancel:true};
 				}, {tabId:id, urls: ["<all_urls>"]}, ["blocking"]);
-				chrome.tabs.reload(id, {bypassCache:true});
-				if (typeof(commonName) === "undefined"){
-					//view command from manager. No need for notifications et.al
-					return;
-				}
-				var notif_msg = 'PageSigner verified that this page was received from '+commonName+'\r\nTip: right-click on the page if you want to see raw HTML';
-				chrome.notifications.create('', {type:'basic', 
-												title:'',
-												message:notif_msg,
-												 iconUrl:'content/icon128.png',
-												 priority:2});
-				chrome.contextMenus.create({type:'normal',
-											title:'View this page from ' + commonName + ' as raw HTML',
-											documentUrlPatterns:[path],
-											onclick:function(info){
-												chrome.tabs.create({url:sdir + '/raw.txt'});
-											}});
+				chrome.tabs.reload(id, {bypassCache:true}, function(){
+					//this callback triggers too early sometimes. Wait to make sure page reloaded
+					setTimeout(function(){
+						chrome.tabs.insertCSS(id, {file: 'content/chrome/injectbar.css'}, function(a){
+							chrome.tabs.executeScript(id, {file: 'content/chrome/injectbar.js'}, function(a){
+									chrome.tabs.executeScript(id, {code: 
+									'document.getElementById("domainName").textContent="' + commonName.toString() + '";' + 
+									'var sdir ="' + dirname.toString() + '";'});
+							});
+						});
+					}, 500);
+				});
 			};
 		});
 	});

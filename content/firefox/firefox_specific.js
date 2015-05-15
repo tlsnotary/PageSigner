@@ -236,19 +236,7 @@ function openManager(){
 						});
 					}
 					else if (data.message === 'viewdata'){
-						var path = OS.Path.join(fsRootPath, data.args.dir);
-						getFileContent(data.args.dir, "metaDataFilename")
-						.then(function(data){
-							var name = ba2str(data);
-							path = OS.Path.join(path, name);
-							block_urls.push(path);
-							var t = gBrowser.addTab(path);
-							gBrowser.selectedTab = t;
-							setTimeout(function(){
-								gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
-							}, 500);
-
-						});
+						openTabs(data.args.dir);
 					}
 					else if (data.message === 'viewraw'){
 						var path = OS.Path.join(fsRootPath, data.args.dir, 'raw.txt');
@@ -611,7 +599,7 @@ function writeFile(dirName, fileName, data, is_update){
 }
 
 
-function openTabs(sdir, commonName){	
+function openTabs(sdir){	
 	var raw_path = OS.Path.join(sdir, 'raw.txt');
 	try{
 		OS.File.stat(raw_path);
@@ -619,15 +607,20 @@ function openTabs(sdir, commonName){
 	catch(e){
 		//file hasnt been written yet, sleep a while
 		setTimeout(function(){
-			openTabs(sdir, commonName);
+			openTabs(sdir);
 		}, 1000);
 		return;
 	}
 	
-	getFileContent(sdir, "metaDataFilename")
+	var commonName;
+	getFileContent(sdir, "metaDomainName")
+	.then(function(data_ba){
+		commonName = ba2str(data_ba);
+		return getFileContent(sdir, "metaDataFilename")
+	})
 	.then(function(data){
 		var name = ba2str(data);
-		var data_path = OS.Path.join(sdir, name);
+		var data_path = OS.Path.join(fsRootPath, sdir, name);
 		block_urls.push(data_path);
 		var t = gBrowser.addTab(data_path);
 		gBrowser.selectedTab = t;
