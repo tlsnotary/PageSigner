@@ -121,6 +121,13 @@ function getHeaders(){
 
 
 function browser_specific_init(){
+	//sometimes gBrowser is not available
+	if (gBrowser === null || typeof(gBrowser) === "undefined"){
+	   gBrowser = win.gBrowser;
+	   setTimeout(browser_specific_init, 100);
+	   return;
+	}
+	
 	var os = Cc["@mozilla.org/xre/app-info;1"].getService(Ci.nsIXULRuntime).OS;
 	if (os === "WINNT") os_win = true;
 	
@@ -130,33 +137,9 @@ function browser_specific_init(){
 			valid_hashes = JSON.parse(vh);
 		}
 	});
+	
 	fsRootPath = OS.Path.join(OS.Constants.Path.profileDir, "pagesigner");
-	OS.File.makeDir(fsRootPath); //noop if exists
-	
-	//sometimes gBrowser is not available
-	if (gBrowser === null || typeof(gBrowser) === "undefined"){
-	   gBrowser = win.gBrowser;
-	   setTimeout(browser_specific_init, 100);
-	   return;
-	}
-	init();
-}
-
-
-var idiv;
-var listener;
-var d;
-function openManager(){
-	//if manager is open, focus it
-	var tabs = gBrowser.tabs;
-	for(var i=0; i < tabs.length; i++){
-		var url = gBrowser.getBrowserForTab(tabs[i]).contentWindow.location.href;
-		if (url.search('/pagesigner/manager.html') > -1){
-			gBrowser.selectedTab = tabs[i];
-			return;
-		}
-	}
-	
+		
 	//copy the manager file to local filesystem for security + takes care of some odd behaviour
 	//when trying to add eventListener to chrome:// resources
 	var contentDir = OS.Path.join(OS.Constants.Path.profileDir,"extensions","pagesigner@tlsnotary","content");
@@ -176,7 +159,10 @@ function openManager(){
 	var dest_swalcss  = OS.Path.join(fsRootPath, "sweetalert.css");
 	var dest_swaljs  = OS.Path.join(fsRootPath, "sweetalert.min.js");
 
-	OS.File.copy(html, dest_html)
+	OS.File.makeDir(fsRootPath, {ignoreExisting:true})
+	.then(function(){
+		OS.File.copy(html, dest_html);
+	})
 	.then(function(){
 		return OS.File.copy(js, dest_js, {noOverwrite:true});
 	})
@@ -194,13 +180,29 @@ function openManager(){
 	})
 	.then(function(){
 		OS.File.copy(swaljs, dest_swaljs, {noOverwrite:true});
-	})
-	.catch(function(e){
-		console.log('files exist');
-		//exception is expected if file exists
-	})
+	});
+	
+	init();
+}
+
+
+var idiv;
+var listener;
+var d;
+function openManager(){
+	//if manager is open, focus it
+	var tabs = gBrowser.tabs;
+	for(var i=0; i < tabs.length; i++){
+		var url = gBrowser.getBrowserForTab(tabs[i]).contentWindow.location.href;
+		if (url.search('/pagesigner/manager.html') > -1){
+			gBrowser.selectedTab = tabs[i];
+			return;
+		}
+	}
+	
+	Promise.resolve() //dont want to indent the whole .then() section
 	.then(function(){
-		var uri = dest_html;
+		var uri = OS.Path.join(fsRootPath, "manager.html");
 		var t = gBrowser.addTab(uri);
 		gBrowser.selectedTab = t;
 		
