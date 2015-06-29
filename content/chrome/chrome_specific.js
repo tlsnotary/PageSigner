@@ -25,17 +25,42 @@ function setPref(pref, type, value){
 
 
 function import_reliable_sites(){
-	var xhr = new XMLHttpRequest();
-	xhr.onreadystatechange = function(){
-		if (xhr.readyState != 4)
-			return;
+	import_resource('pubkeys.txt')
+	.then(function(text){
+		parse_reliable_sites(text);
+	});
+}
 
-		if (xhr.responseText) {
-			parse_reliable_sites(xhr.responseText);
+
+function import_resource(filename){
+	return new Promise(function(resolve, reject) {
+		var xhr = new XMLHttpRequest();
+		xhr.onreadystatechange = function(){
+			if (xhr.readyState != 4)
+				return;
+
+			if (xhr.responseText) {
+				resolve(xhr.responseText);
+			}
+		};
+		xhr.open('get', chrome.extension.getURL('content/'+toFilePath(filename)), true);
+		xhr.send();
+	});
+}
+
+
+//converts an array of file names into a string with correct slashes
+function toFilePath(pathArray){
+	if (typeof(pathArray) === 'string') return pathArray;
+	var expanded = '';
+	for(var i=0; i < pathArray.length; i++){
+		expanded += pathArray[i];
+		//not trailing slash for last element
+		if (i < (pathArray.length-1) ){
+			expanded += '/';
 		}
-	};
-	xhr.open('get', chrome.extension.getURL('content/pubkeys.txt'), true);
-	xhr.send();
+	}
+	return expanded;
 }
 
 

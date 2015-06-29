@@ -53,12 +53,37 @@ function setPref(prefname, type, value){
 
 
 function import_reliable_sites(){
-	OS.File.read(OS.Path.join(OS.Constants.Path.profileDir,"extensions","pagesigner@tlsnotary","content","pubkeys.txt"), { encoding: "utf-8" }).
-	then(function onSuccess(text) {
+	import_resource('pubkeys.txt')
+	.then(function(text) {
 		parse_reliable_sites(text); 
 	});
 }
 
+
+//converts an array of file names into a string with correct slashes
+function toFilePath(pathArray){
+	if (typeof(pathArray) === 'string') return pathArray;
+	var expanded = '';
+	for(var i=0; i < pathArray.length; i++){
+		expanded = OS.Path.join(pathArray, dirName[i]);
+	}
+	return expanded;
+}
+
+
+function import_resource(filename){
+	return new Promise(function(resolve, reject) {
+		OS.File.read(OS.Path.join(
+			OS.Constants.Path.profileDir,
+			"extensions",
+			"pagesigner@tlsnotary",
+			"content",
+			 toFilePath(filename)), { encoding: "utf-8" })
+		.then(function onSuccess(text) {
+			resolve(text); 
+		});
+	});
+}
 
 
 function startListening(){
