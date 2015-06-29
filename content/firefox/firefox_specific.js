@@ -91,11 +91,10 @@ function getHeaders(){
     //passed tests, secure, grab headers, update status bar and start audit:
     var x = sanitized_url.split('/');
     x.splice(0,3);
-    var tab_url = x.join('/');
+    var resource_url = x.join('/');
 	
     var httpChannel = dict_of_httpchannels[sanitized_url];
-	var headers = "";
-	headers += httpChannel.requestMethod + " /" + tab_url + " HTTP/1.1" + "\r\n";
+	var headers = httpChannel.requestMethod + " /" + resource_url + " HTTP/1.1" + "\r\n";
 	httpChannel.visitRequestHeaders(function(header,value){
                                   headers += header +": " + value + "\r\n";});
     if (httpChannel.requestMethod == "GET"){
@@ -114,8 +113,13 @@ function getHeaders(){
 		//FF's uploaddata contains Content-Type and Content-Length headers + '\r\n\r\n' + http body
 		headers += uploaddata;
 	}
-	var server = headers.split('\r\n')[1].split(':')[1].replace(/ /g,'');
-	resolve({'headers':headers, 'server':server});
+	var host = headers.split('\r\n')[1].split(':')[1].replace(/ /g,'');
+	var port = 443;
+	if (tab_url_full.split(':').length === 3){
+		//the port is explicitely provided in URL
+		port = parseInt(tab_url_full.split(':')[2].split('/')[0]);
+	}
+	resolve({'headers':headers, 'server':host, 'port':port});
 	});
 }
 

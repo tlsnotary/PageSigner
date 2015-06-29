@@ -114,7 +114,7 @@ function parse_reliable_sites(text){
 			if ( (extime - now) < 1000*60*60*24*90){
 				continue;
 			}
-			reliable_sites.push( {'name':name, 'expires':expires, 'modulus':modulus} );		
+			reliable_sites.push( {'name':name, 'port':443, 'expires':expires, 'modulus':modulus} );		
 			}
 		}	
 }
@@ -130,14 +130,14 @@ function startNotarizing(callback){
 	}
 	var modulus;
 	var certsha256;
-	var headers;
-	var server;
+	var headers, server, port;
 	getHeaders()
 	.then(function(obj){
 		headers = obj.headers;
 		server = obj.server;
+		port = obj.port;
 		loadBusyIcon();
-		return get_certificate(server);
+		return get_certificate(server, port);
 	})
 	.then(function(chain){
 		if (! verifyCert(chain)){
@@ -177,7 +177,7 @@ function startNotarizing(callback){
 		});
 	})
 	.then(function(args){
-		return start_audit(modulus, certsha256, server, headers, args[0], args[1], args[2]);
+		return start_audit(modulus, certsha256, server, port, headers, args[0], args[1], args[2]);
 	})
 	.then(function(args2){
 		return save_session_and_open_data(args2, server);

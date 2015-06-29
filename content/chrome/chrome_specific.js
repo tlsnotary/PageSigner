@@ -64,11 +64,10 @@ function getHeaders(){
 		}
 		var tab = tabs[t[0].id];
 		var x = tab.url.split('/');
-		var host = x[2];
+		var host = x[2].split(':')[0];
 		x.splice(0,3);
-		var tab_url = x.join('/');	
-		var headers = '';
-		headers += tab.method + " /" + tab_url + " HTTP/1.1" + "\r\n";
+		var resource_url = x.join('/');	
+		var headers = tab.method + " /" + resource_url + " HTTP/1.1" + "\r\n";
 		headers += "Host: " + host + "\r\n";
 		for (var i = 0; i < tab.requestHeaders.length; i++){
 			var h = tab.requestHeaders[i];
@@ -77,7 +76,12 @@ function getHeaders(){
 		if (tab.method == "GET"){
 			headers += "\r\n";
 		}
-		resolve({'headers':headers, 'server':host});
+		var port = 443;
+        if (tab.url.split(':').length === 3){
+			//the port is explicitely provided in URL
+			port = parseInt(tab.url.split(':')[2].split('/')[0]);
+        }
+		resolve({'headers':headers, 'server':host, 'port':port});
 	});
 	});
 }
