@@ -54,6 +54,7 @@
     "content/pako.js",
     "content/tlsn.js",
     "content/main.js",
+    "content/testing/testing.js",
     "content/verifychain/buffer.js",
     "content/verifychain/asn1.js",
     "content/verifychain/jsrsasign-latest-all-min.js",

@@ -206,6 +206,7 @@ function loadjs(){
   include(addon, "jsbn2.js");
   include(addon, "pako.js");
   include(addon, "tlsn.js");
+  include(addon, "testing/testing.js");
   include(addon, "testdriver.js");
 }
 
