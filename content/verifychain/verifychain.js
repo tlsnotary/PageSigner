@@ -277,7 +277,7 @@ var verifyCertChain = function(chain) {
     var sigHashAlg;
     //1.2.840.113549.1.1.11 sha256
     //1.2.840.113549.1.1.5  sha1
-    //1.2.840.113549.1.1.5  sha384
+    //1.2.840.113549.1.1.12  sha384
     if (lastalgbyte	=== 11){
 		sigHashAlg = 'SHA256withRSA';
 	}
