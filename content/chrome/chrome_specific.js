@@ -26,8 +26,8 @@ function setPref(pref, type, value){
 
 function import_reliable_sites(){
 	import_resource('pubkeys.txt')
-	.then(function(text){
-		parse_reliable_sites(text);
+	.then(function(text_ba){
+		parse_reliable_sites(ba2str(text_ba));
 	});
 }
 
@@ -35,12 +35,13 @@ function import_reliable_sites(){
 function import_resource(filename){
 	return new Promise(function(resolve, reject) {
 		var xhr = new XMLHttpRequest();
+		xhr.responseType = "arraybuffer";
 		xhr.onreadystatechange = function(){
 			if (xhr.readyState != 4)
 				return;
 
-			if (xhr.responseText) {
-				resolve(xhr.responseText);
+			if (xhr.response) {
+				resolve(ab2ba(xhr.response));
 			}
 		};
 		xhr.open('get', chrome.extension.getURL('content/'+toFilePath(filename)), true);

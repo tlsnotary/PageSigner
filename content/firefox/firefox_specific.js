@@ -54,8 +54,8 @@ function setPref(prefname, type, value){
 
 function import_reliable_sites(){
 	import_resource('pubkeys.txt')
-	.then(function(text) {
-		parse_reliable_sites(text); 
+	.then(function(ba) {
+		parse_reliable_sites(ba2str(ba)); 
 	});
 }
 
@@ -78,9 +78,10 @@ function import_resource(filename){
 			"extensions",
 			"pagesigner@tlsnotary",
 			"content",
-			 toFilePath(filename)), { encoding: "utf-8" })
-		.then(function onSuccess(text) {
-			resolve(text); 
+			 toFilePath(filename)))
+		.then(function onSuccess(ba) {
+			//returns Uint8Array which is compatible with our internal byte array	
+			resolve(ba); 
 		});
 	});
 }
