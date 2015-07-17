@@ -5,11 +5,16 @@ var is_chrome = true;
 var fsRootPath; //path to local storage root, e.g. filesystem:chrome-extension://abcdabcd/persistent
 
 
-function getPref(value, type){
+function getPref(pref, type){
 	return new Promise(function(resolve, reject) {
-		chrome.storage.local.get(value, function(items){
-			if (!items.hasOwnProperty('first')) resolve("undefined");
-			resolve(items[value]);
+		chrome.storage.local.get(pref, function(obj){
+			if (Object.keys(obj).length === 0){
+				resolve('undefined');
+				return;
+			}
+			else {
+				resolve(obj[pref]);
+			}
 		});
 	});
 }
@@ -17,7 +22,9 @@ function getPref(value, type){
 
 function setPref(pref, type, value){
 	return new Promise(function(resolve, reject) {
-		chrome.storage.local.set({pref:value}, function(){
+		var obj = {};
+		obj[pref] = value;
+		chrome.storage.local.set(obj, function(){
 			resolve();
 		});
 	});
@@ -129,9 +136,11 @@ function browser_specific_init(){
 	window.webkitRequestFileSystem(window.PERSISTENT, 50*1024*1024, function(fs){
 		fsRootPath = fs.root.toURL();
 	});
-	chrome.storage.local.get('valid_hashes', function(items){
-		if (!items.hasOwnProperty('first')) return;
-		valid_hashes = items.valid_hashes;
+	getPref('valid_hashes')
+	.then(function(hashes){
+		if (hashes !== 'undefined'){
+			valid_hashes = hashes;
+		}
 	});
 	chrome.runtime.getPlatformInfo(function(p){
 		if(p.os === "win"){
