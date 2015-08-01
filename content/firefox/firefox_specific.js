@@ -73,12 +73,16 @@ function toFilePath(pathArray){
 
 function import_resource(filename){
 	return new Promise(function(resolve, reject) {
-		OS.File.read(OS.Path.join(
-			OS.Constants.Path.profileDir,
-			"extensions",
-			"pagesigner@tlsnotary",
-			"content",
-			 toFilePath(filename)))
+		var path = 'content';
+		if (typeof(filename) === 'string'){
+			path += '/'+filename;
+		}
+		else {
+			for (var i=0; i < filename.length; i++){
+				path += '/'+filename[i];
+			}
+		}
+		OS.File.read(OS.Path.fromFileURI(thisaddon.getResourceURI(path).spec))
 		.then(function onSuccess(ba) {
 			//returns Uint8Array which is compatible with our internal byte array	
 			resolve(ba); 
@@ -172,14 +176,13 @@ function browser_specific_init(){
 		
 	//copy the manager file to local filesystem for security + takes care of some odd behaviour
 	//when trying to add eventListener to chrome:// resources
-	var contentDir = OS.Path.join(OS.Constants.Path.profileDir,"extensions","pagesigner@tlsnotary","content");
-	var html = OS.Path.join(contentDir, "manager.html");
-	var js   = OS.Path.join(contentDir, "manager.js");
-	var css  = OS.Path.join(contentDir, "manager.css");
-	var check  = OS.Path.join(contentDir, "check.png");
-	var cross  = OS.Path.join(contentDir, "cross.png");
-	var swalcss  = OS.Path.join(contentDir, "sweetalert.css");
-	var swaljs  = OS.Path.join(contentDir, "sweetalert.min.js");
+	var html = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.html').spec);
+	var js   = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.js').spec);
+	var css  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.css').spec);
+	var check  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/check.png').spec);
+	var cross  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/cross.png').spec);
+	var swalcss  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/sweetalert.css').spec);
+	var swaljs  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/sweetalert.min.js').spec);
 
 	var dest_html = OS.Path.join(fsRootPath, "manager.html");
 	var dest_js = OS.Path.join(fsRootPath, "manager.js");
