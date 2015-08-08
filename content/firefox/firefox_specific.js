@@ -197,22 +197,22 @@ function browser_specific_init(){
 		OS.File.copy(html, dest_html);
 	})
 	.then(function(){
-		return OS.File.copy(js, dest_js, {noOverwrite:true});
+		return OS.File.copy(js, dest_js);
 	})
 	.then(function(){
-		OS.File.copy(css, dest_css, {noOverwrite:true});
+		OS.File.copy(css, dest_css);
 	})
 	.then(function(){
-		OS.File.copy(check, dest_check, {noOverwrite:true});
+		OS.File.copy(check, dest_check);
 	})
 	.then(function(){
-		OS.File.copy(cross, dest_cross, {noOverwrite:true});
+		OS.File.copy(cross, dest_cross);
 	})
 	.then(function(){
-		OS.File.copy(swalcss, dest_swalcss, {noOverwrite:true});
+		OS.File.copy(swalcss, dest_swalcss);
 	})
 	.then(function(){
-		OS.File.copy(swaljs, dest_swaljs, {noOverwrite:true});
+		OS.File.copy(swaljs, dest_swaljs);
 	});
 	
 	init();
