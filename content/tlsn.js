@@ -167,7 +167,7 @@ function prepare_pms(modulus, tryno){
 		#Change Cipher Spec record is returned by the server (we could
 		#also check the server finished, but it isn't necessary)*/
 		var record_to_find = new TLSRecord();
-		record_to_find.__init__(chcis, [0x01], global_tlsver);
+		record_to_find.__init__(chcis, [0x01], pms_session.tlsver);
 		if (response.toString().indexOf(record_to_find.serialized.toString()) < 0){
 			console.log("PMS trial failed, retrying. ("+response.toString()+")");
 			throw("PMS trial failed");
