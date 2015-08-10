@@ -127,7 +127,7 @@ function loadBusyIcon(){
 
 
 function loadNormalIcon(){
-	chrome.browserAction.setIcon({path:"content/icon128.png"});
+	chrome.browserAction.setIcon({path:"icon.png"});
 	chrome.browserAction.setPopup({popup:"content/chrome/popup.html"});
 }
 
