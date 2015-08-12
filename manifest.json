@@ -55,9 +55,9 @@
     "content/tlsn.js",
     "content/main.js",
     "content/testing/testing.js",
-    "content/verifychain/buffer.js",
-    "content/verifychain/asn1.js",
-    "content/verifychain/jsrsasign-latest-all-min.js",
+    "content/verifychain/buffer.js2",
+    "content/verifychain/asn1.js2",
+    "content/verifychain/jsrsasign-latest-all-min.js2",
     "content/verifychain/rootcertslist.js",
     "content/verifychain/rootcerts.js",
     "content/verifychain/verifychain.js"

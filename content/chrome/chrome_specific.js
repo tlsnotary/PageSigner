@@ -453,7 +453,7 @@ Socket.prototype.recv = function(){
 					if (! rv.is_complete){
 						console.log("check_complete_records failed");
 						buf = rv.incomprecs;
-						setTimeout(check, 100);
+						setTimeout(function(){check()}, 100);
 						return;
 					}
 					clearTimeout(timer);
@@ -462,7 +462,7 @@ Socket.prototype.recv = function(){
 					return;
 				}
 				console.log('Another timeout in recv');
-				setTimeout(check, 100);
+				setTimeout(function(){check()}, 100);
 			});
 		};
 		check();
@@ -636,7 +636,7 @@ function sendAlert(alertData){
 			alert("You can only notarize pages which start with https://");
 			return;
 		}
-		chrome.tabs.executeScript(tabs[0].id, {file:"content/sweetalert.min.js"}, function(){
+		chrome.tabs.executeScript(tabs[0].id, {file:"content/sweetalert.min.js2"}, function(){
 			chrome.tabs.insertCSS(tabs[0].id, {file:"content/sweetalert.css"}, function(){
 				chrome.tabs.executeScript(tabs[0].id, {code:"swal("+ JSON.stringify(alertData) +")"});
 			});

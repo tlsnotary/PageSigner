@@ -614,16 +614,6 @@ function fixWinPath(path){
 }
 
 
-//startsWith is a pretty recent method, let's implement it here if it's not provided
-//reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/startsWith
-if (!String.prototype.startsWith) {
-  String.prototype.startsWith = function(searchString, position) {
-    position = position || 0;
-    return this.lastIndexOf(searchString, position) === position;
-  };
-}
-
-
 function getModulus(cert){
 	  var c = Certificate.decode(new Buffer(cert), 'der');
 		var pk = c.tbsCertificate.subjectPublicKeyInfo.subjectPublicKey.data;
