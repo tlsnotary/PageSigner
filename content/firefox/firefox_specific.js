@@ -53,12 +53,42 @@ function setPref(prefname, type, value){
 
 
 function import_reliable_sites(){
-	OS.File.read(OS.Path.join(OS.Constants.Path.profileDir,"extensions","pagesigner@tlsnotary","content","pubkeys.txt"), { encoding: "utf-8" }).
-	then(function onSuccess(text) {
-		parse_reliable_sites(text); 
+	import_resource('pubkeys.txt')
+	.then(function(ba) {
+		parse_reliable_sites(ba2str(ba)); 
 	});
 }
 
+
+//converts an array of file names into a string with correct slashes
+function toFilePath(pathArray){
+	if (typeof(pathArray) === 'string') return pathArray;
+	var expanded = '';
+	for(var i=0; i < pathArray.length; i++){
+		expanded = OS.Path.join(pathArray, dirName[i]);
+	}
+	return expanded;
+}
+
+
+function import_resource(filename){
+	return new Promise(function(resolve, reject) {
+		var path = 'content';
+		if (typeof(filename) === 'string'){
+			path += '/'+filename;
+		}
+		else {
+			for (var i=0; i < filename.length; i++){
+				path += '/'+filename[i];
+			}
+		}
+		OS.File.read(OS.Path.fromFileURI(thisaddon.getResourceURI(path).spec))
+		.then(function onSuccess(ba) {
+			//returns Uint8Array which is compatible with our internal byte array	
+			resolve(ba); 
+		});
+	});
+}
 
 
 function startListening(){
@@ -91,11 +121,10 @@ function getHeaders(){
     //passed tests, secure, grab headers, update status bar and start audit:
     var x = sanitized_url.split('/');
     x.splice(0,3);
-    var tab_url = x.join('/');
+    var resource_url = x.join('/');
 	
     var httpChannel = dict_of_httpchannels[sanitized_url];
-	var headers = "";
-	headers += httpChannel.requestMethod + " /" + tab_url + " HTTP/1.1" + "\r\n";
+	var headers = httpChannel.requestMethod + " /" + resource_url + " HTTP/1.1" + "\r\n";
 	httpChannel.visitRequestHeaders(function(header,value){
                                   headers += header +": " + value + "\r\n";});
     if (httpChannel.requestMethod == "GET"){
@@ -114,8 +143,13 @@ function getHeaders(){
 		//FF's uploaddata contains Content-Type and Content-Length headers + '\r\n\r\n' + http body
 		headers += uploaddata;
 	}
-	var server = headers.split('\r\n')[1].split(':')[1].replace(/ /g,'');
-	resolve({'headers':headers, 'server':server});
+	var host = headers.split('\r\n')[1].split(':')[1].replace(/ /g,'');
+	var port = 443;
+	if (tab_url_full.split(':').length === 3){
+		//the port is explicitely provided in URL
+		port = parseInt(tab_url_full.split(':')[2].split('/')[0]);
+	}
+	resolve({'headers':headers, 'server':host, 'port':port});
 	});
 }
 
@@ -142,14 +176,13 @@ function browser_specific_init(){
 		
 	//copy the manager file to local filesystem for security + takes care of some odd behaviour
 	//when trying to add eventListener to chrome:// resources
-	var contentDir = OS.Path.join(OS.Constants.Path.profileDir,"extensions","pagesigner@tlsnotary","content");
-	var html = OS.Path.join(contentDir, "manager.html");
-	var js   = OS.Path.join(contentDir, "manager.js");
-	var css  = OS.Path.join(contentDir, "manager.css");
-	var check  = OS.Path.join(contentDir, "check.png");
-	var cross  = OS.Path.join(contentDir, "cross.png");
-	var swalcss  = OS.Path.join(contentDir, "sweetalert.css");
-	var swaljs  = OS.Path.join(contentDir, "sweetalert.min.js");
+	var html = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.html').spec);
+	var js   = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.js').spec);
+	var css  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.css').spec);
+	var check  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/check.png').spec);
+	var cross  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/cross.png').spec);
+	var swalcss  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/sweetalert.css').spec);
+	var swaljs  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/sweetalert.min.js').spec);
 
 	var dest_html = OS.Path.join(fsRootPath, "manager.html");
 	var dest_js = OS.Path.join(fsRootPath, "manager.js");
@@ -164,22 +197,22 @@ function browser_specific_init(){
 		OS.File.copy(html, dest_html);
 	})
 	.then(function(){
-		return OS.File.copy(js, dest_js, {noOverwrite:true});
+		return OS.File.copy(js, dest_js);
 	})
 	.then(function(){
-		OS.File.copy(css, dest_css, {noOverwrite:true});
+		OS.File.copy(css, dest_css);
 	})
 	.then(function(){
-		OS.File.copy(check, dest_check, {noOverwrite:true});
+		OS.File.copy(check, dest_check);
 	})
 	.then(function(){
-		OS.File.copy(cross, dest_cross, {noOverwrite:true});
+		OS.File.copy(cross, dest_cross);
 	})
 	.then(function(){
-		OS.File.copy(swalcss, dest_swalcss, {noOverwrite:true});
+		OS.File.copy(swalcss, dest_swalcss);
 	})
 	.then(function(){
-		OS.File.copy(swaljs, dest_swaljs, {noOverwrite:true});
+		OS.File.copy(swaljs, dest_swaljs);
 	});
 	
 	init();

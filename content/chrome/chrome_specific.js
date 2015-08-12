@@ -5,11 +5,16 @@ var is_chrome = true;
 var fsRootPath; //path to local storage root, e.g. filesystem:chrome-extension://abcdabcd/persistent
 
 
-function getPref(value, type){
+function getPref(pref, type){
 	return new Promise(function(resolve, reject) {
-		chrome.storage.local.get(value, function(items){
-			if (!items.hasOwnProperty('first')) resolve("undefined");
-			resolve(items[value]);
+		chrome.storage.local.get(pref, function(obj){
+			if (Object.keys(obj).length === 0){
+				resolve('undefined');
+				return;
+			}
+			else {
+				resolve(obj[pref]);
+			}
 		});
 	});
 }
@@ -17,7 +22,9 @@ function getPref(value, type){
 
 function setPref(pref, type, value){
 	return new Promise(function(resolve, reject) {
-		chrome.storage.local.set({pref:value}, function(){
+		var obj = {};
+		obj[pref] = value;
+		chrome.storage.local.set(obj, function(){
 			resolve();
 		});
 	});
@@ -25,17 +32,43 @@ function setPref(pref, type, value){
 
 
 function import_reliable_sites(){
-	var xhr = new XMLHttpRequest();
-	xhr.onreadystatechange = function(){
-		if (xhr.readyState != 4)
-			return;
+	import_resource('pubkeys.txt')
+	.then(function(text_ba){
+		parse_reliable_sites(ba2str(text_ba));
+	});
+}
 
-		if (xhr.responseText) {
-			parse_reliable_sites(xhr.responseText);
+
+function import_resource(filename){
+	return new Promise(function(resolve, reject) {
+		var xhr = new XMLHttpRequest();
+		xhr.responseType = "arraybuffer";
+		xhr.onreadystatechange = function(){
+			if (xhr.readyState != 4)
+				return;
+
+			if (xhr.response) {
+				resolve(ab2ba(xhr.response));
+			}
+		};
+		xhr.open('get', chrome.extension.getURL('content/'+toFilePath(filename)), true);
+		xhr.send();
+	});
+}
+
+
+//converts an array of file names into a string with correct slashes
+function toFilePath(pathArray){
+	if (typeof(pathArray) === 'string') return pathArray;
+	var expanded = '';
+	for(var i=0; i < pathArray.length; i++){
+		expanded += pathArray[i];
+		//not trailing slash for last element
+		if (i < (pathArray.length-1) ){
+			expanded += '/';
 		}
-	};
-	xhr.open('get', chrome.extension.getURL('content/pubkeys.txt'), true);
-	xhr.send();
+	}
+	return expanded;
 }
 
 
@@ -64,11 +97,10 @@ function getHeaders(){
 		}
 		var tab = tabs[t[0].id];
 		var x = tab.url.split('/');
-		var host = x[2];
+		var host = x[2].split(':')[0];
 		x.splice(0,3);
-		var tab_url = x.join('/');	
-		var headers = '';
-		headers += tab.method + " /" + tab_url + " HTTP/1.1" + "\r\n";
+		var resource_url = x.join('/');	
+		var headers = tab.method + " /" + resource_url + " HTTP/1.1" + "\r\n";
 		headers += "Host: " + host + "\r\n";
 		for (var i = 0; i < tab.requestHeaders.length; i++){
 			var h = tab.requestHeaders[i];
@@ -77,7 +109,12 @@ function getHeaders(){
 		if (tab.method == "GET"){
 			headers += "\r\n";
 		}
-		resolve({'headers':headers, 'server':host});
+		var port = 443;
+        if (tab.url.split(':').length === 3){
+			//the port is explicitely provided in URL
+			port = parseInt(tab.url.split(':')[2].split('/')[0]);
+        }
+		resolve({'headers':headers, 'server':host, 'port':port});
 	});
 	});
 }
@@ -90,7 +127,7 @@ function loadBusyIcon(){
 
 
 function loadNormalIcon(){
-	chrome.browserAction.setIcon({path:"content/icon128.png"});
+	chrome.browserAction.setIcon({path:"icon.png"});
 	chrome.browserAction.setPopup({popup:"content/chrome/popup.html"});
 }
 
@@ -99,9 +136,11 @@ function browser_specific_init(){
 	window.webkitRequestFileSystem(window.PERSISTENT, 50*1024*1024, function(fs){
 		fsRootPath = fs.root.toURL();
 	});
-	chrome.storage.local.get('valid_hashes', function(items){
-		if (!items.hasOwnProperty('first')) return;
-		valid_hashes = items.valid_hashes;
+	getPref('valid_hashes')
+	.then(function(hashes){
+		if (hashes !== 'undefined'){
+			valid_hashes = hashes;
+		}
 	});
 	chrome.runtime.getPlatformInfo(function(p){
 		if(p.os === "win"){

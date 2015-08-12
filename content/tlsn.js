@@ -140,7 +140,7 @@ function prepare_pms(modulus, tryno){
 	var rs_choice = random_rs.name;
 	console.log('random reliable site', rs_choice);
 	var pms_session = new TLSNClientSession();
-	pms_session.__init__({'server':rs_choice, 'ccs':53, 'tlsver':global_tlsver});
+	pms_session.__init__({'server':rs_choice, 'port':random_rs.port, 'ccs':53, 'tlsver':global_tlsver});
 	pms_session.server_modulus = random_rs.modulus;
 	pms_session.sckt = new Socket(pms_session.server_name, pms_session.ssl_port);
 	return pms_session.sckt.connect()
@@ -167,7 +167,7 @@ function prepare_pms(modulus, tryno){
 		#Change Cipher Spec record is returned by the server (we could
 		#also check the server finished, but it isn't necessary)*/
 		var record_to_find = new TLSRecord();
-		record_to_find.__init__(chcis, [0x01], global_tlsver);
+		record_to_find.__init__(chcis, [0x01], pms_session.tlsver);
 		if (response.toString().indexOf(record_to_find.serialized.toString()) < 0){
 			console.log("PMS trial failed, retrying. ("+response.toString()+")");
 			throw("PMS trial failed");
@@ -233,9 +233,9 @@ function decrypt_html(tlsn_session){
 }
 
 
-function get_certificate(server){
+function get_certificate(server, port){
 	var probe_session = new TLSNClientSession();
-	probe_session.__init__({'server':server, 'tlsver':global_tlsver});
+	probe_session.__init__({'server':server, 'port':port, 'tlsver':global_tlsver});
 	probe_session.sckt = new Socket(probe_session.server_name,probe_session.ssl_port);
 	return probe_session.sckt.connect()
 	.then(function(){
@@ -250,9 +250,9 @@ function get_certificate(server){
 }
 
 
-function start_audit(modulus, certhash, name, headers, ee_secret, ee_pad_secret, rsapms2){
+function start_audit(modulus, certhash, name, port, headers, ee_secret, ee_pad_secret, rsapms2){
 	var tlsn_session = new TLSNClientSession();
-	tlsn_session.__init__({'server':name, 'tlsver':global_tlsver});
+	tlsn_session.__init__({'server':name, 'port':port, 'tlsver':global_tlsver});
 	tlsn_session.server_modulus = modulus;
 	tlsn_session.server_mod_length = modulus.length;
 	tlsn_session.auditee_secret = ee_secret;
