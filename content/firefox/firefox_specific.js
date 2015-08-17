@@ -182,7 +182,7 @@ function browser_specific_init(){
 	var check  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/check.png').spec);
 	var cross  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/cross.png').spec);
 	var swalcss  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/sweetalert.css').spec);
-	var swaljs  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/sweetalert.min.js').spec);
+	var swaljs  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/sweetalert.min.js2').spec);
 
 	var dest_html = OS.Path.join(fsRootPath, "manager.html");
 	var dest_js = OS.Path.join(fsRootPath, "manager.js");
@@ -190,7 +190,7 @@ function browser_specific_init(){
 	var dest_check  = OS.Path.join(fsRootPath, "check.png");
 	var dest_cross  = OS.Path.join(fsRootPath, "cross.png");
 	var dest_swalcss  = OS.Path.join(fsRootPath, "sweetalert.css");
-	var dest_swaljs  = OS.Path.join(fsRootPath, "sweetalert.min.js");
+	var dest_swaljs  = OS.Path.join(fsRootPath, "sweetalert.min.js2");
 
 	OS.File.makeDir(fsRootPath, {ignoreExisting:true})
 	.then(function(){
