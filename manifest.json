@@ -9,7 +9,7 @@
  "permissions": [
     "background",
     "*://*/*",  //need https to listen for requests and http to send stuff to oracle
-    "file://*", //ideally we should limit acces only to pagesigner.tmp.dir but Chrome can't do that
+    "file:///*pagesigner.tmp.dir*", //to inject notification bar when showing notarized html
     "webRequest",
     "webRequestBlocking",
     "activeTab",
@@ -33,6 +33,13 @@
     "default_icon": "icon.png",
     "default_popup": "content/chrome/popup.html"
   },
+
+  "content_scripts":[
+	{
+	"matches":["file:///*pagesigner.tmp.dir/manager.html"],
+	"js":["content/chrome/inject_into_manager.js"]
+	}  
+  ],
 
  "background": {
     "scripts": [

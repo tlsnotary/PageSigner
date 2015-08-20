@@ -3,7 +3,7 @@ var tabs = {};
 var appId = "oclohfdjoojomkfddjclanpogcnjhemd"; //id of the helper app
 var is_chrome = true;
 var fsRootPath; //path to local storage root, e.g. filesystem:chrome-extension://abcdabcd/persistent
-
+var manager_path; //manager.html which was copied into Downloads/ dir
 
 function getPref(pref, type){
 	return new Promise(function(resolve, reject) {
@@ -148,11 +148,42 @@ function browser_specific_init(){
 		}
 	});
 	//put icon into downloads dir. This is the icon for injected notification
+	//put manager files also there so we could inject code to get the manager's DOM when testing
+	//(Chrome doesnt allow injecting into chrome-extension:// URIs)
 	chrome.downloads.setShelfEnabled(false);
-	setTimeout(function(){chrome.downloads.setShelfEnabled(true);}, 2000);
-	chrome.downloads.download({url:chrome.extension.getURL("content/icon16.png"),
-		conflictAction:'overwrite',
-		 filename:'pagesigner.tmp.dir/icon16.png'});
+	var files_to_copy = ['icon16.png', 'manager.css', 'manager.html', 'manager.js', 'sweetalert.css', 'sweetalert.min.js2', 'check.png', 'cross.png'];
+	var copied_so_far = 0;
+	for (var i=0; i < files_to_copy.length; i++){
+		chrome.downloads.download(
+			{url:chrome.extension.getURL('content/' + files_to_copy[i]),
+			conflictAction:'overwrite',
+			filename:'pagesigner.tmp.dir/' + files_to_copy[i]},
+			function(downloadID){
+				
+				var erase_when_download_completed = function(id){
+					chrome.downloads.search({id:id}, function(item){
+						if (item[0].state !== 'complete'){
+							setTimeout(function(){
+								erase_when_download_completed(id)
+							}, 100);
+						}
+						else {
+							if (item[0].filename.endsWith('manager.html')){
+								manager_path = 'file://' + item[0].filename;
+							}
+							//dont litter the Downloads menu
+							chrome.downloads.erase({id:downloadID});
+							copied_so_far++;
+							if (copied_so_far === files_to_copy.length){
+								chrome.downloads.setShelfEnabled(true);
+							}
+						}
+					});
+					
+				}
+				erase_when_download_completed(downloadID);				
+			});
+	}
 	
 	chrome.runtime.onMessage.addListener(function(data){
 		if (data.destination !== 'extension') return;
@@ -478,16 +509,15 @@ function get_xhr(){
 }
 
 function openManager(){
-	var url = chrome.extension.getURL('content/manager.html');
 	//re-focus tab if manager already open
 	chrome.tabs.query({}, function(tabs){
 		for(var i=0; i < tabs.length; i++){
-			if (tabs[i].url.startsWith(url)){
+			if (tabs[i].url === manager_path){
 				chrome.tabs.update(tabs[i].id, {active:true});
 				return;
 			}	
 		}	
-		chrome.tabs.create({url:url});
+		chrome.tabs.create({url:manager_path});
 	});
 }
 	
@@ -513,8 +543,22 @@ function renamePGSG(dir, newname){
 
 
 function sendMessage(data){
-	chrome.runtime.sendMessage({'destination':'manager',
-									'data':data});
+	//get the manager tab and inject the data into it
+	chrome.tabs.query({}, function(tabs){
+		for(var i=0; i < tabs.length; i++){
+			if (tabs[i].url === manager_path){
+				var jsonstring = JSON.stringify(data);
+				chrome.tabs.executeScript(tabs[i].id, {code:
+					'var idiv = document.getElementById("extension2manager");' +
+					//seems like chrome unstringifies jsonstring, so we stringify it again
+					'var json = JSON.stringify(' + jsonstring + ');' +
+					'console.log("json is", json);' +
+					'idiv.textContent = json;'+
+					'idiv.click();'					
+				});	
+			}	
+		}
+	});
 }
 
 

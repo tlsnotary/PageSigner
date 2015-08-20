@@ -3,26 +3,17 @@ if (navigator.userAgent.search('Chrome') > -1){
 	var is_chrome = true;
 }
 var idiv;
+var chrome_injected = false;//will be set to true after Chrome injected the content script
 
 
 function onload(){
-	if (is_chrome){
-		chrome.runtime.onMessage.addListener(
-		  function(request, sender, sendResponse) {
-			if (request.destination !== 'manager') return;
-			console.log('got request', request);
-			process_data(request.data);
-		});
-	}
-	else {
-		idiv = document.getElementById('extension2manager');
-		idiv.addEventListener('click', function(e){
-			console.log('changed to', idiv.textContent);
-			if (idiv.textContent === '') return; //spurious clicks can happen
-			var data = JSON.parse(idiv.textContent);
-			process_data(data);
-		});
-	}
+	idiv = document.getElementById('extension2manager');
+	idiv.addEventListener('click', function(e){
+		console.log('changed to', idiv.textContent);
+		if (idiv.textContent === '') return; //spurious clicks can happen
+		var data = JSON.parse(idiv.textContent);
+		process_data(data);
+	});
 	sendMessage({'destination':'extension', 'message':'refresh'});
 }
 
@@ -128,13 +119,12 @@ function addRow(args){
 	img.height = 30;
 	img.width = 30;
 	var label;
-	var extrapath = is_chrome ? '/content/' : '';
 	if (args.valid){
-		img.src = extrapath + 'check.png';
+		img.src = 'check.png';
 		label = 'valid';
 	}
 	else {
-		img.src = extrapath + 'cross.png';
+		img.src = 'cross.png';
 		label = 'invalid';
 	}
 	text = document.createElement("text");
@@ -206,7 +196,18 @@ function doRename(t, oldname, dir){
 function sendMessage(msg){
 	console.log('in sendMessage', msg);
 	if (is_chrome){
-		chrome.runtime.sendMessage(msg);
+		var evt = document.createEvent("CustomEvent");
+		evt.initCustomEvent("hello", true, true, msg);
+		var dispatch_when_injected = function(){
+			if (!chrome_injected){
+				console.log('chrome has not yet injected, retrying');
+				setTimeout(function(){dispatch_when_injected();}, 100);
+			}
+			else {
+				document.dispatchEvent(evt);
+			}	
+		}
+		dispatch_when_injected();	
 	}
 	else {
 		var json = JSON.stringify(msg);

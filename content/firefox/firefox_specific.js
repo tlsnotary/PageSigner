@@ -243,7 +243,7 @@ function openManager(){
 			//will trigger on reload (sometimes triggers twice but this should not affect us)
 			d = gBrowser.getBrowserForTab(e.target).contentWindow.document;
 			
-			var install_listener = function(d){
+				var install_listener = function(d){
 				listener = d.getElementById('manager2extension');
 				idiv = d.getElementById('extension2manager');
 				if (!listener){ //maybe the DOM hasnt yet loaded
