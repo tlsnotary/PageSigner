@@ -3,10 +3,23 @@ if (navigator.userAgent.search('Chrome') > -1){
 	var is_chrome = true;
 }
 var idiv;
-var chrome_injected = false;//will be set to true after Chrome injected the content script
-
 
 function onload(){
+	//These divs are used only in testing. We cant use a variable because Chrome
+	//content scripts cant access vars, only DOM elements
+	var div = document.createElement('div');
+	div.id = 'content_script_injected_into_page';
+	div.textContent = 'false';
+	div.style.display = 'none';
+	document.body.appendChild(div);
+	
+	var div2 = document.createElement('div');
+	div2.id = 'table_populated';
+	div2.textContent = 'false';
+	div2.style.display = 'none';
+	document.body.appendChild(div2);
+	//----------END OF TESTING DIVS----------
+	
 	idiv = document.getElementById('extension2manager');
 	idiv.addEventListener('click', function(e){
 		console.log('changed to', idiv.textContent);
@@ -42,6 +55,8 @@ function process_data(rows){
 				'verifier':r.verifier,
 				'dir':r.dir});
 	}
+	document.getElementById('table_populated').textContent = 'true';
+	table_populated = true;
 }
 
 
@@ -199,7 +214,7 @@ function sendMessage(msg){
 		var evt = document.createEvent("CustomEvent");
 		evt.initCustomEvent("hello", true, true, msg);
 		var dispatch_when_injected = function(){
-			if (!chrome_injected){
+			if (document.getElementById('content_script_injected_into_page').textContent !== 'true'){
 				console.log('chrome has not yet injected, retrying');
 				setTimeout(function(){dispatch_when_injected();}, 100);
 			}

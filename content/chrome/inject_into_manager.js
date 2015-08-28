@@ -4,7 +4,6 @@ document.addEventListener("hello", function(evt) {
 	console.log("got hello with", data);
 	chrome.runtime.sendMessage(data);
 });
-//we cannot access page vars directly
-var script = document.createElement('script');
-script.appendChild(document.createTextNode('chrome_injected = true;'));
-(document.body || document.head || document.documentElement).appendChild(script);
+
+//this element is accessible by content scripts and by page javascript
+document.getElementById('content_script_injected_into_page').textContent = 'true';

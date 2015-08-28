@@ -20,7 +20,7 @@ var atob = win.atob;
 var JSON = win.JSON;
 var is_chrome = false;
 var fsRootPath; //path to pagesigner folder in FF profile dir
-
+var manager_path; //manager.html which was copied into profile's pagesigner dir
 
 function getPref(prefname, type){
 	return new Promise(function(resolve, reject) {
@@ -173,11 +173,12 @@ function browser_specific_init(){
 	});
 	
 	fsRootPath = OS.Path.join(OS.Constants.Path.profileDir, "pagesigner");
+	manager_path = OS.Path.toFileURI(OS.Path.join(fsRootPath, "manager.html"));
 		
 	//copy the manager file to local filesystem for security + takes care of some odd behaviour
 	//when trying to add eventListener to chrome:// resources
 	var html = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.html').spec);
-	var js   = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.js').spec);
+	var js   = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.js2').spec);
 	var css  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.css').spec);
 	var check  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/check.png').spec);
 	var cross  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/cross.png').spec);
@@ -185,7 +186,7 @@ function browser_specific_init(){
 	var swaljs  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/sweetalert.min.js2').spec);
 
 	var dest_html = OS.Path.join(fsRootPath, "manager.html");
-	var dest_js = OS.Path.join(fsRootPath, "manager.js");
+	var dest_js = OS.Path.join(fsRootPath, "manager.js2");
 	var dest_css = OS.Path.join(fsRootPath, "manager.css");
 	var dest_check  = OS.Path.join(fsRootPath, "check.png");
 	var dest_cross  = OS.Path.join(fsRootPath, "cross.png");
@@ -221,13 +222,13 @@ function browser_specific_init(){
 
 var idiv;
 var listener;
-var d;
+var document;
 function openManager(){
 	//if manager is open, focus it
 	var tabs = gBrowser.tabs;
 	for(var i=0; i < tabs.length; i++){
 		var url = gBrowser.getBrowserForTab(tabs[i]).contentWindow.location.href;
-		if (url.search('/pagesigner/manager.html') > -1){
+		if (url == manager_path){
 			gBrowser.selectedTab = tabs[i];
 			return;
 		}
@@ -235,20 +236,23 @@ function openManager(){
 	
 	Promise.resolve() //dont want to indent the whole .then() section
 	.then(function(){
-		var uri = OS.Path.join(fsRootPath, "manager.html");
-		var t = gBrowser.addTab(uri);
+		var t = gBrowser.addTab(OS.Path.join(fsRootPath, "manager.html"));
 		gBrowser.selectedTab = t;
 		
 		var readyListener = function(e){
-			//will trigger on reload (sometimes triggers twice but this should not affect us)
-			d = gBrowser.getBrowserForTab(e.target).contentWindow.document;
+			//may trigger prematurely when href is about:blank
+			if (gBrowser.getBrowserForTab(e.target).contentWindow.location.href !== manager_path){
+				return;
+			}
+			t.removeEventListener('load', readyListener);
+			document = gBrowser.getBrowserForTab(e.target).contentWindow.document;
 			
 				var install_listener = function(d){
-				listener = d.getElementById('manager2extension');
-				idiv = d.getElementById('extension2manager');
+				listener = document.getElementById('manager2extension');
+				idiv = document.getElementById('extension2manager');
 				if (!listener){ //maybe the DOM hasnt yet loaded
 					setTimeout(function(){
-						install_listener(d);
+						install_listener(document);
 					}, 100);
 					return;
 				}
@@ -281,7 +285,8 @@ function openManager(){
 						});
 					}
 					else if (data.message === 'viewdata'){
-						openTabs(data.args.dir);
+						var dir = OS.Path.join(fsRootPath, data.args.dir);
+						openTabs(dir);
 					}
 					else if (data.message === 'viewraw'){
 						var path = OS.Path.join(fsRootPath, data.args.dir, 'raw.txt');
@@ -292,7 +297,7 @@ function openManager(){
 				onEvent(); //maybe the page asked for refresh before listener installed
 			};
 			
-			install_listener(d);
+			install_listener(document);
 		};
 			
 		t.addEventListener('load', readyListener);
@@ -335,8 +340,8 @@ function getDirEntry(dirName){
 
 
 function getName(obj){
-	//XXX this is not x-platform
-	return obj.path.split('/').pop();
+	var delimiter = os_win ? '\\' : '/'; 
+	return obj.path.split(delimiter).pop();
 }
 
 
@@ -391,6 +396,24 @@ function sendMessage(data){
 
 
 function savePGSGFile(existing_path, name){
+	var copyFile = function(src, dst){
+		OS.File.copy(src, dst)
+		.then(function(){
+			console.log("File write OK");
+		},
+		function (e){
+			console.log("Caught error writing file: "+e);
+		});
+	};
+	
+	if (testing){
+		var dldir = Cc["@mozilla.org/file/directory_service;1"].
+           getService(Ci.nsIProperties).get("DfltDwnld", Ci.nsIFile).path;
+        var dst = OS.Path.join(dldir, 'pagesigner.tmp.dir', name);
+		copyFile(existing_path, dst);
+		return;
+	}
+	
     var nsIFilePicker = Ci.nsIFilePicker;
 	var fp = Cc["@mozilla.org/filepicker;1"].createInstance(nsIFilePicker);
 	fp.init(window, "Save PageSigner file As", nsIFilePicker.modeSave);
@@ -399,17 +422,8 @@ function savePGSGFile(existing_path, name){
 	fp.defaultString = name + ".pgsg";
 	var rv = fp.show();
 	if (rv == nsIFilePicker.returnOK || rv == nsIFilePicker.returnReplace) {
-		var path = fp.file.path;
-		//write the file
-		let promise = OS.File.copy(existing_path, fp.file.path);
-		promise.then(function(){
-			console.log("File write OK");
-		},
-		function (e){
-			console.log("Caught error writing file: "+e);
-		}
-		);
-   }
+		copyFile(existing_path, fp.file.path);
+	}
 }
 
 
@@ -546,8 +560,10 @@ function makeSessionDir(server, is_imported){
 			imported_str = "-IMPORTED";
 		}
 		var newdir = OS.Path.join(localDir, time+'-'+server+imported_str);
-		OS.File.makeDir(newdir);
-		resolve(newdir);
+		OS.File.makeDir(newdir)
+		.then(function(){
+			resolve(newdir);
+		});
 	});
 }
 
@@ -569,23 +585,24 @@ function writeFile(dirName, fileName, data, is_update){
 	}
 	return new Promise(function(resolve, reject) {
 		var path = OS.Path.join(fsRootPath, dirName, fileName);
-		var promise;
-		if (is_update){
-			promise = OS.File.remove(path);
-		}
-		else {
-			promise = Promise.resolve();
-		}
+		var promise = is_update ? OS.File.remove(path) : Promise.resolve();
 		promise
 		.then(function(){
 			return OS.File.open(path, {create:true});
+		})
+		.then(function(f){
+			return f.close();
 		})
 		.then(function(){				
 			return OS.File.writeAtomic(path, ba2ua(data));
 		})
 		.then(function(){
 			resolve();
-		});
+		})
+		.catch(function(e){
+			console.log('caught error in writeFile', e);
+			alert('error in writeFile');
+		})
 	});
 }
 

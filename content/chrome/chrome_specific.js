@@ -73,8 +73,10 @@ function toFilePath(pathArray){
 
 
 function startListening(){
+	console.log('tab listener started')
 	chrome.webRequest.onSendHeaders.addListener(
         function(details) {
+			console.log('in tab listener', details);
 		  if (details.type === "main_frame"){
 				tabs[details.tabId] = details;
 			}
@@ -149,9 +151,9 @@ function browser_specific_init(){
 	});
 	//put icon into downloads dir. This is the icon for injected notification
 	//put manager files also there so we could inject code to get the manager's DOM when testing
-	//(Chrome doesnt allow injecting into chrome-extension:// URIs)
+	//(Chrome forbids injecting into chrome-extension://* URIs but allows into file://* URIs)
 	chrome.downloads.setShelfEnabled(false);
-	var files_to_copy = ['icon16.png', 'manager.css', 'manager.html', 'manager.js', 'sweetalert.css', 'sweetalert.min.js2', 'check.png', 'cross.png'];
+	var files_to_copy = ['icon16.png', 'manager.css', 'manager.html', 'manager.js2', 'sweetalert.css', 'sweetalert.min.js2', 'check.png', 'cross.png'];
 	var copied_so_far = 0;
 	for (var i=0; i < files_to_copy.length; i++){
 		chrome.downloads.download(
@@ -169,7 +171,11 @@ function browser_specific_init(){
 						}
 						else {
 							if (item[0].filename.endsWith('manager.html')){
-								manager_path = 'file://' + item[0].filename;
+								var path = item[0].filename;
+								if (os_win){
+									path = '/' + encodeURI(path.replace(/\\/g, '/'));
+								}
+								manager_path = 'file://' + path;
 							}
 							//dont litter the Downloads menu
 							chrome.downloads.erase({id:downloadID});
@@ -198,8 +204,14 @@ function browser_specific_init(){
 			verify_tlsn_and_show_data(data.args.data, true);
 		}
 		else if (data.message === 'export'){
-			chrome.downloads.download({url:fsRootPath+data.args.dir+'/pgsg.pgsg',
+			if (testing){
+				chrome.downloads.download({url:fsRootPath+data.args.dir+'/pgsg.pgsg',
+				 'saveAs':false, filename:'pagesigner.tmp.dir/' + data.args.file+'.pgsg'});
+			}
+			else {
+				chrome.downloads.download({url:fsRootPath+data.args.dir+'/pgsg.pgsg',
 				 'saveAs':true, filename:data.args.file+'.pgsg'});
+			 }
 		}
 		else if (data.message === 'notarize'){
 			startNotarizing();
@@ -604,6 +616,8 @@ function getDirEntry(dirName){
 		.then(function(rootDirEntry){
 			rootDirEntry.getDirectory(dirName, {}, function(dirEntry){
 				resolve(dirEntry);
+			}, function(what){
+				reject(what);
 			});
 		});
 	});

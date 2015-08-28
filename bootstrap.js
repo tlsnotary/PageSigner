@@ -207,6 +207,7 @@ function loadjs(){
   include(addon, "pako.js");
   include(addon, "tlsn.js");
   include(addon, "testing/testing.js");
+  include(addon, "testing/manager_test.js");
   include(addon, "verifychain/buffer.js2");
   include(addon, "verifychain/asn1.js2");
   include(addon, "verifychain/jsrsasign-latest-all-min.js2");

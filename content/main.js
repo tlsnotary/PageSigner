@@ -6,7 +6,8 @@ var previous_session_start_time; // used to make sure user doesnt exceed rate li
 var chosen_notary;
 var tdict = {}; 
 var valid_hashes = [];
-var os_win = false; //is OS windows? used to fix / in paths
+var os_win = false; //is OS windows? used to fix / in paths 
+var browser_init_finished = false; //signal to test script when it can start
 
 
 function init(){
@@ -58,6 +59,7 @@ function init(){
 		}
 		import_reliable_sites();
 		startListening();
+		browser_init_finished = true;
 	});
 }
 
@@ -529,7 +531,7 @@ function process_entries(pgsg_subdirs){
 	}
 	Promise.all(promises)
 	.then(function(){
-		console.log('about to sendTable', tdict);
+		//console.log('about to sendTable', tdict);
 		sendTable();	
 	})
 	.catch(function(e){

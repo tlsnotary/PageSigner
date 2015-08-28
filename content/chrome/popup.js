@@ -30,3 +30,4 @@ document.getElementById("about").addEventListener("click",
 							left:500})
 		window.close();
 	});
+
