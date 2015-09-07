@@ -402,12 +402,12 @@ function openTabs(sdir){
 				chrome.tabs.reload(id, {bypassCache:true}, function(){
 					//this callback triggers too early sometimes. Wait to make sure page reloaded
 					setTimeout(function(){
-						chrome.tabs.insertCSS(id, {file: 'content/chrome/injectbar.css'}, function(a){
-							chrome.tabs.executeScript(id, {file: 'content/chrome/injectbar.js'}, function(a){
-									chrome.tabs.executeScript(id, {code: 
-									'document.getElementById("domainName").textContent="' + commonName.toString() + '";' + 
-									'var sdir ="' + dirname.toString() + '";'});
-							});
+						chrome.tabs.executeScript(id, {file: 'content/notification_bar.js'}, function(a){
+								chrome.tabs.executeScript(id, {code:
+								'viewTabDocument = document;' +
+								'install_bar();' +
+								'document.getElementById("domainName").textContent="' + commonName.toString() + '";' + 
+								'document["pagesigner-session-dir"]="' + dirname.toString() + '";'});
 						});
 					}, 500);
 				});

@@ -184,6 +184,7 @@ function browser_specific_init(){
 	var cross  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/cross.png').spec);
 	var swalcss  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/sweetalert.css').spec);
 	var swaljs  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/sweetalert.min.js2').spec);
+	var icon  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/icon16.png').spec);
 
 	var dest_html = OS.Path.join(fsRootPath, "manager.html");
 	var dest_js = OS.Path.join(fsRootPath, "manager.js2");
@@ -192,6 +193,7 @@ function browser_specific_init(){
 	var dest_cross  = OS.Path.join(fsRootPath, "cross.png");
 	var dest_swalcss  = OS.Path.join(fsRootPath, "sweetalert.css");
 	var dest_swaljs  = OS.Path.join(fsRootPath, "sweetalert.min.js2");
+	var dest_icon  = OS.Path.join(fsRootPath, "icon16.png");
 
 	OS.File.makeDir(fsRootPath, {ignoreExisting:true})
 	.then(function(){
@@ -214,6 +216,9 @@ function browser_specific_init(){
 	})
 	.then(function(){
 		OS.File.copy(swaljs, dest_swaljs);
+	})
+	.then(function(){
+		OS.File.copy(icon, dest_icon);
 	});
 	
 	init();
@@ -629,13 +634,40 @@ function openTabs(sdir){
 	.then(function(data){
 		var name = ba2str(data);
 		var data_path = OS.Path.join(fsRootPath, sdir, name);
+		var dataFileURI = OS.Path.toFileURI(data_path);
 		block_urls.push(data_path);
 		var t = gBrowser.addTab(data_path);
 		gBrowser.selectedTab = t;
 		setTimeout(function(){
+			
+			var readyListener = function(e){
+				console.log('in readyListener');
+				//may trigger prematurely when href is about:blank
+				if (gBrowser.getBrowserForTab(e.target).contentWindow.location.href !== dataFileURI){
+					return;
+				}
+				//t.removeEventListener('load', readyListener);
+				viewTabDocument = gBrowser.getBrowserForTab(e.target).contentWindow.document;
+				//even though .document is immediately available, its .body property may not be
+				function wait_for_body(){
+					if (viewTabDocument.body === null){
+						console.log('body not available, waiting');
+						setTimeout(function(){wait_for_body()}, 100);
+					}
+					else {
+						console.log('viewTabDocument is ', viewTabDocument);
+						console.log('body is ', viewTabDocument.body);
+						install_bar();
+						viewTabDocument.getElementById("domainName").textContent = commonName;
+						viewTabDocument['pagesigner-session-dir'] = sdir;
+					}
+				};
+				wait_for_body();
+			};
+			
 			gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
-		}, 500);
-		install_notification(t, commonName, raw_path);
+			t.addEventListener('load', readyListener);
+		}, 500);		
 	});
 }
 
