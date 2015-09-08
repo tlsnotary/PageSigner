@@ -626,6 +626,8 @@ function openTabs(sdir){
 	}
 	
 	var commonName;
+	var dataFileURI;
+	var t;
 	getFileContent(sdir, "metaDomainName")
 	.then(function(data_ba){
 		commonName = ba2str(data_ba);
@@ -634,40 +636,66 @@ function openTabs(sdir){
 	.then(function(data){
 		var name = ba2str(data);
 		var data_path = OS.Path.join(fsRootPath, sdir, name);
-		var dataFileURI = OS.Path.toFileURI(data_path);
+		dataFileURI = OS.Path.toFileURI(data_path);
 		block_urls.push(data_path);
-		var t = gBrowser.addTab(data_path);
+		t = gBrowser.addTab(data_path);
 		gBrowser.selectedTab = t;
-		setTimeout(function(){
-			
-			var readyListener = function(e){
-				console.log('in readyListener');
-				//may trigger prematurely when href is about:blank
-				if (gBrowser.getBrowserForTab(e.target).contentWindow.location.href !== dataFileURI){
-					return;
+		//resolve when URI is ours
+		console.log('opening data tab');
+		return new Promise(function(resolve, reject) {
+			function check_uri(){
+				if (gBrowser.getBrowserForTab(t).contentWindow.location.href !== dataFileURI){
+					console.log('data tab href not ready, waiting');
+					setTimeout(function(){check_uri();}, 100);
 				}
-				//t.removeEventListener('load', readyListener);
-				viewTabDocument = gBrowser.getBrowserForTab(e.target).contentWindow.document;
-				//even though .document is immediately available, its .body property may not be
-				function wait_for_body(){
-					if (viewTabDocument.body === null){
-						console.log('body not available, waiting');
-						setTimeout(function(){wait_for_body()}, 100);
-					}
-					else {
-						console.log('viewTabDocument is ', viewTabDocument);
-						console.log('body is ', viewTabDocument.body);
-						install_bar();
-						viewTabDocument.getElementById("domainName").textContent = commonName;
-						viewTabDocument['pagesigner-session-dir'] = sdir;
-					}
-				};
-				wait_for_body();
+				else {
+					resolve();
+				}
 			};
-			
-			gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
-			t.addEventListener('load', readyListener);
-		}, 500);		
+			check_uri();
+		});
+	})
+	.then(function(){
+		//reload the tab and check URI
+		console.log('reloading data tab');
+		//set a token on old document object
+		gBrowser.getBrowserForTab(t).contentWindow.document['pagesigner-before-reload'] = true;
+		gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
+		//after reload FF marks previous document as [dead Object],
+		return new Promise(function(resolve, reject) {
+			function check_new_document(){
+				var doc = gBrowser.getBrowserForTab(t).contentWindow.document;
+				if (doc.hasOwnProperty('pagesigner-before-reload')){
+					console.log('data tab href not ready, waiting');
+					setTimeout(function(){check_new_document();}, 100);
+				}
+				else {
+					resolve();
+				}
+			};
+			check_new_document();
+		});
+	})
+	.then(function(){
+		viewTabDocument = gBrowser.getBrowserForTab(t).contentWindow.document;
+		//even though .document is immediately available, its .body property may not be
+		return new Promise(function(resolve, reject) {
+			function wait_for_body(){
+				if (viewTabDocument.body === null){
+					console.log('body not available, waiting');
+					setTimeout(function(){wait_for_body()}, 100);
+				}
+				else {
+					console.log('viewTabDocument is ', viewTabDocument);
+					console.log('body is ', viewTabDocument.body);
+					install_bar();
+					viewTabDocument.getElementById("domainName").textContent = commonName;
+					viewTabDocument['pagesigner-session-dir'] = sdir;
+					console.log('injected stuff into viewTabDocument');
+				}
+			};
+			wait_for_body();
+		});
 	});
 }
 
