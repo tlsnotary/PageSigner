@@ -224,88 +224,135 @@ function browser_specific_init(){
 	init();
 }
 
-
-var idiv;
-var listener;
-var document;
-function openManager(){
-	//if manager is open, focus it
+var idiv, listener, managerDocument; //these must be global otherwise we'll get no events
+function openManager(is_loading){
+	if (typeof(is_loading) === 'undefined'){
+		is_loading = false;
+	}
+	var t;
+	var was_manager_open = false;
 	var tabs = gBrowser.tabs;
 	for(var i=0; i < tabs.length; i++){
 		var url = gBrowser.getBrowserForTab(tabs[i]).contentWindow.location.href;
 		if (url == manager_path){
-			gBrowser.selectedTab = tabs[i];
+			t = tabs[i];
+			if (! is_loading){
+				//on Win7 i was getting 'load' event even when I clicked another tab
+				//we want to select the tab only if manager was called from the menu
+				gBrowser.selectedTab = t;
+			}
+			was_manager_open = true;
+		}
+	}
+	if (was_manager_open && (gBrowser.getBrowserForTab(t).contentWindow.document === managerDocument)){
+		console.log('ignoring the same managerDocument in tab');
+		return;
+	}
+	
+	var promise;
+	if (was_manager_open && !is_loading){
+		//this may be a dangling manager from previous browser session
+		//if so, then reload it
+		if (gBrowser.getBrowserForTab(t).contentWindow.document !== managerDocument){
+			console.log('detected a dangling manager tab');
+			promise = Promise.resolve();
+		}
+		else {
+			console.log('focusing existing manager');
 			return;
 		}
 	}
-	
-	Promise.resolve() //dont want to indent the whole .then() section
-	.then(function(){
-		var t = gBrowser.addTab(OS.Path.join(fsRootPath, "manager.html"));
-		gBrowser.selectedTab = t;
+	else if (was_manager_open && is_loading){
 		
-		var readyListener = function(e){
-			//may trigger prematurely when href is about:blank
-			if (gBrowser.getBrowserForTab(e.target).contentWindow.location.href !== manager_path){
-				return;
-			}
-			t.removeEventListener('load', readyListener);
-			document = gBrowser.getBrowserForTab(e.target).contentWindow.document;
-			
-				var install_listener = function(d){
-				listener = document.getElementById('manager2extension');
-				idiv = document.getElementById('extension2manager');
-				if (!listener){ //maybe the DOM hasnt yet loaded
-					setTimeout(function(){
-						install_listener(document);
-					}, 100);
-					return;
+		console.log('reloading existing manager');
+		promise = Promise.resolve();
+	}
+	else if (!was_manager_open){
+		promise = new Promise(function(resolve, reject) {
+			console.log('opening a new manager');
+			t = gBrowser.addTab(manager_path);
+			gBrowser.selectedTab = t;
+			function check_uri(){
+				if (gBrowser.getBrowserForTab(t).contentWindow.location.href !== manager_path){
+					console.log('data tab href not ready, waiting');
+					setTimeout(function(){check_uri();}, 100);
 				}
-				
-				var onEvent = function(){
-					console.log('in click event');
-					if (listener.textContent === '') return;//spurious click
-					var data = JSON.parse(listener.textContent);
-					listener.textContent = '';
-					if (data.destination !== 'extension') return;
-					if (data.message === 'refresh'){
-						populateTable();
-					}
-					else if (data.message === 'export'){
-						var path = OS.Path.join(fsRootPath, data.args.dir, 'pgsg.pgsg');
-						 console.log('saving full path', path);
-						savePGSGFile(path, data.args.file);
-					}
-					else if (data.message === 'delete'){
-						OS.File.removeDir(OS.Path.join(fsRootPath, data.args.dir))
-						.then(function(){
-							populateTable();
-						});
-					}
-					else if (data.message === 'rename'){
-						//to update dir's modtime, we remove the file and recreate it
-						writeFile(data.args.dir, "meta", str2ba(data.args.newname), true)
-						.then(function(){
-							populateTable();
-						});
-					}
-					else if (data.message === 'viewdata'){
-						var dir = OS.Path.join(fsRootPath, data.args.dir);
-						openTabs(dir);
-					}
-					else if (data.message === 'viewraw'){
-						var path = OS.Path.join(fsRootPath, data.args.dir, 'raw.txt');
-						gBrowser.selectedTab = gBrowser.addTab(path);
-					}
-				};
-				listener.addEventListener('click', onEvent);
-				onEvent(); //maybe the page asked for refresh before listener installed
+				else {
+					resolve();
+				}
 			};
-			
-			install_listener(document);
+			check_uri();
+		});
+	}
+	
+	promise
+	.then(function(){
+		//DOM may not be available immediately
+		managerDocument = gBrowser.getBrowserForTab(t).contentWindow.document;
+		return new Promise(function(resolve, reject) {
+			function wait_for_DOM(){
+				listener = managerDocument.getElementById('manager2extension');
+				idiv = managerDocument.getElementById('extension2manager');
+				if (listener && idiv){
+					resolve();
+				}
+				else {
+					console.log('manager DOM not ready yet, waiting');
+					setTimeout(function(){wait_for_DOM()}, 100);
+				}
+			}
+			wait_for_DOM();
+		});
+	})
+	.then(function(){
+		function onEvent(){
+			console.log('in click event');
+			if (listener.textContent === '') return;//spurious click
+			var data = JSON.parse(listener.textContent);
+			listener.textContent = '';
+			if (data.destination !== 'extension') return;
+			if (data.message === 'refresh'){
+				populateTable();
+			}
+			else if (data.message === 'export'){
+				var path = OS.Path.join(fsRootPath, data.args.dir, 'pgsg.pgsg');
+				 console.log('saving full path', path);
+				savePGSGFile(path, data.args.file);
+			}
+			else if (data.message === 'delete'){
+				OS.File.removeDir(OS.Path.join(fsRootPath, data.args.dir))
+				.then(function(){
+					populateTable();
+				});
+			}
+			else if (data.message === 'rename'){
+				//to update dir's modtime, we remove the file and recreate it
+				writeFile(data.args.dir, "meta", str2ba(data.args.newname), true)
+				.then(function(){
+					populateTable();
+				});
+			}
+			else if (data.message === 'viewdata'){
+				var dir = OS.Path.join(fsRootPath, data.args.dir);
+				openTabs(dir);
+			}
+			else if (data.message === 'viewraw'){
+				var path = OS.Path.join(fsRootPath, data.args.dir, 'raw.txt');
+				gBrowser.selectedTab = gBrowser.addTab(path);
+			}
 		};
-			
-		t.addEventListener('load', readyListener);
+		listener.addEventListener('click', onEvent);
+		onEvent(); //maybe the page asked for refresh before listener installed
+		
+		//add tab event listener which will trigger when user reloads the tab ie with F5
+		function onLoadEvent(e){
+			console.log('in tab load event handler');
+			openManager(true);
+		};
+		if (!was_manager_open){
+			//installed only once on first tab load
+			t.addEventListener('load', onLoadEvent);
+		}
 	});
 }
 

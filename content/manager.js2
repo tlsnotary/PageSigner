@@ -191,6 +191,7 @@ function doRename(t, oldname, dir){
 	},
 	function(new_name){
 		if(!(isValid(new_name))){
+			console.log('detected invalid name', new_name);
 			//swal glitch - need a timeout
 			setTimeout(function(){
 				swal({title:"Invalid filename", text:'Please only use alphanumerical characters', type:'warning'});
