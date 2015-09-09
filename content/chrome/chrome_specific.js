@@ -38,8 +38,11 @@ function import_reliable_sites(){
 	});
 }
 
-
-function import_resource(filename){
+//we can import chrome:// and file:// URL
+function import_resource(filename, isFileURI){
+	if (typeof(isFileURI) === 'undefined'){
+		isFileURI = false;
+	}
 	return new Promise(function(resolve, reject) {
 		var xhr = new XMLHttpRequest();
 		xhr.responseType = "arraybuffer";
@@ -51,7 +54,8 @@ function import_resource(filename){
 				resolve(ab2ba(xhr.response));
 			}
 		};
-		xhr.open('get', chrome.extension.getURL('content/'+toFilePath(filename)), true);
+		var path = isFileURI ? filename : chrome.extension.getURL('content/'+toFilePath(filename));
+		xhr.open('get', path, true);
 		xhr.send();
 	});
 }

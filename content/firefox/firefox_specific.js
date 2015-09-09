@@ -71,7 +71,11 @@ function toFilePath(pathArray){
 }
 
 
-function import_resource(filename){
+//reads from addon content folder but also can read an arbitrary file://
+function import_resource(filename, isFileURI){
+	if (typeof(isFileURI) === 'undefined'){
+		isFileURI = false;
+	}
 	return new Promise(function(resolve, reject) {
 		var path = 'content';
 		if (typeof(filename) === 'string'){
@@ -82,11 +86,28 @@ function import_resource(filename){
 				path += '/'+filename[i];
 			}
 		}
+
+		path = isFileURI ? filename : thisaddon.getResourceURI(path).spec;
+		var xhr = get_xhr();
+		xhr.responseType = "arraybuffer";
+		xhr.onreadystatechange = function(){
+			if (xhr.readyState != 4)
+				return;
+
+			if (xhr.response) {
+				resolve(ab2ba(xhr.response));
+			}
+		};
+		xhr.open('get', path, true);
+		xhr.send();
+		
+		/*
 		OS.File.read(OS.Path.fromFileURI(thisaddon.getResourceURI(path).spec))
 		.then(function onSuccess(ba) {
 			//returns Uint8Array which is compatible with our internal byte array	
 			resolve(ba); 
 		});
+		*/
 	});
 }
 
@@ -461,7 +482,7 @@ function savePGSGFile(existing_path, name){
 	if (testing){
 		var dldir = Cc["@mozilla.org/file/directory_service;1"].
            getService(Ci.nsIProperties).get("DfltDwnld", Ci.nsIFile).path;
-        var dst = OS.Path.join(dldir, 'pagesigner.tmp.dir', name);
+        var dst = OS.Path.join(dldir, 'pagesigner.tmp.dir', name + '.pgsg');
 		copyFile(existing_path, dst);
 		return;
 	}
