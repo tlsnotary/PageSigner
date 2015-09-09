@@ -407,6 +407,9 @@ function getDirEntry(dirName){
 		OS.File.stat(path)
 		.then(function(stat){
 			resolve(stat);
+		})
+		.catch(function(what){
+			reject(what);
 		});
 	});
 }
