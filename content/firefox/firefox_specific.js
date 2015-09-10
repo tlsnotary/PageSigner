@@ -20,7 +20,7 @@ var atob = win.atob;
 var JSON = win.JSON;
 var is_chrome = false;
 var fsRootPath; //path to pagesigner folder in FF profile dir
-
+var manager_path; //manager.html which was copied into profile's pagesigner dir
 
 function getPref(prefname, type){
 	return new Promise(function(resolve, reject) {
@@ -71,7 +71,11 @@ function toFilePath(pathArray){
 }
 
 
-function import_resource(filename){
+//reads from addon content folder but also can read an arbitrary file://
+function import_resource(filename, isFileURI){
+	if (typeof(isFileURI) === 'undefined'){
+		isFileURI = false;
+	}
 	return new Promise(function(resolve, reject) {
 		var path = 'content';
 		if (typeof(filename) === 'string'){
@@ -82,11 +86,28 @@ function import_resource(filename){
 				path += '/'+filename[i];
 			}
 		}
+
+		path = isFileURI ? filename : thisaddon.getResourceURI(path).spec;
+		var xhr = get_xhr();
+		xhr.responseType = "arraybuffer";
+		xhr.onreadystatechange = function(){
+			if (xhr.readyState != 4)
+				return;
+
+			if (xhr.response) {
+				resolve(ab2ba(xhr.response));
+			}
+		};
+		xhr.open('get', path, true);
+		xhr.send();
+		
+		/*
 		OS.File.read(OS.Path.fromFileURI(thisaddon.getResourceURI(path).spec))
 		.then(function onSuccess(ba) {
 			//returns Uint8Array which is compatible with our internal byte array	
 			resolve(ba); 
 		});
+		*/
 	});
 }
 
@@ -173,24 +194,27 @@ function browser_specific_init(){
 	});
 	
 	fsRootPath = OS.Path.join(OS.Constants.Path.profileDir, "pagesigner");
+	manager_path = OS.Path.toFileURI(OS.Path.join(fsRootPath, "manager.html"));
 		
 	//copy the manager file to local filesystem for security + takes care of some odd behaviour
 	//when trying to add eventListener to chrome:// resources
 	var html = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.html').spec);
-	var js   = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.js').spec);
+	var js   = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.js2').spec);
 	var css  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/manager.css').spec);
 	var check  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/check.png').spec);
 	var cross  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/cross.png').spec);
 	var swalcss  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/sweetalert.css').spec);
-	var swaljs  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/sweetalert.min.js').spec);
+	var swaljs  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/sweetalert.min.js2').spec);
+	var icon  = OS.Path.fromFileURI(thisaddon.getResourceURI('content/icon16.png').spec);
 
 	var dest_html = OS.Path.join(fsRootPath, "manager.html");
-	var dest_js = OS.Path.join(fsRootPath, "manager.js");
+	var dest_js = OS.Path.join(fsRootPath, "manager.js2");
 	var dest_css = OS.Path.join(fsRootPath, "manager.css");
 	var dest_check  = OS.Path.join(fsRootPath, "check.png");
 	var dest_cross  = OS.Path.join(fsRootPath, "cross.png");
 	var dest_swalcss  = OS.Path.join(fsRootPath, "sweetalert.css");
-	var dest_swaljs  = OS.Path.join(fsRootPath, "sweetalert.min.js");
+	var dest_swaljs  = OS.Path.join(fsRootPath, "sweetalert.min.js2");
+	var dest_icon  = OS.Path.join(fsRootPath, "icon16.png");
 
 	OS.File.makeDir(fsRootPath, {ignoreExisting:true})
 	.then(function(){
@@ -213,89 +237,143 @@ function browser_specific_init(){
 	})
 	.then(function(){
 		OS.File.copy(swaljs, dest_swaljs);
+	})
+	.then(function(){
+		OS.File.copy(icon, dest_icon);
 	});
 	
 	init();
 }
 
-
-var idiv;
-var listener;
-var d;
-function openManager(){
-	//if manager is open, focus it
+var idiv, listener, managerDocument; //these must be global otherwise we'll get no events
+function openManager(is_loading){
+	if (typeof(is_loading) === 'undefined'){
+		is_loading = false;
+	}
+	var t;
+	var was_manager_open = false;
 	var tabs = gBrowser.tabs;
 	for(var i=0; i < tabs.length; i++){
 		var url = gBrowser.getBrowserForTab(tabs[i]).contentWindow.location.href;
-		if (url.search('/pagesigner/manager.html') > -1){
-			gBrowser.selectedTab = tabs[i];
+		if (url == manager_path){
+			t = tabs[i];
+			if (! is_loading){
+				//on Win7 i was getting 'load' event even when I clicked another tab
+				//we want to select the tab only if manager was called from the menu
+				gBrowser.selectedTab = t;
+			}
+			was_manager_open = true;
+		}
+	}
+	if (was_manager_open && (gBrowser.getBrowserForTab(t).contentWindow.document === managerDocument)){
+		console.log('ignoring the same managerDocument in tab');
+		return;
+	}
+	
+	var promise;
+	if (was_manager_open && !is_loading){
+		//this may be a dangling manager from previous browser session
+		//if so, then reload it
+		if (gBrowser.getBrowserForTab(t).contentWindow.document !== managerDocument){
+			console.log('detected a dangling manager tab');
+			promise = Promise.resolve();
+		}
+		else {
+			console.log('focusing existing manager');
 			return;
 		}
 	}
-	
-	Promise.resolve() //dont want to indent the whole .then() section
-	.then(function(){
-		var uri = OS.Path.join(fsRootPath, "manager.html");
-		var t = gBrowser.addTab(uri);
-		gBrowser.selectedTab = t;
+	else if (was_manager_open && is_loading){
 		
-		var readyListener = function(e){
-			//will trigger on reload (sometimes triggers twice but this should not affect us)
-			d = gBrowser.getBrowserForTab(e.target).contentWindow.document;
-			
-			var install_listener = function(d){
-				listener = d.getElementById('manager2extension');
-				idiv = d.getElementById('extension2manager');
-				if (!listener){ //maybe the DOM hasnt yet loaded
-					setTimeout(function(){
-						install_listener(d);
-					}, 100);
-					return;
+		console.log('reloading existing manager');
+		promise = Promise.resolve();
+	}
+	else if (!was_manager_open){
+		promise = new Promise(function(resolve, reject) {
+			console.log('opening a new manager');
+			t = gBrowser.addTab(manager_path);
+			gBrowser.selectedTab = t;
+			function check_uri(){
+				if (gBrowser.getBrowserForTab(t).contentWindow.location.href !== manager_path){
+					console.log('data tab href not ready, waiting');
+					setTimeout(function(){check_uri();}, 100);
 				}
-				
-				var onEvent = function(){
-					console.log('in click event');
-					if (listener.textContent === '') return;//spurious click
-					var data = JSON.parse(listener.textContent);
-					listener.textContent = '';
-					if (data.destination !== 'extension') return;
-					if (data.message === 'refresh'){
-						populateTable();
-					}
-					else if (data.message === 'export'){
-						var path = OS.Path.join(fsRootPath, data.args.dir, 'pgsg.pgsg');
-						 console.log('saving full path', path);
-						savePGSGFile(path, data.args.file);
-					}
-					else if (data.message === 'delete'){
-						OS.File.removeDir(OS.Path.join(fsRootPath, data.args.dir))
-						.then(function(){
-							populateTable();
-						});
-					}
-					else if (data.message === 'rename'){
-						//to update dir's modtime, we remove the file and recreate it
-						writeFile(data.args.dir, "meta", str2ba(data.args.newname), true)
-						.then(function(){
-							populateTable();
-						});
-					}
-					else if (data.message === 'viewdata'){
-						openTabs(data.args.dir);
-					}
-					else if (data.message === 'viewraw'){
-						var path = OS.Path.join(fsRootPath, data.args.dir, 'raw.txt');
-						gBrowser.selectedTab = gBrowser.addTab(path);
-					}
-				};
-				listener.addEventListener('click', onEvent);
-				onEvent(); //maybe the page asked for refresh before listener installed
+				else {
+					resolve();
+				}
 			};
-			
-			install_listener(d);
+			check_uri();
+		});
+	}
+	
+	promise
+	.then(function(){
+		//DOM may not be available immediately
+		managerDocument = gBrowser.getBrowserForTab(t).contentWindow.document;
+		return new Promise(function(resolve, reject) {
+			function wait_for_DOM(){
+				listener = managerDocument.getElementById('manager2extension');
+				idiv = managerDocument.getElementById('extension2manager');
+				if (listener && idiv){
+					resolve();
+				}
+				else {
+					console.log('manager DOM not ready yet, waiting');
+					setTimeout(function(){wait_for_DOM()}, 100);
+				}
+			}
+			wait_for_DOM();
+		});
+	})
+	.then(function(){
+		function onEvent(){
+			console.log('in click event');
+			if (listener.textContent === '') return;//spurious click
+			var data = JSON.parse(listener.textContent);
+			listener.textContent = '';
+			if (data.destination !== 'extension') return;
+			if (data.message === 'refresh'){
+				populateTable();
+			}
+			else if (data.message === 'export'){
+				var path = OS.Path.join(fsRootPath, data.args.dir, 'pgsg.pgsg');
+				 console.log('saving full path', path);
+				savePGSGFile(path, data.args.file);
+			}
+			else if (data.message === 'delete'){
+				OS.File.removeDir(OS.Path.join(fsRootPath, data.args.dir))
+				.then(function(){
+					populateTable();
+				});
+			}
+			else if (data.message === 'rename'){
+				//to update dir's modtime, we remove the file and recreate it
+				writeFile(data.args.dir, "meta", str2ba(data.args.newname), true)
+				.then(function(){
+					populateTable();
+				});
+			}
+			else if (data.message === 'viewdata'){
+				var dir = OS.Path.join(fsRootPath, data.args.dir);
+				openTabs(dir);
+			}
+			else if (data.message === 'viewraw'){
+				var path = OS.Path.join(fsRootPath, data.args.dir, 'raw.txt');
+				gBrowser.selectedTab = gBrowser.addTab(path);
+			}
 		};
-			
-		t.addEventListener('load', readyListener);
+		listener.addEventListener('click', onEvent);
+		onEvent(); //maybe the page asked for refresh before listener installed
+		
+		//add tab event listener which will trigger when user reloads the tab ie with F5
+		function onLoadEvent(e){
+			console.log('in tab load event handler');
+			openManager(true);
+		};
+		if (!was_manager_open){
+			//installed only once on first tab load
+			t.addEventListener('load', onLoadEvent);
+		}
 	});
 }
 
@@ -329,14 +407,17 @@ function getDirEntry(dirName){
 		OS.File.stat(path)
 		.then(function(stat){
 			resolve(stat);
+		})
+		.catch(function(what){
+			reject(what);
 		});
 	});
 }
 
 
 function getName(obj){
-	//XXX this is not x-platform
-	return obj.path.split('/').pop();
+	var delimiter = os_win ? '\\' : '/'; 
+	return obj.path.split(delimiter).pop();
 }
 
 
@@ -391,6 +472,24 @@ function sendMessage(data){
 
 
 function savePGSGFile(existing_path, name){
+	var copyFile = function(src, dst){
+		OS.File.copy(src, dst)
+		.then(function(){
+			console.log("File write OK");
+		},
+		function (e){
+			console.log("Caught error writing file: "+e);
+		});
+	};
+	
+	if (testing){
+		var dldir = Cc["@mozilla.org/file/directory_service;1"].
+           getService(Ci.nsIProperties).get("DfltDwnld", Ci.nsIFile).path;
+        var dst = OS.Path.join(dldir, 'pagesigner.tmp.dir', name + '.pgsg');
+		copyFile(existing_path, dst);
+		return;
+	}
+	
     var nsIFilePicker = Ci.nsIFilePicker;
 	var fp = Cc["@mozilla.org/filepicker;1"].createInstance(nsIFilePicker);
 	fp.init(window, "Save PageSigner file As", nsIFilePicker.modeSave);
@@ -399,17 +498,8 @@ function savePGSGFile(existing_path, name){
 	fp.defaultString = name + ".pgsg";
 	var rv = fp.show();
 	if (rv == nsIFilePicker.returnOK || rv == nsIFilePicker.returnReplace) {
-		var path = fp.file.path;
-		//write the file
-		let promise = OS.File.copy(existing_path, fp.file.path);
-		promise.then(function(){
-			console.log("File write OK");
-		},
-		function (e){
-			console.log("Caught error writing file: "+e);
-		}
-		);
-   }
+		copyFile(existing_path, fp.file.path);
+	}
 }
 
 
@@ -417,56 +507,6 @@ function savePGSGFile(existing_path, name){
 
 function showAboutInfo(){
 	window.openDialog("chrome://pagesigner/content/firefox/about.xul","","chrome, dialog, modal", gBrowser).focus();
-}
-
-
-//extracts modulus from PEM certificate
-function getModulus(cert){
-	const nsIX509Cert = Ci.nsIX509Cert;
-	const nsIX509CertDB = Ci.nsIX509CertDB;
-	const nsX509CertDB = "@mozilla.org/security/x509certdb;1";
-	let certdb = Cc[nsX509CertDB].getService(nsIX509CertDB);
-	let cert_obj = certdb.constructX509FromBase64(b64encode(cert));
-	const nsASN1Tree = "@mozilla.org/security/nsASN1Tree;1";
-	const nsIASN1Tree = Ci.nsIASN1Tree;
-	var hexmodulus = "";
-	
-	var certDumpTree = Cc[nsASN1Tree].createInstance(nsIASN1Tree);
-	certDumpTree.loadASN1Structure(cert_obj.ASN1Structure);
-	var modulus_str = certDumpTree.getDisplayData(12);
-	if (! modulus_str.startsWith( "Modulus (" ) ){
-		//most likely an ECC certificate
-		alert ("Unfortunately this website is not compatible with PageSigner. (could not parse RSA certificate)");
-		return;
-	}
-	var lines = modulus_str.split('\n');
-	var line = "";
-	for (var i = 1; i<lines.length; ++i){
-		line = lines[i];
-		//an empty line is where the pubkey part ends
-		if (line === "") {break;}
-		//remove all whitespaces (g is a global flag)
-		hexmodulus += line.replace(/\s/g, '');
-	}
-	return hex2ba(hexmodulus);
-}
-
-
-//verify the certificate against Firefox's certdb
-function verifyCert(chain){
-	const nsIX509Cert = Ci.nsIX509Cert;
-	const nsIX509CertDB = Ci.nsIX509CertDB;
-	const nsX509CertDB = "@mozilla.org/security/x509certdb;1";
-	let certdb = Cc[nsX509CertDB].getService(nsIX509CertDB);
-	let cert_obj = certdb.constructX509FromBase64(b64encode(chain[0]));
-	let a = {}, b = {};
-	let retval = certdb.verifyCertNow(cert_obj, nsIX509Cert.CERT_USAGE_SSLServerWithStepUp, nsIX509CertDB.FLAG_LOCAL_ONLY, a, b);
-	if (retval === 0){ 		//success
-		return true;
-	}
-	else {
-		return false;
-	}
 }
 
 
@@ -511,23 +551,19 @@ var httpRequestBlocker = {
 				notificationCallbacks = httpChannel.notificationCallbacks;
 			}
 			else if (httpChannel.loadGroup && httpChannel.loadGroup.notificationCallbacks) {
-				notificationCallbacks = httpChannel.loadGroup.notificationCallbacks;        
+				notificationCallbacks = httpChannel.loadGroup.notificationCallbacks;
 			}
 			else {
-				console.log('no notificationCallbacks');
 				return;
 			}
 			var path = notificationCallbacks.getInterface(Components.interfaces.nsIDOMWindow).top.location.pathname;
 		} catch (e){
-			console.log('no interface');
 			return; //xhr dont have any interface
 		}
 		if (block_urls.indexOf(path) > -1){
-			console.log('found matching tab, blocking request', path);
 			httpChannel.cancel(Components.results.NS_BINDING_ABORTED);
 			return;
 		}
-		console.log('not blocking request', path);
 	}
 };
 
@@ -600,8 +636,10 @@ function makeSessionDir(server, is_imported){
 			imported_str = "-IMPORTED";
 		}
 		var newdir = OS.Path.join(localDir, time+'-'+server+imported_str);
-		OS.File.makeDir(newdir);
-		resolve(newdir);
+		OS.File.makeDir(newdir)
+		.then(function(){
+			resolve(newdir);
+		});
 	});
 }
 
@@ -623,23 +661,24 @@ function writeFile(dirName, fileName, data, is_update){
 	}
 	return new Promise(function(resolve, reject) {
 		var path = OS.Path.join(fsRootPath, dirName, fileName);
-		var promise;
-		if (is_update){
-			promise = OS.File.remove(path);
-		}
-		else {
-			promise = Promise.resolve();
-		}
+		var promise = is_update ? OS.File.remove(path) : Promise.resolve();
 		promise
 		.then(function(){
 			return OS.File.open(path, {create:true});
+		})
+		.then(function(f){
+			return f.close();
 		})
 		.then(function(){				
 			return OS.File.writeAtomic(path, ba2ua(data));
 		})
 		.then(function(){
 			resolve();
-		});
+		})
+		.catch(function(e){
+			console.log('caught error in writeFile', e);
+			alert('error in writeFile');
+		})
 	});
 }
 
@@ -658,6 +697,8 @@ function openTabs(sdir){
 	}
 	
 	var commonName;
+	var dataFileURI;
+	var t;
 	getFileContent(sdir, "metaDomainName")
 	.then(function(data_ba){
 		commonName = ba2str(data_ba);
@@ -666,24 +707,67 @@ function openTabs(sdir){
 	.then(function(data){
 		var name = ba2str(data);
 		var data_path = OS.Path.join(fsRootPath, sdir, name);
+		dataFileURI = OS.Path.toFileURI(data_path);
 		block_urls.push(data_path);
-		var t = gBrowser.addTab(data_path);
+		t = gBrowser.addTab(data_path);
 		gBrowser.selectedTab = t;
-		setTimeout(function(){
-			gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
-		}, 500);
-		install_notification(t, commonName, raw_path);
+		//resolve when URI is ours
+		console.log('opening data tab');
+		return new Promise(function(resolve, reject) {
+			function check_uri(){
+				if (gBrowser.getBrowserForTab(t).contentWindow.location.href !== dataFileURI){
+					console.log('data tab href not ready, waiting');
+					setTimeout(function(){check_uri();}, 100);
+				}
+				else {
+					resolve();
+				}
+			};
+			check_uri();
+		});
+	})
+	.then(function(){
+		//reload the tab and check URI
+		console.log('reloading data tab');
+		//set a token on old document object
+		gBrowser.getBrowserForTab(t).contentWindow.document['pagesigner-before-reload'] = true;
+		gBrowser.getBrowserForTab(t).reloadWithFlags(Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE);
+		//after reload FF marks previous document as [dead Object],
+		return new Promise(function(resolve, reject) {
+			function check_new_document(){
+				var doc = gBrowser.getBrowserForTab(t).contentWindow.document;
+				if (doc.hasOwnProperty('pagesigner-before-reload')){
+					console.log('data tab href not ready, waiting');
+					setTimeout(function(){check_new_document();}, 100);
+				}
+				else {
+					resolve();
+				}
+			};
+			check_new_document();
+		});
+	})
+	.then(function(){
+		viewTabDocument = gBrowser.getBrowserForTab(t).contentWindow.document;
+		//even though .document is immediately available, its .body property may not be
+		return new Promise(function(resolve, reject) {
+			function wait_for_body(){
+				if (viewTabDocument.body === null){
+					console.log('body not available, waiting');
+					setTimeout(function(){wait_for_body()}, 100);
+				}
+				else {
+					console.log('viewTabDocument is ', viewTabDocument);
+					console.log('body is ', viewTabDocument.body);
+					install_bar();
+					viewTabDocument.getElementById("domainName").textContent = commonName;
+					viewTabDocument['pagesigner-session-dir'] = sdir;
+					console.log('injected stuff into viewTabDocument');
+				}
+			};
+			wait_for_body();
+		});
 	});
-}
-
-
-function getCommonName(cert){
-	const nsIX509Cert = Ci.nsIX509Cert;
-	const nsIX509CertDB = Ci.nsIX509CertDB;
-	const nsX509CertDB = "@mozilla.org/security/x509certdb;1";
-	let certdb = Cc[nsX509CertDB].getService(nsIX509CertDB);
-	let cert_obj = certdb.constructX509FromBase64(b64encode(cert));
-	return cert_obj.commonName;
 }
 
 

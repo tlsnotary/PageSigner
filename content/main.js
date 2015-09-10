@@ -6,7 +6,8 @@ var previous_session_start_time; // used to make sure user doesnt exceed rate li
 var chosen_notary;
 var tdict = {}; 
 var valid_hashes = [];
-var os_win = false; //is OS windows? used to fix / in paths
+var os_win = false; //is OS windows? used to fix / in paths 
+var browser_init_finished = false; //signal to test script when it can start
 
 
 function init(){
@@ -58,6 +59,7 @@ function init(){
 		}
 		import_reliable_sites();
 		startListening();
+		browser_init_finished = true;
 	});
 }
 
@@ -120,8 +122,6 @@ function parse_reliable_sites(text){
 }
 
 
-
-
 //callback is used in testing to signal when this page's n10n finished
 function startNotarizing(callback){
 	if (! oracles_intact){
@@ -130,7 +130,7 @@ function startNotarizing(callback){
 	}
 	var modulus;
 	var certsha256;
-	var headers, server, port;
+	var headers, server, port, chain;
 	getHeaders()
 	.then(function(obj){
 		headers = obj.headers;
@@ -139,7 +139,8 @@ function startNotarizing(callback){
 		loadBusyIcon();
 		return get_certificate(server, port);
 	})
-	.then(function(chain){
+	.then(function(certchain){
+		chain = certchain;
 		if (! verifyCert(chain)){
 			sendAlert({title:"PageSigner error", text:"This website cannot be audited by PageSigner because it presented an untrusted certificate"});
 			return;
@@ -530,7 +531,7 @@ function process_entries(pgsg_subdirs){
 	}
 	Promise.all(promises)
 	.then(function(){
-		console.log('about to sendTable', tdict);
+		//console.log('about to sendTable', tdict);
 		sendTable();	
 	})
 	.catch(function(e){
@@ -615,14 +616,63 @@ function fixWinPath(path){
 }
 
 
-//startsWith is a pretty recent method, let's implement it here if it's not provided
-//reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/startsWith
-if (!String.prototype.startsWith) {
-  String.prototype.startsWith = function(searchString, position) {
-    position = position || 0;
-    return this.lastIndexOf(searchString, position) === position;
-  };
+function getModulus(cert){
+	  var c = Certificate.decode(new Buffer(cert), 'der');
+		var pk = c.tbsCertificate.subjectPublicKeyInfo.subjectPublicKey.data;
+		var pkba = ua2ba(pk);
+		//expected modulus length 256, 384, 512
+		var modlen = 256;
+		if (pkba.length > 384) modlen = 384;
+		if (pkba.length > 512) modlen = 512;
+		var modulus = pkba.slice(pkba.length - modlen - 5, pkba.length -5);
+		return modulus;
 }
+
+
+function getCommonName(cert){
+	var c = Certificate.decode(new Buffer(cert), 'der');
+	var fields = c.tbsCertificate.subject.value;
+	for (var i=0; i < fields.length; i++){
+		if (fields[i][0].type.toString() !== [2,5,4,3].toString()) continue;
+		//first 2 bytes are DER-like metadata
+		return ba2str(fields[i][0].value.slice(2));
+	}
+	return 'unknown';
+}
+
+
+function permutator(inputArr) {
+  var results = [];
+
+  function permute(arr, memo) {
+    var cur, memo = memo || [];
+
+    for (var i = 0; i < arr.length; i++) {
+      cur = arr.splice(i, 1);
+      if (arr.length === 0) {
+        results.push(memo.concat(cur));
+      }
+      permute(arr.slice(), memo.concat(cur));
+      arr.splice(i, 0, cur[0]);
+    }
+
+    return results;
+  }
+
+  return permute(inputArr);
+}
+
+
+function verifyCert(chain){
+	var chainperms = permutator(chain);
+	for (var i=0; i < chainperms.length; i++){
+		if (verifyCertChain(chainperms[i])){
+			return true;
+		}
+	}
+	return false;
+}
+
 
 
 //This must be at the bottom, otherwise we'd have to define each function

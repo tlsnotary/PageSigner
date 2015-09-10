@@ -4,6 +4,7 @@
 
 let prompts = Services.prompt;
 let prefs = Services.prefs;
+var testing_import_path; //used only in testing
 
 const NS_XUL = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul",
       PREFS_BRANCH = Services.prefs.getBranch("extensions.pagesigner.button-position."),
@@ -13,27 +14,30 @@ const NS_XUL = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul",
 
 let main = {
   notarize: function() {
-	  if (testing){
-		  startTesting();
-	  }
-	  else {
-		startNotarizing();
-	}
+	startNotarizing();
   },
   verify: function() {
+	function importPath(path){
+		OS.File.read(path)
+		.then(function(imported_data){
+			var data_ba = ua2ba(imported_data);  
+			verify_tlsn_and_show_data(data_ba, true);
+			populateTable(); //TODO, why again? v_t_a_s_d already does that
+		});
+	};
+	
+	if (testing){
+		importPath(testing_import_path);
+		return;
+	}
+	  
 	const nsIFilePicker = Components.interfaces.nsIFilePicker;
 	var fp = Components.classes["@mozilla.org/filepicker;1"]
 				   .createInstance(nsIFilePicker);
 	fp.init(window, "Select the .pgsg file you want to import and verify", nsIFilePicker.modeOpen);
 	var rv = fp.show();
 	if (rv == nsIFilePicker.returnOK || rv == nsIFilePicker.returnReplace) {
-	  var path = fp.file.path;
-	  OS.File.read(path).
-	  then(function(imported_data){
-		var data_ba = ua2ba(imported_data);  
-		verify_tlsn_and_show_data(data_ba, true);
-		populateTable();
-		});
+	  importPath(fp.file.path);
 	}
   },
   manage: function() {
