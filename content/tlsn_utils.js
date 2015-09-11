@@ -9,6 +9,16 @@ function ab2ba(ab){
 }
 
 
+function ba2ab(ba){
+	var ab = new ArrayBuffer(ba.length);
+	var dv = new DataView(ab);
+	for(var i=0; i < ba.length; i++){
+		dv.setUint8(i, ba[i]);
+	}
+	return ab;
+}
+
+
 
 function ba2ua(ba){
 	var ua = new Uint8Array(ba.length);
@@ -71,7 +81,7 @@ function hex2ba(str){
 	return ba;
 }
 
-//Turn a max 4 byte array into an int. 
+//Turn a max 4 byte array (big-endian) into an int. 
 function ba2int( x ){
 	assert(x.length <= 8, "Cannot convert bytearray larger than 8 bytes");
 	var retval = 0;

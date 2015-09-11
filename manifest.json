@@ -3,7 +3,7 @@
 
   "name": "PageSigner",
   "description": "PageSigner - a cryptographically secure webpage screenshot tool",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": "TLSNotary Group",
 
  "permissions": [
@@ -43,6 +43,7 @@
 
  "background": {
     "scripts": [
+    "content/socket.js",
     "content/chrome/chrome_specific.js",
     "content/tlsn_utils.js",
     "content/oracles.js",
