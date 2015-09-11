@@ -306,6 +306,10 @@ function writeDatafile(data_with_headers, session_dir){
 					type = 'pdf';
 					break;
 				}
+				else if (header_lines[i].search("zip") > -1){
+					type = 'zip';
+					break;
+				}
 			}
 		}
 		if (type === "html"){
@@ -672,6 +676,8 @@ function verifyCert(chain){
 	}
 	return false;
 }
+
+
 
 
 

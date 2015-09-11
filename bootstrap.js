@@ -187,6 +187,7 @@ function startup(data, reason) AddonManager.getAddonByID(data.id, function(addon
 function loadjs(){
   jsloaded = true;
   var addon = thisaddon;
+  include(addon, "socket.js");
   include(addon, "firefox/button.js");
   include(addon, "tlsn_utils.js");
   include(addon, "oracles.js");

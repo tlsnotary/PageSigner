@@ -425,98 +425,53 @@ function Socket(name, port){
 	this.name = name;
 	this.port = port;
 	this.uid = Math.random().toString(36).slice(-10);
+	this.buffer = [];
+	this.recv_timeout = 20*1000;
 }
+//inherit the base class
+Socket.prototype = Object.create(AbstractSocket.prototype);
+Socket.prototype.constructor = Socket;
+
 Socket.prototype.connect = function(){
 	var that = this;
-	var is_open = false;
-	var uid = this.uid;
 	return new Promise(function(resolve, reject) {
 		chrome.runtime.sendMessage(appId,
 			{'command':'connect', 
 			'args':{'name':that.name, 'port':that.port},
-			'uid':uid},
+			'uid':that.uid},
 			function(response){
 			console.log('in connect response', response);
+			clearInterval(timer);
 			if (response.retval === 'success'){
-				is_open = true;
+				//endless data fetching loop for the lifetime of this Socket
+				var fetch = function(){
+					chrome.runtime.sendMessage(appId, {'command':'recv', 'uid':that.uid}, function(response){
+						console.log('fetched some data', response.data.length, that.uid);
+						that.buffer = [].concat(that.buffer, response.data);
+						setTimeout(function(){fetch()}, 100);
+					});
+				};
+				fetch();	
 				resolve('ready');
 			}
 			reject(response.retval);
-			
 		});
-		//dont wait too loong
-		var timer;
-		var startTime = new Date().getTime();
-		var check = function(){
-			var now = new Date().getTime();
-			if (( (now - startTime) / 1000) >= 20){
-				clearInterval(timer);
-				reject('connect: socket timed out');
-				return;
-			}
-			if (!is_open){
-				console.log('connect: Another timeout');
-				return;
-			}
-			clearInterval(timer);
-			console.log('connect: promise resolved');
-			resolve('ready');
-		};
-		timer = setInterval(check, 100);
+		//dont wait for connect for too long
+		var timer = setTimeout(function(){
+			reject('connect: socket timed out');
+		}, 1000*20);
 	});
 };
 Socket.prototype.send = function(data_in){
-	//Transform number array into ArrayBuffer
-	var ab = new ArrayBuffer(data_in.length);
-	var dv = new DataView(ab);
-	for(var i=0; i < data_in.length; i++){
-		dv.setUint8(i, data_in[i]);
-	}
 	chrome.runtime.sendMessage(appId, 
 		{'command':'send',
 		 'args':{'data':data_in},
 		 'uid':this.uid});
 };
-Socket.prototype.recv = function(){
-	var uid = this.uid;
-	return new Promise(function(resolve, reject) {
-		var startTime = new Date().getTime();
-		var complete_records = [];
-		var buf = [];		
-		var cancelled = false;
-		var timer = setTimeout(function(){
-			reject('recv: socket timed out');
-			cancelled = true;
-		}, 20*1000);
-		
-		var check = function(){
-			if (cancelled) return;
-			chrome.runtime.sendMessage(appId, {'command':'recv', 'uid':uid}, function(response){
-				if (cancelled) return;
-				if (response.data.length > 0){
-					buf = [].concat(buf, response.data);
-					var rv = check_complete_records(buf);
-					complete_records = [].concat(complete_records, rv.comprecs);
-					if (! rv.is_complete){
-						console.log("check_complete_records failed");
-						buf = rv.incomprecs;
-						setTimeout(function(){check()}, 100);
-						return;
-					}
-					clearTimeout(timer);
-					console.log('recv promise resolved');
-					resolve(complete_records);
-					return;
-				}
-				console.log('Another timeout in recv');
-				setTimeout(function(){check()}, 100);
-			});
-		};
-		check();
-	});
-};	
 Socket.prototype.close = function(){
-	chrome.runtime.sendMessage(appId, {'command':'close'});
+	console.log('closing socket', this.uid);
+	chrome.runtime.sendMessage(appId, 
+		{'command':'close', 'uid':this.uid});
 };
 
 

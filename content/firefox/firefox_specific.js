@@ -775,104 +775,43 @@ function Socket(name, port){
 	this.name = name;
 	this.port = port;
 	this.sckt = null;
-	this.is_open = false;
 	this.buffer = [];
+	this.recv_timeout = 20*1000;
 }
+//inherit the base class
+Socket.prototype = Object.create(AbstractSocket.prototype);
+Socket.prototype.constructor = Socket;
+
 Socket.prototype.connect = function(){
-	//TCPSocket doesnt like to be wrapped in a Promise. We work around by making the
-	//promise resolve when .is_open is triggered
-	var TCPSocket = Components.classes["@mozilla.org/tcp-socket;1"].createInstance(Components.interfaces.nsIDOMTCPSocket);
-	this.sckt = TCPSocket.open(this.name, this.port, {binaryType:"arraybuffer"});
-	var that = this; //inside .ondata/open etc this is lost
-	this.sckt.ondata = function(event){ 
-		//transform ArrayBuffer into number array
-		var view = new DataView(event.data);
-		var int_array = [];
-		for(var i=0; i < view.byteLength; i++){
-			int_array.push(view.getUint8(i));
-		}
-		console.log('ondata got bytes:', view.byteLength);
-		that.buffer = [].concat(that.buffer, int_array);
-	};
-	this.sckt.onopen = function() {
-		that.is_open = true;
-		console.log('onopen');
-	};
-	
-	return new Promise(function(resolve, reject) {
-		var timer;
-		var startTime = new Date().getTime();
-		var check = function(){
-			var now = new Date().getTime();
-			if (( (now - startTime) / 1000) >= 20){
-				clearInterval(timer);
-				reject('socket timed out');
-				return;
-			}
-			if (!that.is_open){
-				console.log('Another timeout');
-				return;
-			}
-			clearInterval(timer);
-			console.log('promise resolved');
-			resolve('ready');
-		};
-		timer = setInterval(check, 100);
-	});
-	
-};
-Socket.prototype.send = function(data_in){
-	//Transform number array into ArrayBuffer
-	var sock = this.sckt;
-	var ab = new ArrayBuffer(data_in.length);
-	var dv = new DataView(ab);
-	for(var i=0; i < data_in.length; i++){
-		dv.setUint8(i, data_in[i]);
-	}
-	sock.send(ab, 0, ab.byteLength);
-}
-Socket.prototype.recv = function(is_handshake){
-	if (typeof(is_handshake) === "undefined"){
-		is_handshake = false;
-	}
 	var that = this;
 	return new Promise(function(resolve, reject) {
-		console.log('in recv promise');
-		var timer;
-		var startTime = new Date().getTime();
-		var tmp_buf = [];
-		
-		var complete_records = [];
-		var buf = [];
-		//keep checking until either timeout or enough data gathered
-		var check_recv = function(){
-			var now = new Date().getTime();
-			if (( (now - startTime) / 1000) >= 20){
-				clearInterval(timer);
-				console.log('rejecting');
-				reject('socket timed out');
-				return;
-			}
-			if (that.buffer.length === 0){
-				console.log('Another timeout in recv');
-				return;
-			}
-			buf = [].concat(buf, that.buffer);
-			that.buffer = [];
-			var rv = check_complete_records(buf);
-			complete_records = [].concat(complete_records, rv.comprecs);
-			if (! rv.is_complete){
-				console.log("check_complete_records failed");
-				buf = rv.incomprecs;
-				return;
-			}
-			//else
-			clearInterval(timer);
-			console.log('promise resolved');
-			resolve(complete_records);
+		var TCPSocket = Components.classes["@mozilla.org/tcp-socket;1"].createInstance(Components.interfaces.nsIDOMTCPSocket);
+		that.sckt = TCPSocket.open(that.name, that.port, {binaryType:"arraybuffer"});
+		that.sckt.ondata = function(event){ 
+			var int_array = ab2ba(event.data)
+			console.log('ondata got bytes:', int_array.length);
+			that.buffer = [].concat(that.buffer, int_array);
 		};
-		timer = setInterval(check_recv, 100);
+		//dont wait for connect for too long
+		var timer = setTimeout(function(){
+			reject('connect: socket timed out');
+		}, 1000*20)
+		
+		that.sckt.onopen = function() {
+			clearInterval(timer);
+			console.log('onopen');
+			resolve('ready');
+		};
+		that.sckt.onerror = function(event) {
+			clearInterval(timer);
+			console.log('onerror', event.data);
+			reject(event.data);
+		};	
 	});
+};
+Socket.prototype.send = function(data_in){
+	var ab = ba2ab(data_in);
+	this.sckt.send(ab, 0, ab.byteLength);
 };
 Socket.prototype.close = function(){
 	this.sckt.close();
