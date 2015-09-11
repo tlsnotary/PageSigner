@@ -3,13 +3,18 @@ var tabs = {};
 var appId = "oclohfdjoojomkfddjclanpogcnjhemd"; //id of the helper app
 var is_chrome = true;
 var fsRootPath; //path to local storage root, e.g. filesystem:chrome-extension://abcdabcd/persistent
+var manager_path; //manager.html which was copied into Downloads/ dir
 
-
-function getPref(value, type){
+function getPref(pref, type){
 	return new Promise(function(resolve, reject) {
-		chrome.storage.local.get(value, function(items){
-			if (!items.hasOwnProperty('first')) resolve("undefined");
-			resolve(items[value]);
+		chrome.storage.local.get(pref, function(obj){
+			if (Object.keys(obj).length === 0){
+				resolve('undefined');
+				return;
+			}
+			else {
+				resolve(obj[pref]);
+			}
 		});
 	});
 }
@@ -17,7 +22,9 @@ function getPref(value, type){
 
 function setPref(pref, type, value){
 	return new Promise(function(resolve, reject) {
-		chrome.storage.local.set({pref:value}, function(){
+		var obj = {};
+		obj[pref] = value;
+		chrome.storage.local.set(obj, function(){
 			resolve();
 		});
 	});
@@ -25,23 +32,55 @@ function setPref(pref, type, value){
 
 
 function import_reliable_sites(){
-	var xhr = new XMLHttpRequest();
-	xhr.onreadystatechange = function(){
-		if (xhr.readyState != 4)
-			return;
+	import_resource('pubkeys.txt')
+	.then(function(text_ba){
+		parse_reliable_sites(ba2str(text_ba));
+	});
+}
 
-		if (xhr.responseText) {
-			parse_reliable_sites(xhr.responseText);
+//we can import chrome:// and file:// URL
+function import_resource(filename, isFileURI){
+	if (typeof(isFileURI) === 'undefined'){
+		isFileURI = false;
+	}
+	return new Promise(function(resolve, reject) {
+		var xhr = new XMLHttpRequest();
+		xhr.responseType = "arraybuffer";
+		xhr.onreadystatechange = function(){
+			if (xhr.readyState != 4)
+				return;
+
+			if (xhr.response) {
+				resolve(ab2ba(xhr.response));
+			}
+		};
+		var path = isFileURI ? filename : chrome.extension.getURL('content/'+toFilePath(filename));
+		xhr.open('get', path, true);
+		xhr.send();
+	});
+}
+
+
+//converts an array of file names into a string with correct slashes
+function toFilePath(pathArray){
+	if (typeof(pathArray) === 'string') return pathArray;
+	var expanded = '';
+	for(var i=0; i < pathArray.length; i++){
+		expanded += pathArray[i];
+		//not trailing slash for last element
+		if (i < (pathArray.length-1) ){
+			expanded += '/';
 		}
-	};
-	xhr.open('get', chrome.extension.getURL('content/pubkeys.txt'), true);
-	xhr.send();
+	}
+	return expanded;
 }
 
 
 function startListening(){
+	console.log('tab listener started')
 	chrome.webRequest.onSendHeaders.addListener(
         function(details) {
+			console.log('in tab listener', details);
 		  if (details.type === "main_frame"){
 				tabs[details.tabId] = details;
 			}
@@ -64,11 +103,10 @@ function getHeaders(){
 		}
 		var tab = tabs[t[0].id];
 		var x = tab.url.split('/');
-		var host = x[2];
+		var host = x[2].split(':')[0];
 		x.splice(0,3);
-		var tab_url = x.join('/');	
-		var headers = '';
-		headers += tab.method + " /" + tab_url + " HTTP/1.1" + "\r\n";
+		var resource_url = x.join('/');	
+		var headers = tab.method + " /" + resource_url + " HTTP/1.1" + "\r\n";
 		headers += "Host: " + host + "\r\n";
 		for (var i = 0; i < tab.requestHeaders.length; i++){
 			var h = tab.requestHeaders[i];
@@ -77,7 +115,12 @@ function getHeaders(){
 		if (tab.method == "GET"){
 			headers += "\r\n";
 		}
-		resolve({'headers':headers, 'server':host});
+		var port = 443;
+        if (tab.url.split(':').length === 3){
+			//the port is explicitely provided in URL
+			port = parseInt(tab.url.split(':')[2].split('/')[0]);
+        }
+		resolve({'headers':headers, 'server':host, 'port':port});
 	});
 	});
 }
@@ -90,7 +133,7 @@ function loadBusyIcon(){
 
 
 function loadNormalIcon(){
-	chrome.browserAction.setIcon({path:"content/icon128.png"});
+	chrome.browserAction.setIcon({path:"icon.png"});
 	chrome.browserAction.setPopup({popup:"content/chrome/popup.html"});
 }
 
@@ -99,9 +142,11 @@ function browser_specific_init(){
 	window.webkitRequestFileSystem(window.PERSISTENT, 50*1024*1024, function(fs){
 		fsRootPath = fs.root.toURL();
 	});
-	chrome.storage.local.get('valid_hashes', function(items){
-		if (!items.hasOwnProperty('first')) return;
-		valid_hashes = items.valid_hashes;
+	getPref('valid_hashes')
+	.then(function(hashes){
+		if (hashes !== 'undefined'){
+			valid_hashes = hashes;
+		}
 	});
 	chrome.runtime.getPlatformInfo(function(p){
 		if(p.os === "win"){
@@ -109,11 +154,46 @@ function browser_specific_init(){
 		}
 	});
 	//put icon into downloads dir. This is the icon for injected notification
+	//put manager files also there so we could inject code to get the manager's DOM when testing
+	//(Chrome forbids injecting into chrome-extension://* URIs but allows into file://* URIs)
 	chrome.downloads.setShelfEnabled(false);
-	setTimeout(function(){chrome.downloads.setShelfEnabled(true);}, 2000);
-	chrome.downloads.download({url:chrome.extension.getURL("content/icon16.png"),
-		conflictAction:'overwrite',
-		 filename:'pagesigner.tmp.dir/icon16.png'});
+	var files_to_copy = ['icon16.png', 'manager.css', 'manager.html', 'manager.js2', 'sweetalert.css', 'sweetalert.min.js2', 'check.png', 'cross.png'];
+	var copied_so_far = 0;
+	for (var i=0; i < files_to_copy.length; i++){
+		chrome.downloads.download(
+			{url:chrome.extension.getURL('content/' + files_to_copy[i]),
+			conflictAction:'overwrite',
+			filename:'pagesigner.tmp.dir/' + files_to_copy[i]},
+			function(downloadID){
+				
+				var erase_when_download_completed = function(id){
+					chrome.downloads.search({id:id}, function(item){
+						if (item[0].state !== 'complete'){
+							setTimeout(function(){
+								erase_when_download_completed(id)
+							}, 100);
+						}
+						else {
+							if (item[0].filename.endsWith('manager.html')){
+								var path = item[0].filename;
+								if (os_win){
+									path = '/' + encodeURI(path.replace(/\\/g, '/'));
+								}
+								manager_path = 'file://' + path;
+							}
+							//dont litter the Downloads menu
+							chrome.downloads.erase({id:downloadID});
+							copied_so_far++;
+							if (copied_so_far === files_to_copy.length){
+								chrome.downloads.setShelfEnabled(true);
+							}
+						}
+					});
+					
+				}
+				erase_when_download_completed(downloadID);				
+			});
+	}
 	
 	chrome.runtime.onMessage.addListener(function(data){
 		if (data.destination !== 'extension') return;
@@ -128,8 +208,14 @@ function browser_specific_init(){
 			verify_tlsn_and_show_data(data.args.data, true);
 		}
 		else if (data.message === 'export'){
-			chrome.downloads.download({url:fsRootPath+data.args.dir+'/pgsg.pgsg',
+			if (testing){
+				chrome.downloads.download({url:fsRootPath+data.args.dir+'/pgsg.pgsg',
+				 'saveAs':false, filename:'pagesigner.tmp.dir/' + data.args.file+'.pgsg'});
+			}
+			else {
+				chrome.downloads.download({url:fsRootPath+data.args.dir+'/pgsg.pgsg',
 				 'saveAs':true, filename:data.args.file+'.pgsg'});
+			 }
 		}
 		else if (data.message === 'notarize'){
 			startNotarizing();
@@ -181,48 +267,7 @@ function browser_specific_init(){
 }
 
 
-function getModulus(cert){
-	  var c = Certificate.decode(new Buffer(cert), 'der');
-		var pk = c.tbsCertificate.subjectPublicKeyInfo.subjectPublicKey.data;
-		var pkba = ua2ba(pk);
-		//expected modulus length 256, 384, 512
-		var modlen = 256;
-		if (pkba.length > 384) modlen = 384;
-		if (pkba.length > 512) modlen = 512;
-		var modulus = pkba.slice(pkba.length - modlen - 5, pkba.length -5);
-		return modulus;
-}
 
-function permutator(inputArr) {
-  var results = [];
-
-  function permute(arr, memo) {
-    var cur, memo = memo || [];
-
-    for (var i = 0; i < arr.length; i++) {
-      cur = arr.splice(i, 1);
-      if (arr.length === 0) {
-        results.push(memo.concat(cur));
-      }
-      permute(arr.slice(), memo.concat(cur));
-      arr.splice(i, 0, cur[0]);
-    }
-
-    return results;
-  }
-
-  return permute(inputArr);
-}
-
-function verifyCert(chain){
-	var chainperms = permutator(chain);
-	for (var i=0; i < chainperms.length; i++){
-		if (verifyCertChain(chainperms[i])){
-			return true;
-		}
-	}
-	return false;
-}
 
 
 function makeSessionDir(server, is_imported){
@@ -361,30 +406,18 @@ function openTabs(sdir){
 				chrome.tabs.reload(id, {bypassCache:true}, function(){
 					//this callback triggers too early sometimes. Wait to make sure page reloaded
 					setTimeout(function(){
-						chrome.tabs.insertCSS(id, {file: 'content/chrome/injectbar.css'}, function(a){
-							chrome.tabs.executeScript(id, {file: 'content/chrome/injectbar.js'}, function(a){
-									chrome.tabs.executeScript(id, {code: 
-									'document.getElementById("domainName").textContent="' + commonName.toString() + '";' + 
-									'var sdir ="' + dirname.toString() + '";'});
-							});
+						chrome.tabs.executeScript(id, {file: 'content/notification_bar.js'}, function(a){
+								chrome.tabs.executeScript(id, {code:
+								'viewTabDocument = document;' +
+								'install_bar();' +
+								'document.getElementById("domainName").textContent="' + commonName.toString() + '";' + 
+								'document["pagesigner-session-dir"]="' + dirname.toString() + '";'});
 						});
 					}, 500);
 				});
 			};
 		});
 	});
-}
-
-
-function getCommonName(cert){
-	var c = Certificate.decode(new Buffer(cert), 'der');
-	var fields = c.tbsCertificate.subject.value;
-	for (var i=0; i < fields.length; i++){
-		if (fields[i][0].type.toString() !== [2,5,4,3].toString()) continue;
-		//first 2 bytes are DER-like metadata
-		return ba2str(fields[i][0].value.slice(2));
-	}
-	return 'unknown';
 }
 
 
@@ -467,7 +500,7 @@ Socket.prototype.recv = function(){
 					if (! rv.is_complete){
 						console.log("check_complete_records failed");
 						buf = rv.incomprecs;
-						setTimeout(check, 100);
+						setTimeout(function(){check()}, 100);
 						return;
 					}
 					clearTimeout(timer);
@@ -476,7 +509,7 @@ Socket.prototype.recv = function(){
 					return;
 				}
 				console.log('Another timeout in recv');
-				setTimeout(check, 100);
+				setTimeout(function(){check()}, 100);
 			});
 		};
 		check();
@@ -492,16 +525,15 @@ function get_xhr(){
 }
 
 function openManager(){
-	var url = chrome.extension.getURL('content/manager.html');
 	//re-focus tab if manager already open
 	chrome.tabs.query({}, function(tabs){
 		for(var i=0; i < tabs.length; i++){
-			if (tabs[i].url.startsWith(url)){
+			if (tabs[i].url === manager_path){
 				chrome.tabs.update(tabs[i].id, {active:true});
 				return;
 			}	
 		}	
-		chrome.tabs.create({url:url});
+		chrome.tabs.create({url:manager_path});
 	});
 }
 	
@@ -527,8 +559,22 @@ function renamePGSG(dir, newname){
 
 
 function sendMessage(data){
-	chrome.runtime.sendMessage({'destination':'manager',
-									'data':data});
+	//get the manager tab and inject the data into it
+	chrome.tabs.query({}, function(tabs){
+		for(var i=0; i < tabs.length; i++){
+			if (tabs[i].url === manager_path){
+				var jsonstring = JSON.stringify(data);
+				chrome.tabs.executeScript(tabs[i].id, {code:
+					'var idiv = document.getElementById("extension2manager");' +
+					//seems like chrome unstringifies jsonstring, so we stringify it again
+					'var json = JSON.stringify(' + jsonstring + ');' +
+					'console.log("json is", json);' +
+					'idiv.textContent = json;'+
+					'idiv.click();'					
+				});	
+			}	
+		}
+	});
 }
 
 
@@ -574,6 +620,8 @@ function getDirEntry(dirName){
 		.then(function(rootDirEntry){
 			rootDirEntry.getDirectory(dirName, {}, function(dirEntry){
 				resolve(dirEntry);
+			}, function(what){
+				reject(what);
 			});
 		});
 	});
@@ -650,7 +698,7 @@ function sendAlert(alertData){
 			alert("You can only notarize pages which start with https://");
 			return;
 		}
-		chrome.tabs.executeScript(tabs[0].id, {file:"content/sweetalert.min.js"}, function(){
+		chrome.tabs.executeScript(tabs[0].id, {file:"content/sweetalert.min.js2"}, function(){
 			chrome.tabs.insertCSS(tabs[0].id, {file:"content/sweetalert.css"}, function(){
 				chrome.tabs.executeScript(tabs[0].id, {code:"swal("+ JSON.stringify(alertData) +")"});
 			});

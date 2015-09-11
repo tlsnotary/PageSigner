@@ -206,11 +206,22 @@ function loadjs(){
   include(addon, "jsbn2.js");
   include(addon, "pako.js");
   include(addon, "tlsn.js");
+  include(addon, "notification_bar.js");
+  include(addon, "testing/testing.js");
+  include(addon, "testing/manager_test.js");
+  include(addon, "verifychain/buffer.js2");
+  include(addon, "verifychain/asn1.js2");
+  include(addon, "verifychain/jsrsasign-latest-all-min.js2");
+  include(addon, "verifychain/rootcertslist.js");
+  include(addon, "verifychain/rootcerts.js");
+  include(addon, "verifychain/verifychain.js");
   include(addon, "testdriver.js");
 }
 
 
 function shutdown(data, reason) {
+  gBrowser.removeProgressListener(myListener);
+  Services.obs.removeObserver(httpRequestBlocker, "http-on-modify-request");
   Services.ww.unregisterNotification(windowWatcher);
   eachWindow(unloadFromWindow);
 }

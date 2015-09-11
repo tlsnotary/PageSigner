@@ -30,3 +30,11 @@ document.getElementById("about").addEventListener("click",
 							left:500})
 		window.close();
 	});
+
+//if this file is opened in a tab during testing, it will have a hash appended to the URL
+setTimeout(function(){
+	var hash = window.location.hash;
+	if (hash === "#manage"){
+		document.getElementById('manage').click();
+	}
+}, 100);

@@ -5,7 +5,7 @@
 
   <Description about="urn:mozilla:install-manifest">
     <em:id>pagesigner@tlsnotary</em:id>
-    <em:version>1.0</em:version>
+    <em:version>1.0.1</em:version>
     <em:type>2</em:type>
     <em:bootstrap>true</em:bootstrap>
     <em:unpack>true</em:unpack>
@@ -26,8 +26,7 @@
     <em:creator>TLSNotary Group</em:creator>
     <em:homepageURL>https://tlsnotary.org</em:homepageURL>
     <em:optionsURL>chrome://pagesigner/content/firefox/settings.xul</em:optionsURL>
-    <em:iconURL>chrome://pagesigner/content/icon32.png</em:iconURL>
-    <em:icon64URL>chrome://pagesigner/content/icon64.png</em:icon64URL>
+    <em:icon64URL>icon.png</em:icon64URL>
     <em:optionsType>2</em:optionsType>
   </Description>      
 </RDF>
