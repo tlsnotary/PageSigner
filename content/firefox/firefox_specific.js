@@ -785,8 +785,7 @@ Socket.prototype.constructor = Socket;
 Socket.prototype.connect = function(){
 	var that = this;
 	return new Promise(function(resolve, reject) {
-		var TCPSocket = Components.classes["@mozilla.org/tcp-socket;1"].createInstance(Components.interfaces.nsIDOMTCPSocket);
-		that.sckt = TCPSocket.open(that.name, that.port, {binaryType:"arraybuffer"});
+		that.sckt = new window.TCPSocket(that.name, that.port, {binaryType:"arraybuffer"});
 		that.sckt.ondata = function(event){ 
 			var int_array = ab2ba(event.data)
 			console.log('ondata got bytes:', int_array.length);
