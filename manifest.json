@@ -8,8 +8,8 @@
 
  "permissions": [
     "background",
-    "*://*/*",  //need https to listen for requests and http to send stuff to oracle
-    "file:///*pagesigner.tmp.dir*", //to inject notification bar when showing notarized html
+    "*://*/*",
+    "file:///*pagesigner.tmp.dir*",
     "webRequest",
     "webRequestBlocking",
     "activeTab",
@@ -22,10 +22,9 @@
   ],
   
   "icons": {
-	"64": "icon.png" //Chrome will scale down as needed
+	"64": "icon.png"
   },
   
-  //this is needed for asn1.js
   "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'",
 
   
