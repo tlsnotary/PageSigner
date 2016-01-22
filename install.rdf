@@ -5,7 +5,7 @@
 
   <Description about="urn:mozilla:install-manifest">
     <em:id>pagesigner@tlsnotary</em:id>
-    <em:version>1.0.3</em:version>
+    <em:version>1.0.4</em:version>
     <em:type>2</em:type>
     <em:bootstrap>true</em:bootstrap>
     <em:unpack>true</em:unpack>
@@ -15,8 +15,8 @@
     <em:targetApplication>
       <Description>
         <em:id>{ec8030f7-c20a-464f-9b0e-13a3a9e97384}</em:id>
-        <em:minVersion>36.0</em:minVersion>
-        <em:maxVersion>40.0</em:maxVersion>
+        <em:minVersion>43.0</em:minVersion>
+        <em:maxVersion>45.0</em:maxVersion>
       </Description>
     </em:targetApplication>
    
