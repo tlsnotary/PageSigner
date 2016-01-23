@@ -2,17 +2,17 @@
 
 "use strict";
 
-let prompts = Services.prompt;
-let prefs = Services.prefs;
+var prompts = Services.prompt;
+var prefs = Services.prefs;
 var testing_import_path; //used only in testing
 
-const NS_XUL = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul",
+var NS_XUL = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul",
       PREFS_BRANCH = Services.prefs.getBranch("extensions.pagesigner.button-position."),
       PREF_TB = "nav-bar",
       PREF_NEXT = "next-item",
       BUTTON_ID = "pagesigner-button";
 
-let main = {
+var main = {
   notarize: function() {
 	startNotarizing();
   },
