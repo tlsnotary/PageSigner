@@ -38,11 +38,7 @@ function init(){
 					//async check oracles and if the check fails, sets a global var
 					//which prevents notarization session from running
 					console.log('oracle not verified');
-					var main_pubkey = {pubkey:''};
-					check_oracle(chosen_notary.main, 'main', main_pubkey)
-					.then(function(){
-						check_oracle(chosen_notary.sig, 'sig',  main_pubkey);
-					})
+					check_oracle(chosen_notary)
 					.then(function success(){
 						return setPref('verifiedOracles.'+oracle_hash, 'bool', true);
 					})
@@ -403,7 +399,7 @@ function verify_tlsn(data, from_past){
 	var signed_data = sha256([].concat(commit_hash, pms2, modulus));
 	var signing_key;
 	if (from_past){signing_key = notary_pubkey;}
-	else {signing_key = chosen_notary.sig.modulus;}
+	else {signing_key = chosen_notary.modulus;}
 	if (!verify_commithash_signature(signed_data, sig, signing_key)){
 		throw ('notary signature verification failed');
 	}

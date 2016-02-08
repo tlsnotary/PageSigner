@@ -67,7 +67,7 @@ function get_cs(cs){
 function send_and_recv(command, data, expected_response){
 	return new Promise(function(resolve, reject) {
 		var req = get_xhr();
-		req.open("HEAD", "http://"+chosen_notary.main.IP+":"+chosen_notary.main.port, true);
+		req.open("HEAD", "http://"+chosen_notary.IP+":"+chosen_notary.port, true);
 		req.setRequestHeader("Request", command);
 		req.setRequestHeader("Data", b64encode(data));
 		req.setRequestHeader("UID", random_uid);
@@ -272,7 +272,7 @@ function start_audit(modulus, certhash, name, port, headers, ee_secret, ee_pad_s
 		pms2 = response.slice(0,24);
 		signature = response.slice(24, 536);
 		var time = response.slice(536, 540);
-		var modulus = chosen_notary.sig.modulus;
+		var modulus = chosen_notary.modulus;
 		var signed_data = sha256([].concat(commit_hash, pms2, tlsn_session.server_modulus, time));
 		if (!verify_commithash_signature(signed_data, signature, modulus)){
 			throw('Failed to verify notary server signature');
@@ -299,10 +299,10 @@ function start_audit(modulus, certhash, name, port, headers, ee_secret, ee_pad_s
 				fullresp,
 				tlsn_session.IV_after_finished.length,
 				tlsn_session.IV_after_finished,
-				chosen_notary.sig.modulus.length,
+				chosen_notary.modulus.length,
 				signature,
 				commit_hash,
-				chosen_notary.sig.modulus,
+				chosen_notary.modulus,
 				plaintext];
 	});
 }
