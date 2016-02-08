@@ -303,7 +303,8 @@ function start_audit(modulus, certhash, name, port, headers, ee_secret, ee_pad_s
 				signature,
 				commit_hash,
 				chosen_notary.modulus,
-				plaintext];
+				plaintext,
+				time];
 	});
 }
 
