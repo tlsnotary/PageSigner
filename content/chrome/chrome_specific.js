@@ -650,7 +650,7 @@ function sendAlert(alertData){
 	chrome.tabs.query({active: true}, function(tabs) {
 		if (!tabs[0].url.startsWith("http")){
 			//we cannot inject out alert into not http & https URLs, use the ugly alert
-			alert("You can only notarize pages which start with https://");
+			alert(alertData.title + ' ' + alertData.text);
 			return;
 		}
 		chrome.tabs.executeScript(tabs[0].id, {file:"content/sweetalert.min.js2"}, function(){
