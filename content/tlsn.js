@@ -270,9 +270,10 @@ function start_audit(modulus, certhash, name, port, headers, ee_secret, ee_pad_s
 	})
 	.then(function(response){
 		pms2 = response.slice(0,24);
-		signature = response.slice(24);
+		signature = response.slice(24, 536);
+		var time = response.slice(536, 540);
 		var modulus = chosen_notary.sig.modulus;
-		var signed_data = sha256([].concat(commit_hash, pms2, tlsn_session.server_modulus));
+		var signed_data = sha256([].concat(commit_hash, pms2, tlsn_session.server_modulus, time));
 		if (!verify_commithash_signature(signed_data, signature, modulus)){
 			throw('Failed to verify notary server signature');
 		}
