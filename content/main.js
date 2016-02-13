@@ -38,11 +38,7 @@ function init(){
 					//async check oracles and if the check fails, sets a global var
 					//which prevents notarization session from running
 					console.log('oracle not verified');
-					var main_pubkey = {pubkey:''};
-					check_oracle(chosen_notary.main, 'main', main_pubkey)
-					.then(function(){
-						check_oracle(chosen_notary.sig, 'sig',  main_pubkey);
-					})
+					check_oracle(chosen_notary)
 					.then(function success(){
 						return setPref('verifiedOracles.'+oracle_hash, 'bool', true);
 					})
@@ -210,7 +206,7 @@ function startNotarizing(callback){
 
 
 function save_session_and_open_data(args, server){
-	assert (args.length === 17, "wrong args length");
+	assert (args.length === 18, "wrong args length");
 	var cipher_suite = args[0];
 	var client_random = args[1];
 	var server_random = args[2];
@@ -228,6 +224,7 @@ function save_session_and_open_data(args, server){
 	var commit_hash = args[14];
 	var notary_modulus = args[15];
 	var data_with_headers = args[16];
+	var time = args[17];
 	
 	var server_chain_serialized = []; //3-byte length prefix followed by cert
 	for (var i=0; i < server_certchain.length; i++){
@@ -240,7 +237,7 @@ function save_session_and_open_data(args, server){
 	
 	var pgsg = [].concat(
 			str2ba('tlsnotary notarization file\n\n'),
-			[0x00, 0x01],
+			[0x00, 0x02],
 			bi2ba(cipher_suite, {'fixed':2}),
 			client_random,
 			server_random,
@@ -257,7 +254,8 @@ function save_session_and_open_data(args, server){
 			bi2ba(notary_modulus_length, {'fixed':2}),
 			signature,
 			commit_hash,
-			notary_modulus);
+			notary_modulus,
+			time);
 			
 	var commonName = getCommonName(server_certchain[0]);
 	var sdir;
@@ -359,7 +357,7 @@ function verify_tlsn(data, from_past){
 	if (ba2str(data.slice(offset, offset+=29)) !== "tlsnotary notarization file\n\n"){
 		throw('wrong header');
 	}
-	if(data.slice(offset, offset+=2).toString() !== [0x00, 0x01].toString()){
+	if(data.slice(offset, offset+=2).toString() !== [0x00, 0x02].toString()){
 		throw('wrong version');
 	}
 	var cs = ba2int(data.slice(offset, offset+=2));
@@ -379,6 +377,7 @@ function verify_tlsn(data, from_past){
 	var sig = data.slice(offset, offset+=sig_len);
 	var commit_hash = data.slice(offset, offset+=32);
 	var notary_pubkey = data.slice(offset, offset+=sig_len);
+	var time = data.slice(offset, offset+=4);
 	assert (data.length === offset, 'invalid .pgsg length');
 	
 	offset = 0;
@@ -400,10 +399,10 @@ function verify_tlsn(data, from_past){
 		throw ('commit hash mismatch');
 	}
 	//verify sig
-	var signed_data = sha256([].concat(commit_hash, pms2, modulus));
+	var signed_data = sha256([].concat(commit_hash, pms2, modulus, time));
 	var signing_key;
 	if (from_past){signing_key = notary_pubkey;}
-	else {signing_key = chosen_notary.sig.modulus;}
+	else {signing_key = chosen_notary.modulus;}
 	if (!verify_commithash_signature(signed_data, sig, signing_key)){
 		throw ('notary signature verification failed');
 	}
