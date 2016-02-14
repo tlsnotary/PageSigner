@@ -316,6 +316,15 @@ function verify_commithash_signature(commithash, signature, modulus){
 	var bigint_exp = new BigInteger(ba2hex(bi2ba(65537)), 16);
 	var bigint_result = bigint_signature.modPow(bigint_exp, bigint_mod);
 	var padded_hash = hex2ba(bigint_result.toString(16));
+	//check PKCS v1.5 padding 0001 || ff ff ... ff ff || 00 || data
+	if (padded_hash[0] !== 1 || padded_hash[478] !== 0){
+		return false;
+	}
+	var arrayOfFFs = padded_hash.slice(1, 478);
+	for (var i = 0; i < arrayOfFFs.length; i++){
+		if (arrayOfFFs[i] !== 255) return false;
+	}
+		
 	var hash = padded_hash.slice(padded_hash.length-32);
 	if (commithash.toString() === hash.toString()){
 		return true;
