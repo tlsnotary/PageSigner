@@ -32,7 +32,7 @@ td{
 	padding-left: 0px;
 }
  
-img {
+.menu_img {
 	width: 16px;
 	height: 16px;
 	padding-right: 8px;
@@ -44,22 +44,30 @@ img {
 
 <body>
 
-<table style="width:100%">
+<table style="width:100%" id='menu' hidden>
   <tr class="border_bottom">
-   <td id="notarize"><img src="../../icon.png"></img>Notarize this page</td>
+   <td id="notarize"><img class='menu_img' src="../../icon.png"></img>Notarize this page</td>
   </tr>
   <tr class="border_bottom">
-	<td id="manage"><img src="../manage.png"></img>Manage files</td>
+	<td id="manage"><img class='menu_img' src="../manage.png"></img>Manage files</td>
   </tr>
   <tr class="border_bottom">
-   <td id="import"><img src="../verify.png"></img>Import .pgsg file</td>
+   <td id="import"><img class='menu_img' src="../verify.png"></img>Import .pgsg file</td>
   </tr>
   <tr>
-	<td id="about"><img src="../../icon.png"></img>About</td>
+	<td id="about"><img class='menu_img' src="../../icon.png"></img>About</td>
   </tr>
 </table>
 
+<a href="https://chrome.google.com/webstore/detail/pagesigner-helper-app/oclohfdjoojomkfddjclanpogcnjhemd" id="app_not_installed" hidden><h1>Click here to install the helper app needed for PageSigner to work</h1></a>
 
+<a href="chrome://extensions" id="app_disabled" hidden><h1>Click here and then enable PageSigner helper app</h1></a>
+
+<div id='enable_file_access' hidden>
+	<img src="../enable_file_access.png"><a href="chrome://extensions"><h1>Click here and then enable the checkbox marked in the image above</h1></a></img>
+</div>
+
+<h1 id='notarization_in_progress' hidden>Notarization in progress. Please wait...</h1>
 
 <script src="popup.js"></script>
 

@@ -4,6 +4,7 @@ var appId = "oclohfdjoojomkfddjclanpogcnjhemd"; //id of the helper app
 var is_chrome = true;
 var fsRootPath; //path to local storage root, e.g. filesystem:chrome-extension://abcdabcd/persistent
 var manager_path; //manager.html which was copied into Downloads/ dir
+var notarization_in_progress = false;
 
 function getPref(pref, type){
 	return new Promise(function(resolve, reject) {
@@ -128,13 +129,13 @@ function getHeaders(){
 
 function loadBusyIcon(){
 	chrome.browserAction.setIcon({path:"content/icon_spin.gif"});
-	chrome.browserAction.setPopup({popup:"content/chrome/popup_pleasewait.html"});
+	notarization_in_progress = true;
 }
 
 
 function loadNormalIcon(){
 	chrome.browserAction.setIcon({path:"icon.png"});
-	chrome.browserAction.setPopup({popup:"content/chrome/popup.html"});
+	notarization_in_progress = false;
 }
 
 
@@ -244,23 +245,43 @@ function browser_specific_init(){
 		else if (data.message === 'openInstallLink'){
 			chrome.tabs.create({url:'https://chrome.google.com/webstore/detail/pagesigner-helper-app/oclohfdjoojomkfddjclanpogcnjhemd'});
 		}
-	});
-	chrome.management.get(appId, function(a){
-		if (typeof(a) === "undefined"){
-			chrome.browserAction.setPopup({popup:"content/chrome/popup_installapp.html"});
+		else if (data.message === 'openChromeExtensions'){
+			chrome.tabs.query({url:'chrome://extensions/*'}, function(tabs){
+				if (tabs.length === 0){
+					chrome.tabs.create({url:'chrome://extensions'});
+					return;
+				}
+				chrome.tabs.update(tabs[0].id, {active:true});
+			});
 		}
-		else {
-			chrome.browserAction.setPopup({popup:"content/chrome/popup.html"});
+		else if (data.message === 'popup active'){
+			if (notarization_in_progress){
+			    chrome.runtime.sendMessage({'destination':'popup',
+									'message':'notarization_in_progress'});
+				return;
+			}
+			chrome.extension.isAllowedFileSchemeAccess(function(bool){
+				if (bool === false){
+					chrome.runtime.sendMessage({'destination':'popup',
+									'message':'file_access_disabled'});
+					return;
+				}
+				chrome.management.get(appId, function(info){
+					if (! info){
+						chrome.runtime.sendMessage({'destination':'popup',
+									'message':'app_not_installed'});
+						return;
+					}
+					if (info.enabled === false){
+						chrome.runtime.sendMessage({'destination':'popup',
+									'message':'app_disabled'});
+						return;
+					}
+					chrome.runtime.sendMessage({'destination':'popup',
+									'message':'show_menu'});
+				});
+			});
 		}
-	});
-	
-	chrome.management.onEnabled.addListener(function(app){
-		if (app.id !== appId) return;
-		chrome.browserAction.setPopup({popup:"content/chrome/popup.html"});
-	});
-	chrome.management.onDisabled.addListener(function(app){
-		if (app.id !== appId) return;
-		chrome.browserAction.setPopup({popup:"content/chrome/popup_installapp.html"});
 	});
 	
 	init();
