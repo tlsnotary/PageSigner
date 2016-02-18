@@ -1,0 +1,51 @@
+{
+  "name": "PageSigner",
+  "version": "1.1.0",
+  "description": "PageSigner - a cryptographically secure webpage screenshot tool",
+  "manifest_version": 2,
+  "author": "TLSNotary Group",
+  "permissions": [
+    "webRequest",
+    "webRequestBlocking",
+    "activeTab",
+    "tabs",
+    "storage",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "content/socket.js",
+      "content/tlsn_utils.js",
+      "content/oracles.js",
+      "content/CryptoJS/components/core.js",
+      "content/CryptoJS/components/md5.js",
+      "content/CryptoJS/components/evpkdf.js",
+      "content/CryptoJS/components/enc-base64.js",
+      "content/CryptoJS/components/sha1.js",
+      "content/CryptoJS/components/sha256.js",
+      "content/CryptoJS/components/hmac.js",
+      "content/CryptoJS/components/cipher-core.js",
+      "content/CryptoJS/components/aes.js",
+      "content/CryptoJS/components/pad-nopadding.js",
+      "content/jsbn.js",
+      "content/jsbn2.js",
+      "content/pako.js",
+      "content/tlsn.js",
+      "content/main.js",
+      "content/testing/testing.js",
+      "content/verifychain/buffer.js",
+      "content/verifychain/asn1.js",
+      "content/verifychain/jsrsasign-latest-all-min.js",
+      "content/verifychain/rootcertslist.js",
+      "content/verifychain/rootcerts.js",
+      "content/verifychain/verifychain.js"
+    ]
+  },
+  "browser_action": {
+    "browser_style": true,
+    "default_icon": "content/icon.png",
+    "default_popup": "content/popup.html"
+  },
+  "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'"
+
+}

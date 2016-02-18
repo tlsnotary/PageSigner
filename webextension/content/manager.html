@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+  <title>Manage your PageSigner notarization files.</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="description" content="PageSigner" />
+  <link rel="stylesheet" href="manager.css" type="text/css" media="screen" />
+  <link rel="stylesheet" type="text/css" href="sweetalert.css">
+  <style>
+    a {
+      cursor: pointer;
+      cursor: hand;
+      text-decoration: underline;
+      color: blue;
+    }
+
+    #toprightimg {
+      position: relative;
+    }
+
+    #toprightimg img {
+      position: absolute;
+      top: 0px;
+      right: 0px;
+    }
+  </style>
+
+
+
+
+</head>
+
+<body>
+
+  <textarea hidden id="extension2manager"></textarea>
+  <textarea hidden id="manager2extension"></textarea>
+
+  <div id="mydata">
+
+    <table class="table1" id="myTableData" width="100%">
+      <thead>
+        <tr>
+          <th scope='col' colspan='4' abbr='File'>File</th>
+          <th scope='col' abbr='Filename'>Creation date</th>
+          <th scope='col' abbr='Verified'>Verified</th>
+          <th title='The identity of the verifying notary server' scope='col' abbr='Verifier'>Verifier</th>
+          <th scope='col' abbr='Html'>View Data</th>
+        </tr>
+      </thead>
+      <tbody id="myTableBody">
+      </tbody>
+    </table>
+  </div>
+
+  <script src="manager.js"></script>
+  <script src="sweetalert.min.js"></script>
+
+</body>
+
+</html>
