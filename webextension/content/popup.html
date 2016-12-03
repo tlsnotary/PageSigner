@@ -1,0 +1,102 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <style>
+    body {
+      margin-top: 0px;
+      margin-bottom: 0px;
+      margin-left: 0px;
+      margin-right: 0px;
+      width: 16em;
+      /* Fonts Chrome specifies for each OS:     */
+      /* Linux: 'DejaVu Sans', Arial, sans-serif */
+      /* Mac: 'Lucida Grande', sans-serif        */
+      /* Windows: 'Segoe UI', Tahoma, sans-serif */
+      font-family: 'Lucida Grande', 'Segoe UI', Tahoma, 'DejaVu Sans', Arial, sans-serif;
+      font-size: 75%;
+      color: #303942;
+    }
+
+    tr.border_bottom td {
+      border-bottom: 1pt solid grey;
+    }
+
+    tr:hover {
+      background-color: #eee;
+    }
+
+    td {
+      font-size: 11pt;
+      padding-top: 7px;
+      padding-bottom: 7px;
+      padding-right: 0px;
+      padding-left: 0px;
+    }
+
+    .menu_img {
+      width: 16px;
+      height: 16px;
+      padding-right: 0px;
+    }
+  </style>
+</head>
+
+
+<body>
+
+  <div style='padding: 3px; word-wrap: break-word;' id='aboutWindow' hidden>
+    <h1 align="center">PageSigner</h1>
+    <p align="center">Using <a href="#" id="link1">TLSNotary</a> technology.</p>
+    <p align="center">Email the developers: </p>
+    <p align="center">
+      <a href="mailto:tlsnotarygroup@gmail.com">tlsnotarygroup@gmail.com</a></p>
+    <p align="center">Please support development by donating bitcoin <a href='#' id="donate_link">here</a></p>
+  </div>
+
+
+  <table style="width:100%" id='menu' hidden>
+    <tr class="border_bottom">
+
+      <td id="notarize">
+        <img class='menu_img' src="icon.png"></img>
+        <text style='padding-right: 5px;'>Notarize this page</text>
+
+      </td>
+      <td id="notarizeAfter">
+        <img style="cursor:pointer;width:12px;height:12px;position:fixed;right:0px;top:2px" title="Click this tiny cursor icon if you want to make a click on the page first. As soon as you click on the page, PageSigner will start notarizing" class='menu_img'
+          src="arrow16.png"></img>
+      </td>
+      <tr class="border_bottom">
+        <td id="manage">
+          <img class='menu_img' src="manage.png"></img>
+          <text>Manage files</text>
+        </td>
+      </tr>
+      <tr class="border_bottom">
+        <td id="import">
+          <img class='menu_img' src="verify.png"></img>
+          <text>Import .pgsg files</text>
+      </tr>
+      <tr>
+        <td id="about">
+          <img class='menu_img' src="icon.png"></img>
+          <text>About</text>
+      </tr>
+  </table>
+
+  <a href="https://chrome.google.com/webstore/detail/pagesigner-helper-app/oclohfdjoojomkfddjclanpogcnjhemd" id="app_not_installed" hidden><h1>Click here to install the helper app needed for PageSigner to work</h1></a>
+
+  <a href="chrome://extensions" id="app_disabled" hidden><h1>Click here and then enable PageSigner helper app</h1></a>
+
+  <h3 id='notarization_in_progress' hidden>Notarization in progress. Please wait...</h3>
+
+  <h3 id='waiting_for_click' hidden>Waiting for you to click any https:// link on the page...</h3>
+
+  <h3 id='popup_error' hidden></h3>
+
+  <script src="popup.js"></script>
+  <script src="about.js"></script>
+
+</body>

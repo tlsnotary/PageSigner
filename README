@@ -1,23 +1,11 @@
-To create a firefox addon:
+To create a Firefox addon:
 
-1. Create a zip archive which contains the following:
-content (a directory)
-bootstrap.js
-chrome.manifest
-icon.png
-install.rdf
-README
-
-e.g. in Linux you can "Select All" then right-click and choose Compress.
-
-2. Rename the zip extension to .xpi
-
-3. Drag and drop the .xpi into Firefox
-
+Go to about:debugging#addons -> Load Temporary Add-on -> point to install.rdf
 
 To create a Chrome extension:
 
 1. go to chrome://extensions and Enable "Developer mode"
 
-2. Click "Load unpacked extension" and point to the parent folder 
-(inside of which this README file is) 
+2. Click "Load unpacked extension" 
+
+3. Navigate inside "webextension" folder and click Open.
