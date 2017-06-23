@@ -1093,7 +1093,7 @@ function processNewEntries(dirnames) {
           'imported': imported,
           'hash': sha256(items[keys[i]]['pgsg.pgsg']),
           'pgsg': items[keys[i]]['pgsg.pgsg'],
-          'modtime': items[keys[i]]['lastModified'],
+          'lastModified': items[keys[i]]['lastModified'],
           'creationTime': items[keys[i]]['creationTime'],
           'dir': keys[i]
         };
