@@ -749,7 +749,6 @@ function writeDatafile(data_with_headers, session_dir) {
     var rv = data_with_headers.split('\r\n\r\n');
     var headers = rv[0];
     var data = rv.splice(1).join('\r\n\r\n');
-    var dirname = session_dir.split('/').pop();
     var header_lines = headers.split('\r\n');
     var type = 'html';
     for (var i = 0; i < header_lines.length; i++) {
@@ -777,10 +776,10 @@ function writeDatafile(data_with_headers, session_dir) {
       //html needs utf-8 byte order mark
       //data = ''.concat(String.fromCharCode(0xef, 0xbb, 0xbf), data);
     }
-    writeFile(dirname, 'metaDataFilename', 'data.' + type).then(function() {
-      return writeFile(dirname, 'data.' + type, data);
+    writeFile(session_dir, 'dataType', type).then(function() {
+      return writeFile(session_dir, 'data', str2ba(data));
     }).then(function() {
-      return writeFile(dirname, 'raw.txt', data_with_headers);
+      return writeFile(session_dir, 'raw.txt', data_with_headers);
     }).then(function() {
       resolve();
     });
@@ -980,15 +979,17 @@ function verify_tlsn_and_show_data(imported_data, create) {
 
 function openTabs(dirname) {
   var commonName;
+  var dataType;
   getFileContent(dirname, "metaDomainName")
     .then(function(data) {
       commonName = data;
-      return getFileContent(dirname, "metaDataFilename");
+      return getFileContent(dirname, "dataType");
     })
-    .then(function(name) {
-      return getFileContent(dirname, name);
+    .then(function(dt) {
+      dataType = dt;
+      return getFileContent(dirname, 'data');
     })
-    .then(function(html) {
+    .then(function(data) {
       var url;
       if (is_chrome) url = chrome.extension.getURL('webextension/content/viewer.html');
       if (!is_chrome) url = chrome.extension.getURL('content/viewer.html');
@@ -999,8 +1000,8 @@ function openTabs(dirname) {
           setTimeout(function() {
             chrome.runtime.sendMessage({
               destination: 'viewer',
-              type: 'html',
-              data: html,
+              type: dataType,
+              data: data,
               sessionId: dirname,
               serverName: commonName
             });
