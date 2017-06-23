@@ -18,7 +18,13 @@ chrome.runtime.onMessage.addListener(function(msg) {
   if (received_once) return;
   received_once = true;
   //console.log('got data in viewer', msg.data.slice(0, 100));
-  var utf_string = decodeURIComponent(escape(msg.data));
+  var utf_string;
+  try {
+  utf_string = decodeURIComponent(escape(msg.data));
+  }
+  catch (err){
+    utf_string = msg.data
+  }
   var hideButton = null;
   if (msg.type == 'html') {
     hideButton = false;
