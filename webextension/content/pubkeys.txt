@@ -48,26 +48,6 @@ b9 47 1f 27 66 d0 4d 6d 6b 6c 7c 38 58 f5 1b bc
 ab 48 b9 6e 2a f6 71 72 1e 73 2b 9a 75 3a 99 3b 
 16 03 71 75 a8 6d de 94 e1 f7 18 b4 17 9d d1 5f 
 
-Name=skype.com
-Expires=04/06/2018
-Modulus=
-c9 01 0b ed ab 1a af 88 cc 13 96 d6 36 67 c5 df 
-bc f5 a2 b5 8c f5 6b fb b4 e2 03 78 c3 a6 70 22 
-33 fd 26 b5 74 2d a5 c6 69 fe 7c 5b 56 32 d2 a3 
-e9 ab 26 54 87 b4 a1 e6 d3 ae d7 f1 2b b0 a0 67 
-1d ba 6f 38 c4 bb 53 0d 65 c8 02 97 56 0c 40 e9 
-30 43 a3 ac 91 75 0c fe 84 98 56 14 4c b6 05 e4 
-b8 51 35 01 08 f9 72 a5 81 26 0c 28 f8 88 cf 52 
-50 cd 06 b1 78 38 ed 8a 16 86 97 15 b0 ce a7 38 
-01 00 bc 03 38 65 f5 55 88 8b 8f 97 46 9b f6 2f 
-b9 d2 82 76 77 3d a1 08 cb ad 45 71 35 e6 49 d2 
-19 e2 cf 49 44 f9 a3 c8 2b 94 f9 66 79 7d d2 94 
-82 75 3f f8 3e 58 fd 31 d7 88 01 ca c3 f6 13 aa 
-c1 77 31 df 5b 7b 42 e9 17 ce 4a fe 68 40 c5 14 
-e0 b2 b1 9b 14 06 a6 7e f7 cb 17 66 b3 6b 8f b9 
-50 3c d4 eb ef b0 1e ad af 57 c1 a4 19 dd ed 3f 
-d6 73 40 24 13 96 2b b8 49 94 6b 34 2a 6e 20 7f 
-
 Name=viber.com
 Expires=06/27/2018
 Modulus=
