@@ -462,7 +462,7 @@ function init() {
               console.log('oracle not verified');
               check_oracle(chosen_notary)
                 .then(function success() {
-                  return setPref('verifiedOracles.' + oracle_hash, 'bool', true);
+                  return setPref('verifiedOracles.' + oracle_hash, true);
                 })
                 .then(function() {
                   oracles_intact = true;
