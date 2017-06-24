@@ -12,6 +12,8 @@ var notarization_in_progress = false;
 var waiting_for_click = false;
 var clickTimeout = null;
 var requestBody = null; //will contain POST request's body
+var urlToMatch;
+var requestIdToMatch;
 var is_chrome = window.navigator.userAgent.match('Chrome') ? true : false;
 var appId = null; //Chrome uses to send message to external Chrome app. Firefox uses it's own id
 var popupError = null; //set to non-null when there is some error message that must be shown
@@ -116,17 +118,18 @@ function onBeforeRequestListener(details) {
     requestBody = details.requestBody;
   }
 
-  var url = details.url;
-
   //kludge: FF wont trigger onBeforeSendHeaders for 127.0.0.1 url
-  //which we use during testing
-  if (testing && !is_chrome) url = '<all_urls>';
-
+  //which we use during testing. Also Chrome wont trigger oBSH
+  //when URL contains # that's why we use <all_urls> instead of details.url
+  
+  urlToMatch = details.url;
+  requestIdToMatch = details.requestId;
+  
   chrome.webRequest.onBeforeSendHeaders.addListener(
     onBeforeSendHeadersListener, {
-      urls: [url],
+      urls: ['<all_urls>'],
       tabId: details.tabId,
-      types: [details.type]
+      types: [details.type],
     }, ["requestHeaders", "blocking"]);
 
 
@@ -139,6 +142,8 @@ function onBeforeRequestListener(details) {
 
 function onBeforeSendHeadersListener(details) {
   console.log('in onBeforeSendHeadersListener got details', details);
+  if (details.url !== urlToMatch) return;
+  if (details.requestId !== requestIdToMatch) return;
   details['requestBody'] = requestBody;
   var rv = getHeaders(details);
   //we must return fast hence the async invocation
