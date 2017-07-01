@@ -636,8 +636,10 @@ function startNotarizing(headers, server, port) {
       return start_audit(modulus, certsha256, server, port, headers, args[0], args[1], args[2]);
     })
     .then(function(args2) {
-      loadNormalIcon();
       return save_session_and_open_data(args2, server);
+    })
+    .then(function() {
+      loadNormalIcon();
     })
     .catch(function(err) {
       //TODO need to get a decent stack trace
@@ -666,6 +668,8 @@ function startNotarizing(headers, server, port) {
 
 
 function save_session_and_open_data(args, server) {
+  return new Promise(function(resolve, reject) {
+  
   assert(args.length === 18, "wrong args length");
   var cipher_suite = args[0];
   var client_random = args[1];
@@ -744,7 +748,10 @@ function save_session_and_open_data(args, server) {
     .then(function() {
       updateCache(sha256(pgsg));
       populateTable(); //refresh manager
+      resolve();
     });
+    
+  });
 }
 
 
@@ -755,27 +762,39 @@ function writeDatafile(data_with_headers, session_dir) {
     var headers = rv[0];
     var data = rv.splice(1).join('\r\n\r\n');
     var header_lines = headers.split('\r\n');
-    var type = 'html';
+    var type = 'unknown';
     for (var i = 0; i < header_lines.length; i++) {
       if (header_lines[i].search(/content-type:\s*/i) > -1) {
-        if (header_lines[i].search("html") > -1) {
-          type = 'html';
-          break;
-        } else if (header_lines[i].search("xml") > -1) {
-          type = 'xml';
-          break;
-        } else if (header_lines[i].search("json") > -1) {
-          type = 'json';
-          break;
-        } else if (header_lines[i].search("pdf") > -1) {
-          type = 'pdf';
-          break;
-        } else if (header_lines[i].search("zip") > -1) {
-          type = 'zip';
-          break;
-        }
+        type = get_type(header_lines[i]);
+        break;
       }
     }
+    
+    function get_type(line){
+      var t;
+      var match = line.match('application/|text/|image/');
+      if (!match) {
+        t = 'unknown';
+      }
+      else {
+        var afterslash = line.slice(match.index + match[0].length);
+        //search until either + , ; or <space> is encountered
+        var delimiter = afterslash.match(/\+|;| /);
+        if (!delimiter) {
+          t = afterslash;
+        }
+        else {
+          t = afterslash.slice(0, delimiter.index);
+        }
+      }
+      if (!t.length) t = 'unknown';
+      if (t == 'vnd.ms-excel') t = 'xls';
+      if (t == 'vnd.openxmlformats-officedocument.spreadsheetml.sheet') t = 'xlsx';
+      if (t == 'plain') t = 'txt';
+      return t;
+    }
+    
+    
     if (type === "html") {
       //disabling for now because there are no issues displaying without the marker
       //html needs utf-8 byte order mark
@@ -811,7 +830,6 @@ function writePgsg(pgsg, session_dir, commonName) {
 
 
 function writeFile(dirName, fileName, data) {
-  if (data.length === 0) return;
   if (!is_chrome) {
     //weird that even though chrome.storage.local.get is available in FF53
     //it is undefined

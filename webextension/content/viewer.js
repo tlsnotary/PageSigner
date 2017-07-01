@@ -15,21 +15,21 @@ function loadViewerTest() {
 var message;
 
 chrome.runtime.onMessage.addListener(function(msg) {
-  message = msg;
   if (msg.destination !== 'viewer') return;
   if (received_once) return;
+  message = msg;
   received_once = true;
   
-  //console.log('got data in viewer', msg.data.slice(0, 100));
+  console.log('got data in viewer', msg.data);
   var hideButton = false;
-  if (['html', 'json', 'xml'].indexOf(msg.type) > -1) {
+  if (['html', 'json', 'xml', 'txt'].indexOf(msg.type) > -1) {
     document.getElementsByTagName('html')[0].innerHTML = decode_str(ba2str(msg.data));
   } else if (msg.type == 'raw') {
     hideButton = true;
     document.getElementsByTagName('plaintext')[0].innerHTML = decode_str(msg.data);
     document.getElementById('text').removeAttribute('hidden');
     document.title = 'PageSigner raw viewer';
-  } else if (['pdf', 'zip'].indexOf(msg.type) > -1) {
+  } else {
     document.getElementById('type').textContent = msg.type;
     document.getElementById('view file button').onclick = function() {view_file(msg.data)};
     document.getElementById('view file').removeAttribute('hidden');
