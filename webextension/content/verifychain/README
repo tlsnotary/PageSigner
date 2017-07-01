@@ -1,4 +1,8 @@
 This is how to recreate these files:
+npm install browserify@9.0.8
+npm install asn1.js@1.0.4
+npm install buffer@3.1.2
+
 
 https://github.com/kjur/jsrsasign/blob/master/jsrsasign-latest-all-min.js
 browserify -r asn1.js > asn1.js
