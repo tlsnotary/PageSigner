@@ -1,18 +1,18 @@
-var snapshotID = 'snap-2c1fab9b';
-var imageID = 'ami-15192302';
+var snapshotID = 'snap-03bae56722ceec3f0';
+var imageID = 'ami-1f447c65';
 var oracles_intact = false; //must be explicitely set to true
 
 var oracle = {
-  'name': 'tlsnotarygroup4',
-  'IP': '54.152.4.116',
+  'name': 'tlsnotarygroup5',
+  'IP': '54.158.251.14',
   'port': '10011',
-  'DI': 'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstances&Expires=2019-01-01&InstanceId=i-4b3aff5c&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=ByJUrXXgB%2BmJwc2Irk%2BxfZQh1yR3tYiqcA6Hp2gKciE%3D',
-  'DV': 'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeVolumes&Expires=2019-01-01&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&VolumeId=vol-006fce93&Signature=DXq7nf5BrpjUF7Rj%2FMJgk%2Bbs959FrVcJvfquT%2BeNS%2BM%3D',
-  'GCO': 'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=GetConsoleOutput&Expires=2019-01-01&InstanceId=i-4b3aff5c&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=ZUPfAD0jruIIupYSUrXUW7SR9vDhiNIyuVLvO7kgLLM%3D',
-  'GU': 'https://iam.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=GetUser&Expires=2019-01-01&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2010-05-08&Signature=C%2B2l1fpHxTt4p0JnROsu%2FMLlOnAJBjQ%2FS%2B8p%2FumAcH0%3D',
-  'DIA': 'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=userData&Expires=2019-01-01&InstanceId=i-4b3aff5c&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=FBc9vervde7ofgVYS3MR1kIjrW8yyAJQ8wDtURAJkwM%3D',
-  'instanceId': 'i-4b3aff5c',
-  'modulus': [160, 219, 242, 71, 45, 207, 8, 59, 79, 223, 247, 65, 118, 79, 92, 119, 51, 107, 26, 66, 49, 174, 16, 126, 182, 43, 221, 31, 56, 45, 138, 214, 69, 246, 225, 36, 162, 66, 241, 197, 137, 45, 96, 224, 13, 213, 205, 59, 163, 225, 202, 179, 175, 99, 112, 135, 37, 149, 17, 87, 168, 15, 93, 245, 138, 106, 137, 39, 236, 125, 88, 170, 131, 191, 243, 226, 163, 209, 235, 135, 152, 55, 101, 152, 168, 71, 152, 48, 157, 184, 96, 196, 19, 187, 171, 238, 168, 208, 59, 101, 32, 119, 124, 132, 16, 43, 162, 173, 242, 160, 81, 39, 173, 128, 196, 136, 86, 121, 80, 10, 12, 233, 53, 185, 147, 114, 124, 68, 216, 23, 186, 156, 117, 53, 21, 52, 200, 223, 222, 52, 201, 180, 208, 17, 165, 33, 212, 48, 55, 111, 235, 30, 189, 200, 248, 218, 90, 191, 253, 172, 93, 146, 140, 248, 150, 70, 93, 221, 161, 172, 179, 156, 58, 230, 161, 111, 95, 45, 90, 27, 102, 206, 136, 222, 127, 191, 203, 43, 156, 198, 50, 21, 232, 229, 41, 110, 195, 37, 206, 62, 126, 249, 50, 1, 45, 157, 87, 13, 172, 255, 161, 110, 34, 151, 53, 233, 96, 201, 139, 149, 220, 67, 182, 190, 23, 135, 40, 93, 221, 214, 41, 159, 219, 183, 119, 132, 86, 205, 216, 161, 97, 0, 28, 124, 91, 1, 125, 209, 106, 47, 220, 75, 108, 224, 143, 139, 150, 188, 23, 23, 15, 203, 42, 231, 76, 253, 239, 195, 6, 111, 246, 30, 31, 156, 115, 190, 52, 52, 37, 213, 102, 0, 150, 110, 7, 150, 120, 61, 190, 135, 244, 228, 107, 87, 87, 223, 24, 212, 178, 205, 198, 61, 140, 16, 44, 6, 224, 168, 214, 53, 201, 247, 121, 138, 240, 72, 7, 73, 149, 181, 133, 147, 124, 221, 222, 46, 121, 176, 200, 162, 48, 33, 59, 241, 254, 30, 247, 7, 165, 91, 166, 113, 133, 119, 234, 229, 129, 162, 64, 164, 205, 172, 79, 182, 147, 63, 226, 133, 82, 201, 26, 251, 17, 227, 251, 0, 25, 238, 38, 70, 85, 229, 92, 103, 180, 87, 60, 159, 148, 113, 135, 33, 169, 101, 184, 138, 239, 71, 40, 187, 1, 133, 134, 49, 160, 236, 165, 160, 250, 77, 140, 213, 234, 172, 225, 231, 174, 21, 29, 220, 60, 221, 177, 21, 26, 245, 163, 155, 187, 28, 66, 50, 159, 184, 97, 107, 14, 86, 26, 145, 171, 88, 137, 238, 212, 36, 79, 123, 183, 190, 202, 177, 201, 132, 121, 178, 127, 149, 13, 184, 243, 47, 132, 120, 153, 28, 41, 169, 72, 251, 152, 86, 153, 212, 63, 247, 29, 52, 173, 26, 252, 249, 63, 146, 188, 53, 97, 244, 90, 123, 71, 47, 195, 142, 91, 123, 213, 151, 166, 229, 208, 154, 127, 208, 243, 253, 168, 154, 171, 110, 253, 153, 129, 176, 27, 155, 195, 103, 49, 211, 182, 55]
+'DI':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstances&Expires=2025-01-01&InstanceId=i-0858c02ad9a33c579&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=AWkxF%2FlBVL%2FBl2WhQC62qGJ80qhL%2B%2B%2FJXvSp8mm5sIg%3D',
+'DV':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeVolumes&Expires=2025-01-01&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&VolumeId=vol-056223d4e1ce55d9c&Signature=DCYnV1vNqE3cyTm6bmtNS1idGdBT7DcbeLtZfcm3ljo%3D',
+'GCO':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=GetConsoleOutput&Expires=2025-01-01&InstanceId=i-0858c02ad9a33c579&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=I%2F1kp7oSli9GvYrrP5HD52D6nOy7yCq9dowaDomSAOQ%3D',
+'GU':'https://iam.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=GetUser&Expires=2025-01-01&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2010-05-08&Signature=N%2BsdNA6z3QReVsHsf7RV4uZLzS5Pqi0n3QSfqBAMs8o%3D',
+'DIA':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=userData&Expires=2025-01-01&InstanceId=i-0858c02ad9a33c579&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=ENM%2Bw9WkB4U4kYDMN6kowJhZenuCEX3c1G7xSuu6GZA%3D',
+  'instanceId': 'i-0858c02ad9a33c579',
+  'modulus': [186,187,68,57,92,215,243,62,188,248,16,13,3,29,40,217,208,206,78,13,202,184,82,121,26,51,203,41,169,11,4,102,228,127,110,117,170,48,210,212,160,51,175,246,110,178,43,106,94,255,69,0,217,91,225,7,84,133,193,43,177,254,75,191,109,50,212,190,177,61,64,230,188,105,56,252,40,3,91,190,117,1,52,30,210,137,136,13,216,110,83,21,164,56,248,215,33,159,129,149,85,236,130,194,79,227,184,135,133,61,85,201,243,225,121,233,36,84,207,218,86,68,99,21,150,252,28,220,4,93,81,57,214,94,147,56,234,236,0,178,93,39,48,143,21,120,241,33,73,239,185,255,255,79,112,194,72,226,84,158,182,96,159,33,111,57,212,27,23,133,223,152,101,240,98,181,94,38,147,195,187,245,226,158,11,102,91,91,47,146,178,65,180,73,176,209,32,27,99,183,254,161,115,38,186,31,132,165,252,189,226,72,152,219,177,52,47,178,121,45,30,143,78,142,223,133,112,136,72,165,166,225,18,62,249,119,157,198,68,114,69,199,32,121,201,72,159,13,37,66,160,210,83,163,131,128,54,178,219,5,74,94,214,244,43,123,140,156,192,89,120,211,61,192,76,70,176,122,247,198,21,220,79,212,200,192,88,126,200,115,71,102,66,92,102,60,179,213,125,123,86,195,67,204,71,222,249,46,242,179,11,111,12,158,91,189,215,72,190,15,165,11,102,51,1,91,116,127,31,12,55,193,249,170,15,231,13,189,60,73,8,239,238,18,44,131,78,190,164,46,41,169,139,43,230,105,2,170,231,202,203,126,74,202,172,112,217,194,26,202,140,71,183,45,239,213,254,213,139,27,95,163,172,27,176,189,233,59,181,49,225,220,125,90,182,120,183,236,62,100,170,130,122,202,206,193,77,130,250,167,187,238,39,197,216,183,56,203,72,122,168,64,217,225,8,233,13,164,224,23,255,239,230,44,90,31,149,106,207,28,9,249,154,163,84,231,149,167,59,194,193,41,106,239,30,137,188,78,45,66,30,224,233,181,132,146,106,227,135,229,106,71,168,69,149,167,154,150,106,29,130,114,109,11,66,120,42,128,247,166,248,152,103,131,56,88,37,46,19,240,110,135,15,234,44,39,87,65,232,105,2,163]
 }
 
 
@@ -127,6 +127,8 @@ function checkGetConsoleOutput(xmlDoc, instanceId, launchTime) {
     assert(xmlDoc.getElementsByTagName('instanceId')[0].textContent === instanceId);
     var timestamp = xmlDoc.getElementsByTagName('timestamp')[0].textContent;
     //prevent funny business: last consoleLog entry no later than 5 minutes after instance starts
+    //However, it was once observed that timestamp was switched on 2018-01-01. Maybe AWS resets it
+    //every first day of the year?
     assert(getSecondsDelta(timestamp, launchTime) <= 300);
     var b64data = xmlDoc.getElementsByTagName('output')[0].textContent;
     var logstr = ba2str(b64decode(b64data));
@@ -138,7 +140,14 @@ function checkGetConsoleOutput(xmlDoc, instanceId, launchTime) {
     assert(mark_start !== -1);
     var pubkey_start = mark_start + logstr.slice(mark_start).search(pkstartmark);
     var pubkey_end = pubkey_start + logstr.slice(pubkey_start).search(pkendmark) + pkendmark.length;
-    var pk = logstr.slice(pubkey_start, pubkey_end);
+    var chunk = logstr.slice(pubkey_start, pubkey_end);
+    var lines = chunk.split('\n');
+    var pk = pkstartmark + '\n';
+    for (var i = 1; i < lines.length-1; i++) {
+      var words = lines[i].split(' ');
+      pk = pk + words[words.length-1] + '\n';
+    }
+    pk = pk + pkendmark;
     assert(pk.length > 0);
     return pk;
   } catch (e) {
