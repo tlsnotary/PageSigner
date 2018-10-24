@@ -1,6 +1,6 @@
 {
   "name": "PageSigner",
-  "version": "1.1.2",
+  "version": "1.1.2.2",
   "description": "PageSigner - a cryptographically secure webpage screenshot tool",
   "manifest_version": 2,
   "author": "TLSNotary Group",
