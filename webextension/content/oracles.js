@@ -129,7 +129,11 @@ function checkGetConsoleOutput(xmlDoc, instanceId, launchTime) {
     //prevent funny business: last consoleLog entry no later than 5 minutes after instance starts
     //However, it was once observed that timestamp was switched on 2018-01-01. Maybe AWS resets it
     //every first day of the year?
-    assert(getSecondsDelta(timestamp, launchTime) <= 300);
+    //Update Oct 2018. 
+    //AWS spuriously changed the timestamp of an instance launched in Jan 2018 to Sep 2018.
+    //Commenting out the assert because otherwise we'd have to relaunch the oracle server after each
+    //such spurious glitch
+    //assert(getSecondsDelta(timestamp, launchTime) <= 300);
     var b64data = xmlDoc.getElementsByTagName('output')[0].textContent;
     var logstr = ba2str(b64decode(b64data));
     var sigmark = 'PageSigner public key for verification';
