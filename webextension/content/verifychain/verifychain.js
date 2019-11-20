@@ -20,6 +20,13 @@ var Certificate = asn1.define('Certificate', function() {
   );
 });
 
+const BasicConstraints = asn1.define('BasicConstraints', function() {
+  this.seq().obj(
+    this.key('cA').bool().def(false),
+    this.key('pathLenConstraint').optional().int()
+  );
+});
+
 var TBSCertificate = asn1.define('TBSCertificate', function() {
   this.seq().obj(
     this.key('version').def('v1').explicit(0).use(Version),
@@ -271,6 +278,31 @@ var verifyCertChain = function(chain) {
     var data = new Buffer(cert);
     //var data = ba2ua(der);
     var c = Certificate.decode(data, 'der');
+
+    //find Basic Constraints. Last cert must not be CA but all the others certs must be CAs
+    var found_bc = false;
+    var exts = c.tbsCertificate.extensions;
+    var isCA;
+    for(var j=0; j < exts.length; j++){
+      if (exts[j].extnID.toString() != "2,5,29,19"){
+        continue;
+      }
+      else {
+        found_bc = true;
+        var bc_bits = exts[j].extnValue;
+        var isCA = BasicConstraints.decode(new Buffer(bc_bits), "der").cA;
+      }
+    }
+    if (!found_bc){
+      return false;
+    }
+    if (i == 0 && isCA){
+      return false;
+    }
+    if (i > 0 && !isCA){
+      return false;
+    }
+  
     var sig = c.signature.data;
     var alg = c.signatureAlgorithm.algorithm;
     var lastalgbyte = alg[alg.length-1];
