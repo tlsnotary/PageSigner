@@ -1,11 +1,9 @@
-To create a Firefox addon:
-
-Go to about:debugging#addons -> Load Temporary Add-on -> point to install.rdf
+Firefox addon creation is not supported anymore due to missing API in Firefox.
 
 To create a Chrome extension:
 
 1. go to chrome://extensions and Enable "Developer mode"
 
-2. Click "Load unpacked extension" 
+2. Click "Load unpacked" 
 
 3. Navigate inside pagesigner's top folder and click Open.
