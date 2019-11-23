@@ -80,13 +80,83 @@ AbstractSocket.prototype.recv = function(is_handshake) {
 };
 
 
+//We do not communicate directly with the server but we send messages to the helper app
+//It is the helper app which opens the raw sockets and sends/receives data
+function Socket(name, port) {
+  this.name = name;
+  this.port = port;
+  this.uid = Math.random().toString(36).slice(-10);
+  this.buffer = [];
+  this.recv_timeout = 20 * 1000;
+}
+//inherit the base class
+Socket.prototype = Object.create(AbstractSocket.prototype);
+Socket.prototype.constructor = Socket;
+
+Socket.prototype.connect = function() {
+  var that = this;
+  return new Promise(function(resolve, reject) {
+    chrome.runtime.sendMessage(appId, {
+        'command': 'connect',
+        'args': {
+          'name': that.name,
+          'port': that.port
+        },
+        'uid': that.uid
+      },
+      function(response) {
+        console.log('in connect response', response);
+        clearInterval(timer);
+        if (response.retval === 'success') {
+          //endless data fetching loop for the lifetime of this Socket
+          var fetch = function() {
+            chrome.runtime.sendMessage(appId, {
+              'command': 'recv',
+              'uid': that.uid
+            }, function(response) {
+              console.log('fetched some data', response.data.length, that.uid);
+              that.buffer = [].concat(that.buffer, response.data);
+              setTimeout(function() {
+                fetch()
+              }, 100);
+            });
+          };
+          //only needed for Chrome
+          fetch();
+          resolve('ready');
+        }
+        reject(response.retval);
+      });
+    //dont wait for connect for too long
+    var timer = setTimeout(function() {
+      reject('connect: socket timed out');
+    }, 1000 * 20);
+  });
+};
+Socket.prototype.send = function(data_in) {
+  chrome.runtime.sendMessage(appId, {
+    'command': 'send',
+    'args': {
+      'data': data_in
+    },
+    'uid': this.uid
+  });
+};
+Socket.prototype.close = function() {
+  console.log('closing socket', this.uid);
+  chrome.runtime.sendMessage(appId, {
+    'command': 'close',
+    'uid': this.uid
+  });
+};
+
+
 function check_complete_records(d) {
   /*'''Given a response d from a server,
   we want to know if its contents represents
   a complete set of records, however many.'''
   */
   var complete_records = [];
-  var incomplete_records = [];
 
   while (d) {
     if (d.length < 5) {

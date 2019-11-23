@@ -4,27 +4,7 @@
 //so as a temporary kludge I use ports for communication
 var is_chrome = window.navigator.userAgent.match('Chrome') ? true : false;
 var port;
-
-function getPref(pref) {
-  return new Promise(function(resolve, reject) {
-    chrome.storage.local.get(pref, function(obj) {
-      if (Object.keys(obj).length === 0) {
-        resolve('undefined');
-        return;
-      } else {
-        resolve(obj[pref]);
-      }
-    });
-  });
-}
-
-getPref('verbose')
-  .then(function(value) {
-	if (value !== true && !is_chrome) {
-    //Firefox pollutes browser window, disable logging
-    console.log = function(){};
-  }
-});
+var tabid = 1; //to distinguish this view during .getViews()
 
 if (!is_chrome) {
   port = chrome.runtime.connect({
@@ -55,8 +35,9 @@ function process_message(data) {
     document.getElementById("waiting_for_click").removeAttribute('hidden');
   } else if (data.message === 'popup error') {
     console.log('got popup error with', data);
-    var error_text = document.getElementById("popup_error")
-    error_text.removeAttribute('hidden');
+    var error_div = document.getElementById("popup_error")
+    error_div.removeAttribute('hidden');
+    var error_text = document.getElementById("popup_error_text")
     error_text.textContent = data.data.text;
   } else {
     console.log('popup received unexpected message ' + data.message);

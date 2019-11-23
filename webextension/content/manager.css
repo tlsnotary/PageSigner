@@ -1,3 +1,7 @@
+body {
+ background-image: linear-gradient(to right bottom, #d1d1d1, #d8d8d8, #dfdfdf, #e7e7e7, #eeeeee);
+ }
+
 a:link {
   text-decoration: none;
   color: #0000ff

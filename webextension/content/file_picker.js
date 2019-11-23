@@ -1,17 +1,44 @@
 //Because file picker doesn't work from popup.html we open a new tab just for this purpose
 var is_chrome = window.navigator.userAgent.match('Chrome') ? true : false;
+var is_file_picker = false; //toggled to true when invoked as a file picker
 
-chrome.storage.local.get('testing', function(obj) {
-  if (obj.testing == true) {
-    var script = document.createElement('script');
-    script.src = 'testing/file_picker_test.js';
-    document.body.appendChild(script);
-  }
-});
+function prepare_testing(){
+  var script = document.createElement('script');
+  script.src = 'testing/file_picker_test.js';
+  document.body.appendChild(script);
+}
 
-var fileChooser = document.getElementById("import");
+
+//triggered by exrension
+function showFilePicker(){
+  is_file_picker = true
+  var label = document.getElementById("import_label");
+  label.style.display = "";
+
+  var fileChooser = document.getElementById("import");
+  fileChooser.addEventListener('change', function(evt) {
+    var f = evt.target.files[0];
+    if (f) {
+      var reader = new FileReader();
+      reader.onload = onload;
+      reader.readAsArrayBuffer(f);
+    }
+  });
+}
+
+
+
+
 
 function onload(e) {
+  var loader = document.getElementById("loader");
+  loader.classList.toggle("m-fadeIn");
+  loader.removeAttribute('hidden');
+  var import_label = document.getElementById("import_label");
+  //import_label.style.display = 'none'
+  import_label.classList.toggle("m-fadeOut");
+
+
   var contents = e.target.result;
   var view = new DataView(contents);
   var int_array = [];
@@ -39,14 +66,7 @@ function onload(e) {
       }
     });
   }
-  window.close();
+  //don't close the window, we reuse it to display html
+  //window.close();
 }
 
-fileChooser.addEventListener('change', function(evt) {
-  var f = evt.target.files[0];
-  if (f) {
-    var reader = new FileReader();
-    reader.onload = onload;
-    reader.readAsArrayBuffer(f);
-  }
-});
