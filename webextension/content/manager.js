@@ -1,21 +1,46 @@
 var is_chrome = window.navigator.userAgent.match('Chrome') ? true : false;
 var port;
+var tabid = null;
+var is_manager = true;
 
 var table_populated = false; //used in testing only
-chrome.storage.local.get('testing', function(obj) {
-  if (obj.testing == true) {
-    var script = document.createElement('script');
-    script.src = 'testing/manager_test.js';
-    document.body.appendChild(script);
-  }
-});
+function prepare_testing(){
+  var script = document.createElement('script');
+  script.src = 'testing/manager_test.js';
+  document.body.appendChild(script);
+}
 
 function onload() {
   if (is_chrome) {
     chrome.runtime.onMessage.addListener(function(data) {
-      if (data.destination == 'manager') {
+      if (data.destination != 'manager') return;
+      if (data.command == 'payload'){
         console.log('hooray', data.payload);
         process_data(data.payload);
+      }
+      else if (data.command == 'export'){
+
+        function ba2ab(ba) {
+          var ab = new ArrayBuffer(ba.length);
+          var dv = new DataView(ab);
+          for (var i = 0; i < ba.length; i++) {
+            dv.setUint8(i, ba[i]);
+          }
+          return ab;
+        };
+
+        //.payload contains {pgsg: pgsg_blob, name: session_name}
+        var ba = data.payload.pgsg
+        var ab = ba2ab(ba);
+        var exportedBlob = new Blob([ab]);
+        var exportedBlobUrl = URL.createObjectURL(exportedBlob, {
+          type: 'application/octet-stream'
+        });
+        var fauxLink = document.createElement('a');
+        fauxLink.href = exportedBlobUrl;
+        fauxLink.setAttribute('download', data.payload.name+'.pgsg');
+        document.body.appendChild(fauxLink);
+        fauxLink.click();
       }
     });
   } else {
@@ -54,12 +79,11 @@ function process_data(rows) {
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
     addRow({
-      'name': r.name,
-      'imported': r.imported,
-      'valid': r.valid,
+      'sessionName': r.sessionName,
+      'serverName': r.serverName,
+      'is_imported': r.is_imported,
       'verifier': r.verifier,
       'creationTime': r.creationTime,
-      'dir': r.dir
     });
   }
   table_populated = true;
@@ -68,21 +92,21 @@ function process_data(rows) {
 
 
 function addRow(args) {
-  var dir = args.dir;
+  var session = args.creationTime;
   var tb, row, td, a, img, text;
   tb = document.getElementById('myTableBody');
   row = tb.insertRow(tb.rows.length);
 
   td = document.createElement("td");
   td.id = 'toprightimg';
-  td.appendChild(document.createTextNode(args.name));
+  td.appendChild(document.createTextNode(args.sessionName));
   var importimg = document.createElement("img");
   importimg.src = 'import.png';
   importimg.width = 12;
   importimg.height = 12;
   importimg.id = 'topright';
   importimg.title = 'This notarization file was imported';
-  if (!args.imported) {
+  if (!args.is_imported) {
     importimg.hidden = true;
   }
   td.appendChild(importimg);
@@ -90,18 +114,22 @@ function addRow(args) {
   row.appendChild(td);
 
   td = document.createElement("td");
-  a = document.createElement("a");
-  a.title = 'Give the file a more memorable name';
-  a.style = 'float: right';
-  a.onclick = function(event) {
-    doRename(event.target, args.name, dir);
+  div = document.createElement("input");
+  div.type = 'button'
+  div.title = 'Give the file a more memorable name';
+  div.style = 'float: right';
+  div.onclick = function(event) {
+    doRename(event.target, session);
   };
-  a.text = 'Rename';
-  td.appendChild(a);
+  div.value = 'Rename';
+  div.className = 'myButton'
+  td.appendChild(div);
   row.appendChild(td);
 
   td = document.createElement("td");
-  a = document.createElement("a");
+  a = document.createElement("input");
+  a.type = 'button'
+  a.className = 'myButton'
   a.title = 'Save the file so you can transfer it to others';
   a.style = 'float: right';
   a.onclick = function(event) {
@@ -112,45 +140,29 @@ function addRow(args) {
         type: "warning"
       },
       function() {
-        //sendMessage({'destination':'extension','message':'export', 'args':{'dir': dir, 'file': args.name}});
-        //get the Blob and create an invisible download link
-        chrome.storage.local.get(dir, function(item) {
-
-          function ba2ab(ba) {
-            var ab = new ArrayBuffer(ba.length);
-            var dv = new DataView(ab);
-            for (var i = 0; i < ba.length; i++) {
-              dv.setUint8(i, ba[i]);
-            }
-            return ab;
-          };
-
-          var ba = item[dir]['pgsg.pgsg'];
-          var ab = ba2ab(ba);
-          var exportedBlob = new Blob([ab]);
-          var exportedBlobUrl = URL.createObjectURL(exportedBlob, {
-            type: 'application/octet-stream'
-          });
-          var fauxLink = document.createElement('a');
-          fauxLink.href = exportedBlobUrl;
-          fauxLink.setAttribute('download', item[dir]['meta'] + '.pgsg');
-          document.body.appendChild(fauxLink);
-          fauxLink.click();
+        sendMessage({
+          'destination': 'extension',
+          'message': 'export',
+          'args': {
+            'dir': session
+          }
         });
-      });
+      })
   };
-  a.text = 'Export';
+  a.value = 'Export';
   td.appendChild(a);
   row.appendChild(td);
 
   td = document.createElement("td");
-  a = document.createElement("a");
+  a = document.createElement("input");
+  a.type = 'button'
+  a.className = 'myButton'
   a.title = 'permanently remove this set of files from disk';
   a.style = 'float: right';
   a.onclick = function(event) {
     swal({
         title: 'Removing notarization data',
-        text: "This will remove all notarized data of " + args.name + ". Are you sure?",
+        text: "This will remove all notarized data of " + args.sessionName + ". Are you sure?",
         type: "warning"
       },
       function() {
@@ -158,12 +170,12 @@ function addRow(args) {
           'destination': 'extension',
           'message': 'delete',
           'args': {
-            'dir': dir
+            'dir': session
           }
         });
       });
   };
-  a.text = 'Delete';
+  a.value = 'Delete';
   td.appendChild(a);
   row.appendChild(td);
 
@@ -171,62 +183,65 @@ function addRow(args) {
   td.textContent = args.creationTime;
   row.appendChild(td);
 
-  td = document.createElement("td");
-  img = document.createElement("img");
-  img.height = 30;
-  img.width = 30;
-  var label;
-  if (args.valid) {
-    img.src = 'check.png';
-    label = 'valid';
-  } else {
-    img.src = 'cross.png';
-    label = 'invalid';
-  }
-  text = document.createElement("text");
-  text.textContent = label;
-  td.appendChild(img);
-  td.appendChild(text);
-  row.appendChild(td);
+  // td = document.createElement("td");
+  // img = document.createElement("img");
+  // img.height = 30;
+  // img.width = 30;
+  // var label;
+  // if (args.valid) {
+  //   img.src = 'check.png';
+  //   label = 'valid';
+  // } else {
+  //   img.src = 'cross.png';
+  //   label = 'invalid';
+  // }
+  // text = document.createElement("text");
+  // text.textContent = label;
+  // td.appendChild(img);
+  // td.appendChild(text);
+  // row.appendChild(td);
 
   td = document.createElement("td");
   td.textContent = args.verifier;
   row.appendChild(td);
 
   td = document.createElement("td");
-  a = document.createElement("a");
+  a = document.createElement("input");
+  a.type = 'button'
+  a.className = 'myButton'
   a.onclick = function(event) {
     sendMessage({
       'destination': 'extension',
       'message': 'viewdata',
       'args': {
-        'dir': dir
+        'dir': session
       }
     });
   };
-  a.text = "view";
+  a.value = "view";
+  a.style = "margin-right: 20px;"
   td.appendChild(a);
-  text = document.createElement("text");
-  text.textContent = ' , ';
-  td.appendChild(text);
-  a = document.createElement("a");
+
+  a = document.createElement("input");
+  a.type = 'button'
+  a.className = 'myButton'
   a.onclick = function(event) {
     sendMessage({
       'destination': 'extension',
       'message': 'viewraw',
       'args': {
-        'dir': dir
+        'dir': session
       }
     });
   };
-  a.text = "raw";
+  a.value = "raw";
   td.appendChild(a);
 
   row.appendChild(td);
 }
 
 
-function doRename(t, oldname, dir) {
+function doRename(t, dir) {
   var isValid = (function() {
     var rg1 = /^[^\\/:\*\?"<>\|]+$/; // forbidden characters \ / : * ? " < > |
     var rg2 = /^\./; // cannot start with dot (.)

@@ -9,7 +9,7 @@
       margin-bottom: 0px;
       margin-left: 0px;
       margin-right: 0px;
-      width: 16em;
+      /*width: 16em;*/
       /* Fonts Chrome specifies for each OS:     */
       /* Linux: 'DejaVu Sans', Arial, sans-serif */
       /* Mac: 'Lucida Grande', sans-serif        */
@@ -35,20 +35,58 @@
       padding-left: 0px;
     }
 
+    td.pointer{
+      cursor: pointer;
+    }
+
     .menu_img {
       width: 16px;
       height: 16px;
       padding-right: 0px;
     }
+
+    .myButton {
+      box-shadow:inset 0px -3px 7px 0px #29bbff;
+      background:linear-gradient(to bottom, #2dabf9 5%, #0688fa 100%);
+      background-color:#2dabf9;
+      border-radius:3px;
+      border:1px solid #0b0e07;
+      display:inline-block;
+      cursor:pointer;
+      color:#ffffff;
+      font-family:Arial;
+      font-size:15px;
+      padding:9px 23px;
+      text-decoration:none;
+      text-shadow:0px 1px 0px #263666;
+    }
+    .myButton:hover {
+      background:linear-gradient(to bottom, #0688fa 5%, #2dabf9 100%);
+      background-color:#0688fa;
+    }
+    .myButton:active {
+      position:relative;
+      top:1px;
+    }
+
+    .warning{
+      margin-top: 20px;
+      margin-bottom: 20px;
+      margin-left: 20px;
+      margin-right: 20px;
+      width: 32em;
+    }
+
+        
+
   </style>
 </head>
 
 
 <body>
 
-  <div style='padding: 3px; word-wrap: break-word;' id='aboutWindow' hidden>
+  <div style='padding: 5px; word-wrap: break-word;' id='aboutWindow' hidden>
     <h1 align="center">PageSigner</h1>
-    <p align="center">Using <a href="#" id="link1">TLSNotary</a> technology.</p>
     <p align="center">Email the developers: </p>
     <p align="center">
       <a href="mailto:tlsnotarygroup@gmail.com">tlsnotarygroup@gmail.com</a></p>
@@ -56,10 +94,10 @@
   </div>
 
 
-  <table style="width:100%" id='menu' hidden>
+  <table style="width: 16em;" id='menu' hidden>
     <tr class="border_bottom">
 
-      <td id="notarize">
+      <td class="pointer" id="notarize">
         <img class='menu_img' src="icon.png"></img>
         <text style='padding-right: 5px;'>Notarize this page</text>
 
@@ -69,32 +107,44 @@
           src="arrow16.png"></img>
       </td>
       <tr class="border_bottom">
-        <td id="manage">
+        <td class="pointer" id="manage">
           <img class='menu_img' src="manage.png"></img>
           <text>Manage files</text>
         </td>
       </tr>
       <tr class="border_bottom">
-        <td id="import">
+        <td class="pointer" id="import">
           <img class='menu_img' src="verify.png"></img>
           <text>Import .pgsg files</text>
       </tr>
       <tr>
-        <td id="about">
+        <td class="pointer" id="about">
           <img class='menu_img' src="icon.png"></img>
           <text>About</text>
       </tr>
   </table>
 
-  <a href="https://chrome.google.com/webstore/detail/pagesigner-helper-app/oclohfdjoojomkfddjclanpogcnjhemd" id="app_not_installed" hidden><h1>Click here to install the helper app needed for PageSigner to work</h1></a>
+  <div id='app_not_installed' class='warning' hidden>
+    <h3>PageSigner requires that you install a helper app from Chrome web store.</h3>
+    <input type="button" class="myButton" click="location.href='https://chrome.google.com/webstore/detail/pagesigner-helper-app/oclohfdjoojomkfddjclanpogcnjhemd';" value="Got it, take me to the web store." />
+  </div>
 
-  <a href="chrome://extensions" id="app_disabled" hidden><h1>Click here and then enable PageSigner helper app</h1></a>
+  <div id='app_disabled' class='warning' hidden>
+    <h3>Please enable PageSigner helper app on the extensions page.</h3>
+    <input type="button" class="myButton" click="location.href='chrome://extensions';" value="Open extensions page" />
+  </div>
 
-  <h3 id='notarization_in_progress' hidden>Notarization in progress. Please wait...</h3>
+  <div id='notarization_in_progress' class='warning' hidden>
+    <h3>Notarization in progress. Please wait...</h3>
+  </div>
 
-  <h3 id='waiting_for_click' hidden>Waiting for you to click any https:// link on the page...</h3>
+  <div id='waiting_for_click' class='warning' hidden>
+    <h3>Waiting for you to click any https:// link on the page...</h3>
+  </div>
 
-  <h3 id='popup_error' hidden></h3>
+  <div id='popup_error' class='warning' hidden>
+    <h3 id='popup_error_text'></h3>
+  </div>
 
   <script src="popup.js"></script>
   <script src="about.js"></script>

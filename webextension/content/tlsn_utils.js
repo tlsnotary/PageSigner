@@ -10,6 +10,7 @@ function ab2ba(ab) {
 
 
 function ba2ab(ba) {
+  assert (ba.length != 'undefined', "Can only convert from an array")
   var ab = new ArrayBuffer(ba.length);
   var dv = new DataView(ab);
   for (var i = 0; i < ba.length; i++) {
@@ -28,7 +29,7 @@ function ba2ua(ba) {
   return ua;
 }
 
-function ua2ba(ua) {
+  function ua2ba(ua) {
   var ba = [];
   for (var i = 0; i < ua.byteLength; i++) {
     ba.push(ua[i]);
@@ -138,56 +139,20 @@ function ba2str(ba) {
 }
 
 
-function hmac(key, msg, algo) {
-  var key_hex = ba2hex(key);
-  var msg_hex = ba2hex(msg);
-  var key_words = CryptoJS.enc.Hex.parse(key_hex);
-  var msg_words = CryptoJS.enc.Hex.parse(msg_hex);
-  var hash;
-  if (algo === 'md5') {
-    hash = CryptoJS.HmacMD5(msg_words, key_words);
-    return wa2ba(hash.words);
-  } else if (algo === 'sha1') {
-    hash = CryptoJS.HmacSHA1(msg_words, key_words);
-    return wa2ba(hash.words);
-  }
-}
 
 
-function sha1(ba) {
-  var ba_obj = CryptoJS.enc.Hex.parse(ba2hex(ba));
-  var hash = CryptoJS.SHA1(ba_obj);
-  return wa2ba(hash.words);
+async function sha256(ba) {
+  var digest =  await window.crypto.subtle.digest('SHA-256', ba2ab(ba))
+  return (ab2ba(digest))
 }
 
-function sha256(ba) {
-  var ba_obj = CryptoJS.enc.Hex.parse(ba2hex(ba));
-  var hash = CryptoJS.SHA256(ba_obj);
-  return wa2ba(hash.words);
-}
-
-function md5(ba) {
-  var ba_obj = CryptoJS.enc.Hex.parse(ba2hex(ba));
-  var hash = CryptoJS.MD5(ba_obj);
-  return wa2ba(hash.words);
-}
-
-//input bytearrays must be of equal length
-function xor(a, b) {
-  assert(a.length === b.length, "length mismatch");
-  var c = [];
-  for (var i = 0; i < a.length; i++) {
-    c.push(a[i] ^ b[i]);
-  }
-  return c;
-}
 
 
 function assert(condition, message) {
-  if (!condition) {
-    throw message || "Assertion failed";
+    if (!condition) {
+      throw message || "Assertion failed";
+    }
   }
-}
 
 function isdefined(obj) {
   assert(typeof(obj) !== "undefined", "obj was undefined");
@@ -203,10 +168,7 @@ function log() {
 
 function getRandom(number, window) {
   //window was undefined in this context, so i decided to pass it explicitely
-  var a = window.crypto.getRandomValues(new Uint8Array(number));
-  //convert to normal array
-  var b = Array.prototype.slice.call(a);
-  return b;
+  return Array.from(window.crypto.getRandomValues(new Uint8Array(number)));
 }
 
 
@@ -220,6 +182,12 @@ function b64decode(sBase64, nBlocksSize) {
   return atob(sBase64).split("").map(function(c) {
     return c.charCodeAt(0);
   });
+}
+
+//conform to base64url format replace +/= with -_ 
+function b64urlencode (aBytes){
+  var str = btoa(String.fromCharCode.apply(null, aBytes));
+  return str.split('+').join('-').split('/').join('_').split('=').join('')
 }
 
 //plaintext must be string
@@ -280,4 +248,80 @@ function getTime() {
   var today = new Date();
   var time = today.getFullYear() + '-' + ("00" + (today.getMonth() + 1)).slice(-2) + '-' + ("00" + today.getDate()).slice(-2) + '-' + ("00" + today.getHours()).slice(-2) + '-' + ("00" + today.getMinutes()).slice(-2) + '-' + ("00" + today.getSeconds()).slice(-2);
   return time;
+}
+
+//PEM certificate/pubkey to ArrayBuffer
+function pem2ab(pem) {
+  var lines = pem.split('\n');
+  var encoded = '';
+  for(let line of lines){
+    if (line.trim().length > 0 &&
+        line.indexOf('-BEGIN CERTIFICATE-') < 0 &&
+        line.indexOf('-BEGIN PUBLIC KEY-') < 0 &&
+        line.indexOf('-END PUBLIC KEY-') < 0 &&
+        line.indexOf('-END CERTIFICATE-') < 0 ) {
+      encoded += line.trim();
+    }
+  }
+  return ba2ab(b64decode(encoded))    
+}
+
+
+//compare 2 Arrays
+function eq(a, b) {
+  return Array.isArray(a) &&
+    Array.isArray(b) &&
+    a.length === b.length &&
+    a.every((val, index) => val === b[index]);
+}
+
+
+
+// convert OpenSSL's signature format (asn1 DER) into WebCrypto's IEEE P1363 format
+function sigDER2p1363(sigDER){
+  var o = 0
+  assert(eq(sigDER.slice(o,o+=1), [0x30]))
+  var total_len = ba2int(sigDER.slice(o,o+=1))
+  assert(sigDER.length == total_len+2)
+  assert(eq(sigDER.slice(o,o+=1), [0x02]))
+  var r_len = ba2int(sigDER.slice(o,o+=1))
+  assert(r_len == 32 || r_len==33)
+  var r = sigDER.slice(o,o+=r_len)
+  assert(eq(sigDER.slice(o,o+=1), [0x02]))
+  var s_len = ba2int(sigDER.slice(o,o+=1))
+  assert(s_len == 32 || s_len==33)
+  var s = sigDER.slice(o,o+=s_len)
+  if (s.length == 31){
+    s = [].concat([0x00], s)
+  }
+  if (r_len == 33){
+    assert(eq(r.slice(0,1), [0x00]))
+    r = r.slice(1)
+  }
+  if (s_len == 33){
+    assert(eq(s.slice(0,1), [0x00]))
+    s = s.slice(1)
+  }
+  var sig_p1363 = [].concat(r,s) 
+  return sig_p1363;
+}
+
+
+//take PEM EC pubkey and output a "raw" pubkey with all asn1 data stripped
+function pubkeyPEM2raw(pkPEM){
+  //prepended asn1 data for ECpubkey prime256v1
+  const preasn1 = [0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01, 0x06,
+    0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00]
+  pk_ba = ab2ba(pem2ab(pkPEM))
+  assert(eq(pk_ba.slice(0, preasn1.length), preasn1))
+  var pkraw = pk_ba.slice(preasn1.length)
+  return pkraw
+}
+
+
+//test a string against a wildcard - useful when checking certificate's names
+function wildTest(wildcard, str) {
+  let w = wildcard.replace(/[.+^${}()|[\]\\]/g, '\\$&'); // regexp escape 
+  const re = new RegExp(`^${w.replace(/\*/g,'.*').replace(/\?/g,'.')}$`,'i');
+  return re.test(str); // remove last 'i' above to have case sensitive
 }
