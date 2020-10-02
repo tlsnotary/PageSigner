@@ -81,7 +81,8 @@ function getAlternativeNames(cert_ba) {
 
 
 //return true/false and an intermediate certificate which was missing in the chain, if any
-async function verifyChain(chain_ba) {
+//verification is against a date in the past when the notarization took place
+async function verifyChain(chain_ba, date) {
   let chain = []
   for (let cert_ba of chain_ba){
     let cert_asn1 = asn1js.fromBER(ba2ab(cert_ba));
@@ -89,7 +90,7 @@ async function verifyChain(chain_ba) {
     chain.push(cert)
   }
 
-  async function do_verify(chain){
+  async function do_verify(chain, date){
     //we must pass a copy of trustedCertificates, otherwise verification fails
     const trustedCerts = [];
     trustedCerts.push(...trustedCertificates);
@@ -98,14 +99,15 @@ async function verifyChain(chain_ba) {
     let ccve = new CertificateChainValidationEngine({
         trustedCerts,
           certs: chain, 
-          crls
+          crls,
+          checkDate: date ? date : new Date()
         });
     
     let pr = await ccve.verify()
     return pr.result
   }
 
-  let rv = await do_verify(chain)
+  let rv = await do_verify(chain, date)
   if (chain.length == 1 && rv != true){
     //maybe we must fetch the intermedate cert
     for (let ext of chain[0].extensions){

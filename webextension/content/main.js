@@ -586,7 +586,9 @@ async function verify_tlsn(data) {
   }
 
   var commonName = getCommonName(chain[0]);
-  var vcrv = await verifyChain(chain); 
+  var seconds = ba2int(time)
+  var date = new Date(seconds*1000)
+  var vcrv = await verifyChain(chain, date); 
   if (vcrv[0] != true) {
     throw ('certificate verification failed');
   }
