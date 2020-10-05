@@ -1,5 +1,6 @@
 var trustedCertificates = [];
 
+
 //extract PEMs from Mozilla's CA store and convert into asn1js's Certificate object
 async function parse_certs(){
   //wait for pkijs module to load
@@ -12,8 +13,8 @@ async function parse_certs(){
     })
   }
 
-  var c = await import_resource('verifychain/certs.txt')
-  var lines = c.split('"\n"').slice(1) //discard the first line - headers
+  var text = await import_resource('verifychain/certs.txt')
+  var lines = text.split('"\n"').slice(1) //discard the first line - headers
   for (let line of lines){
     let fields = line.split('","')
     let pem = fields[32].slice(1,-1);
@@ -24,9 +25,11 @@ async function parse_certs(){
   } 
 }
 
+
 function getPubkey(c){
     return ab2ba(c.subjectPublicKeyInfo.subjectPublicKey.valueBlock.valueHex)
 }
+
 
 function getModulus(cert_ba) {
   let cert_asn1 = asn1js.fromBER(ba2ab(cert_ba));
@@ -91,15 +94,10 @@ async function verifyChain(chain_ba, date) {
   }
 
   async function do_verify(chain, date){
-    //we must pass a copy of trustedCertificates, otherwise verification fails
-    const trustedCerts = [];
-    trustedCerts.push(...trustedCertificates);
 
-    let crls = []
-    let ccve = new CertificateChainValidationEngine({
-        trustedCerts,
-          certs: chain, 
-          crls,
+    const ccve = new CertificateChainValidationEngine({
+          trustedCerts: trustedCertificates,
+          certs: chain,
           checkDate: date ? date : new Date()
         });
     
@@ -129,4 +127,15 @@ async function verifyChain(chain_ba, date) {
   }
 
   return [rv]
+}
+
+
+if (typeof module !== 'undefined'){ //we are in node.js environment
+  module.exports={
+    checkCertSubjName,
+    getCommonName,
+    getModulus,
+    parse_certs,
+    verifyChain
+  }
 }

@@ -16,7 +16,7 @@ async function send_and_recv(command, data, expected_response, uid) {
 }
 
 
-async function start_audit(server, port, headers){
+const start_audit = async function(server, port, headers){
   var mhm = false //multiple handshake messages
 
   var all_handshakes = []; //a concatenation of all handshake messages up to this point
@@ -52,7 +52,7 @@ async function start_audit(server, port, headers){
   ch.push(0x01) //Handshake type: Client Hello 
   ch = ch.concat( bi2ba((extlen + 43), {fixed:3}) ) //Length
   ch.push(0x03, 0x03) //Version: TLS 1.2
-  var client_random = getRandom(32, window)
+  var client_random = getRandom(32)
   ch = ch.concat(client_random)
   ch.push(0x00) //Session ID Length
   ch.push(0x00, 0x02) //Cipher Suites Length
@@ -225,7 +225,7 @@ async function start_audit(server, port, headers){
     let finished = [].concat([0x14, 0x00, 0x00, 0x0c], verify_data) //Finished (0x14) with length 12
     all_handshakes = [].concat(all_handshakes, finished)
 
-    let explicit_nonce = getRandom(8, window)
+    let explicit_nonce = getRandom(8)
     let nonce = [].concat(client_write_IV, explicit_nonce)
     let seq_num = 0
     let aad = [] //additional_data
@@ -233,12 +233,12 @@ async function start_audit(server, port, headers){
     aad.push(0x16) // type 0x16 = Handshake
     aad.push(0x03, 0x03) // TLS Version 1.2
     aad.push(0x00, 0x10) // 16 bytes of unencrypted data
-    var ck = await window.crypto.subtle.importKey("raw", ba2ab(client_write_key), "AES-GCM", true, ["encrypt", "decrypt"]);
+    let ck = await crypto.subtle.importKey("raw", ba2ab(client_write_key), "AES-GCM", true, ["encrypt", "decrypt"]);
     cwkCryptoKey = ck
-    let ciphertext = await window.crypto.subtle.encrypt(
+    let ciphertext = await crypto.subtle.encrypt(
       {name: 'AES-GCM', iv: ba2ab(nonce), additionalData: ba2ab(aad)}, cwkCryptoKey, ba2ab(finished));
     let ct = ab2ba(ciphertext)
-    var f = [0x16, 0x03, 0x03, 0x00, 0x28] //Finished message of 40 (0x28) bytes length
+    let f = [0x16, 0x03, 0x03, 0x00, 0x28] //Finished message of 40 (0x28) bytes length
     f = [].concat(f, explicit_nonce, ct)
     return f
   })()
@@ -278,14 +278,14 @@ async function start_audit(server, port, headers){
 
   var appdata = await (async function encrypt_request(){
     let headers_ba = str2ba(headers);
-    let explicit_nonce = getRandom(8, window)
+    let explicit_nonce = getRandom(8)
     let nonce = [].concat(client_write_IV, explicit_nonce)
     let aad = [] 
     let seq_num = 1
     aad = [].concat(aad, bi2ba(seq_num, {fixed:8}))
     aad = [].concat(aad, [0x17, 0x03, 0x03]) //type 0x17 = Application data , TLS Version 1.2
     aad = [].concat(aad, bi2ba(headers_ba.length, {fixed:2})) //length bytes of unencrypted data 
-    let ciphertext = await window.crypto.subtle.encrypt(
+    let ciphertext = await crypto.subtle.encrypt(
       {name: 'AES-GCM', iv: ba2ab(nonce),
       additionalData: ba2ab(aad)}, cwkCryptoKey, ba2ab(headers_ba));
     let ct = ab2ba(ciphertext)
@@ -337,7 +337,7 @@ async function start_audit(server, port, headers){
 async function decryptNotaryResponse (key, enc){
   var IV = enc.slice(0,12)
   var ciphertext = enc.slice(12)
-  var data_ab = await window.crypto.subtle.decrypt(
+  var data_ab = await crypto.subtle.decrypt(
     {name: 'AES-GCM', iv: ba2ab(IV)},
     key,
     ba2ab(ciphertext));
@@ -347,11 +347,11 @@ async function decryptNotaryResponse (key, enc){
 
 //pub/privkey must be in WebCrypto format
 async function getExpandedKeys(hisPubkey, myPrivkey, cr, sr){
-  var Secret = await window.crypto.subtle.deriveBits(
+  var Secret = await crypto.subtle.deriveBits(
     {'name': 'ECDH', 'public': hisPubkey },
     myPrivkey,
     256)
-  var Secret_CryptoKey = await window.crypto.subtle.importKey(
+  var Secret_CryptoKey = await crypto.subtle.importKey(
       "raw",
       Secret,
       {name: 'HMAC', hash:'SHA-256'},
@@ -361,20 +361,20 @@ async function getExpandedKeys(hisPubkey, myPrivkey, cr, sr){
   //calculate Master Secret and expanded keys
   var seed = [].concat(str2ba('master secret'), cr, sr);
   var a0 = ba2ab(seed)
-  var a1 = await window.crypto.subtle.sign('HMAC', Secret_CryptoKey, a0);
-  var a2 = await window.crypto.subtle.sign('HMAC', Secret_CryptoKey, a1);
-  var p1 = await window.crypto.subtle.sign('HMAC', Secret_CryptoKey, ba2ab([].concat(ab2ba(a1),seed)));
-  var p2 = await window.crypto.subtle.sign('HMAC', Secret_CryptoKey, ba2ab([].concat(ab2ba(a2),seed)));
+  var a1 = await crypto.subtle.sign('HMAC', Secret_CryptoKey, a0);
+  var a2 = await crypto.subtle.sign('HMAC', Secret_CryptoKey, a1);
+  var p1 = await crypto.subtle.sign('HMAC', Secret_CryptoKey, ba2ab([].concat(ab2ba(a1),seed)));
+  var p2 = await crypto.subtle.sign('HMAC', Secret_CryptoKey, ba2ab([].concat(ab2ba(a2),seed)));
   var ms = [].concat(ab2ba(p1), ab2ba(p2)).slice(0,48)
-  var MS_CryptoKey = await window.crypto.subtle.importKey("raw", ba2ab(ms), {name: 'HMAC', hash:'SHA-256'}, true, ['sign']);
+  var MS_CryptoKey = await crypto.subtle.importKey("raw", ba2ab(ms), {name: 'HMAC', hash:'SHA-256'}, true, ['sign']);
 
   //Expand keys
   var eseed = [].concat(str2ba('key expansion'), sr, cr);
   var ea0 = ba2ab(eseed)
-  var ea1 = await window.crypto.subtle.sign('HMAC', MS_CryptoKey, ea0);
-  var ea2 = await window.crypto.subtle.sign('HMAC', MS_CryptoKey, ea1);
-  var ep1 = await window.crypto.subtle.sign('HMAC', MS_CryptoKey, ba2ab([].concat(ab2ba(ea1),eseed)));
-  var ep2 = await window.crypto.subtle.sign('HMAC', MS_CryptoKey, ba2ab([].concat(ab2ba(ea2),eseed)));
+  var ea1 = await crypto.subtle.sign('HMAC', MS_CryptoKey, ea0);
+  var ea2 = await crypto.subtle.sign('HMAC', MS_CryptoKey, ea1);
+  var ep1 = await crypto.subtle.sign('HMAC', MS_CryptoKey, ba2ab([].concat(ab2ba(ea1),eseed)));
+  var ep2 = await crypto.subtle.sign('HMAC', MS_CryptoKey, ba2ab([].concat(ab2ba(ea2),eseed)));
 
   var ek = [].concat(ab2ba(ep1), ab2ba(ep2)).slice(0,40)
   //GCM doesnt need MAC keys
@@ -389,19 +389,19 @@ async function getExpandedKeys(hisPubkey, myPrivkey, cr, sr){
   //Calculate ECDH shared secret between auditee and auditor
   //16 bytes of that secret is the symmetric key
 async function getECDHSecret(hisPubkeyRaw_ba, myPrivkey){
-  var comm_pk_CryptoKey = await window.crypto.subtle.importKey(
+  var comm_pk_CryptoKey = await crypto.subtle.importKey(
     "raw",
     ba2ab(hisPubkeyRaw_ba),
     {name: 'ECDH', namedCurve:'P-256'},
     true,
     []);
 
-  var Secret = await window.crypto.subtle.deriveBits(
+  var Secret = await crypto.subtle.deriveBits(
     {'name': 'ECDH', 'public': comm_pk_CryptoKey },
     myPrivkey,
     256)
 
-  var commSymmetricKey = await window.crypto.subtle.importKey(
+  var commSymmetricKey = await crypto.subtle.importKey(
     "raw",
     ba2ab(ab2ba(Secret).slice(0,16)),
     "AES-GCM", true, ["encrypt", "decrypt"]);
@@ -412,7 +412,7 @@ async function getECDHSecret(hisPubkeyRaw_ba, myPrivkey){
 
 async function decrypt_tls_response(s, server_write_key, server_write_IV){
 
-  var swkCryptoKey = await window.crypto.subtle.importKey("raw", 
+  var swkCryptoKey = await crypto.subtle.importKey("raw", 
     ba2ab(server_write_key), "AES-GCM", true, ["encrypt", "decrypt"]);
 
   //split up into TLS segments
@@ -448,7 +448,7 @@ async function decrypt_tls_response(s, server_write_key, server_write_IV){
     aad = [].concat(aad, bi2ba(seg_enc.length - 8 - 16, {fixed:2}))
 
     try {
-      var cleartext_segment = await window.crypto.subtle.decrypt(
+      var cleartext_segment = await crypto.subtle.decrypt(
         {name: 'AES-GCM', iv: ba2ab(nonce), additionalData: ba2ab(aad)}, 
         swkCryptoKey, 
         ba2ab(seg_enc.slice(8))); //encrypted segment is prepended with 8 bytes of IV
@@ -472,12 +472,12 @@ async function verifyECParamsSig(cert_ba, ECpubkey, sig, cr, sr){
    
    var to_be_signed = [].concat(cr, sr, [0x03, 0x00, 0x17, 0x41], ECpubkey) //4 bytes of EC Diffie-Hellman Server Params + pubkey
    try {
-    var rsa_pubkey = await window.crypto.subtle.importKey(
+    var rsa_pubkey = await crypto.subtle.importKey(
       "jwk",
       jwk,
       {name: 'RSASSA-PKCS1-v1_5', hash:'SHA-256'},
       true, ["verify"]);
-    var result = await window.crypto.subtle.verify('RSASSA-PKCS1-v1_5', rsa_pubkey, ba2ab(sig), ba2ab(to_be_signed))
+    var result = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', rsa_pubkey, ba2ab(sig), ba2ab(to_be_signed))
    } catch (e) {
      console.log(e, e.name)
      throw(e)
@@ -491,9 +491,9 @@ async function verifyNotarySig(sigDER, pkPEM, signed_data_ba){
   var sig_p1363 = sigDER2p1363(sigDER)
   var notaryPubkey_ba = pubkeyPEM2raw(pkPEM)
   try {
-    var notary_pk_CryptoKey = await window.crypto.subtle.importKey(
+    var notary_pk_CryptoKey = await crypto.subtle.importKey(
       "raw", ba2ab(notaryPubkey_ba), {name: 'ECDSA', namedCurve:'P-256'}, true, ["verify"]);
-    var result = await window.crypto.subtle.verify(
+    var result = await crypto.subtle.verify(
       {'name':'ECDSA', 'hash':'SHA-256'}, notary_pk_CryptoKey, ba2ab(sig_p1363), ba2ab(signed_data_ba))
     if (!result) throw('notary signature verification failed')
   } catch (e) {
@@ -501,4 +501,14 @@ async function verifyNotarySig(sigDER, pkPEM, signed_data_ba){
     throw(e)
   }
   return true;
+}
+
+if (typeof module !== 'undefined'){ //we are in node.js environment
+  module.exports={
+    decrypt_tls_response,
+    start_audit,
+    verifyECParamsSig,
+    verifyNotarySig,
+    getExpandedKeys
+  }
 }

@@ -142,17 +142,17 @@ function ba2str(ba) {
 
 
 async function sha256(ba) {
-  var digest =  await window.crypto.subtle.digest('SHA-256', ba2ab(ba))
+  var digest =  await crypto.subtle.digest('SHA-256', ba2ab(ba))
   return (ab2ba(digest))
 }
 
 
 
 function assert(condition, message) {
-    if (!condition) {
-      throw message || "Assertion failed";
-    }
+  if (!condition) {
+    throw message || "Assertion failed";
   }
+}
 
 function isdefined(obj) {
   assert(typeof(obj) !== "undefined", "obj was undefined");
@@ -166,27 +166,46 @@ function log() {
 }
 
 
-function getRandom(number, window) {
+function getRandom(number) {
   //window was undefined in this context, so i decided to pass it explicitely
-  return Array.from(window.crypto.getRandomValues(new Uint8Array(number)));
+  return Array.from(crypto.getRandomValues(new Uint8Array(number)));
 }
 
 
 
 function b64encode(aBytes) {
-  return btoa(String.fromCharCode.apply(null, aBytes));
+  if (typeof window === 'undefined') {
+    //running in nodejs
+    return Buffer.from(aBytes).toString('base64');
+  }
+  else {
+    return btoa(String.fromCharCode.apply(null, aBytes));
+  }
 }
 
 
-function b64decode(sBase64, nBlocksSize) {
-  return atob(sBase64).split("").map(function(c) {
-    return c.charCodeAt(0);
-  });
+function b64decode(sBase64) {
+  if (typeof window === 'undefined') {
+    //running in nodejs
+    return Buffer.from(sBase64, 'base64').toJSON().data;
+  }
+  else {
+    return atob(sBase64).split("").map(function(c) {
+      return c.charCodeAt(0);
+    });
+  }
 }
 
 //conform to base64url format replace +/= with -_ 
 function b64urlencode (aBytes){
-  var str = btoa(String.fromCharCode.apply(null, aBytes));
+  var str;
+  if (typeof window === 'undefined') {
+    //running in nodejs
+    str = Buffer.from(aBytes).toString('base64');
+  }
+  else {
+    str = btoa(String.fromCharCode.apply(null, aBytes));
+  }
   return str.split('+').join('-').split('/').join('_').split('=').join('')
 }
 
@@ -227,7 +246,7 @@ function gunzip_http(http_data) {
   //#\s* below means any amount of whitespaces
   if (http_header.search(/content-encoding:\s*deflate/i) > -1) {
     //#TODO manually resend the request with compression disabled
-    throw ('Please set gzip_disabled = 1 in tlsnotary.ini and rerun the audit');
+    throw ('please disable compression and rerun the notarization');
   }
   if (http_header.search(/content-encoding:\s.*gzip/i) === -1) {
     console.log('nothing to gunzip');
@@ -324,4 +343,29 @@ function wildTest(wildcard, str) {
   let w = wildcard.replace(/[.+^${}()|[\]\\]/g, '\\$&'); // regexp escape 
   const re = new RegExp(`^${w.replace(/\*/g,'.*').replace(/\?/g,'.')}$`,'i');
   return re.test(str); // remove last 'i' above to have case sensitive
+}
+
+
+if (typeof module !== 'undefined'){ //we are in node.js environment
+  module.exports={
+    assert,
+    ba2ab,
+    ba2str,
+    bi2ba,
+    ab2ba,
+    ba2int,
+    b64encode,
+    b64decode,
+    b64urlencode,
+    dechunk_http,
+    gunzip_http,
+    eq,
+    getTime,
+    pem2ab,
+    pubkeyPEM2raw,
+    sha256,
+    sigDER2p1363,
+    str2ba,
+    wildTest
+  }
 }

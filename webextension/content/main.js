@@ -1,11 +1,9 @@
-var chosen_notary;
 var browser_init_finished = false; //signal to test script when it can start
 var mustVerifyCert = true; //set to false during debugging to be able to work with self-signed certs
 var portPopup;
 var portManager = null;
 var notarization_in_progress = false;
 var waiting_for_click = false; 
-var is_chrome = window.navigator.userAgent.match('Chrome') ? true : false;
 var appId = null; //Chrome uses to send message to external Chrome app. Firefox uses it's own id
 var popupError = null; //set to non-null when there is some error message that must be shown
 //via the popup
@@ -482,8 +480,10 @@ async function startNotarizing(headers, server, port) {
   }
   loadBusyIcon();
   try{
-    let rv = await start_audit(server, port, headers)
-    await save_session_and_open_data(rv, server)
+    let rv = await start_audit(server, port, headers);
+    let sessionId = await save_session(rv);
+    await showData(sessionId);
+
   }
   catch (err){
     console.log('There was an error: ' + err);
@@ -503,7 +503,7 @@ async function startNotarizing(headers, server, port) {
 }
 
 
-async function save_session_and_open_data(args, server) {  
+async function save_session(args) {  
   assert(args.length === 11, "wrong args length");
   var idx = -1;
   var client_random = args[idx+=1]
@@ -544,16 +544,20 @@ async function save_session_and_open_data(args, server) {
 
   var commonName = getCommonName(server_certchain[0]);
   var creationTime = getTime();
-  await createNewSession (creationTime, commonName, cleartext, pgsg, false)
-  await openTab(creationTime);
+  await createNewSession (creationTime, commonName, cleartext, pgsg, false);
+  return creationTime; //creationTime is also a session ID
+}
+
+
+async function showData (sid){
+  await openTab(sid);
   var allSessions = await getAllSessions(); 
   sendSessions(allSessions); //refresh manager
 }
 
 
-
 //imported_data is an array of ints
-async function verify_tlsn(data) {
+async function verify_pgsg(data) {
   var o = 0; //offset
   if (ba2str(data.slice(o, o += 29)) !== "tlsnotary notarization file\n\n") {
     throw ('wrong header');
@@ -598,14 +602,14 @@ async function verify_tlsn(data) {
   }
 
   //calculate pre-master secre
-  var ECpubkey_CryptoKey = await window.crypto.subtle.importKey(
+  var ECpubkey_CryptoKey = await crypto.subtle.importKey(
     "raw",
      ba2ab(ec_pubkey_server),
     {name: 'ECDH', namedCurve:'P-256'},
     true,
     []);
 
-  var ECprivkey_CryptoKey = await window.crypto.subtle.importKey(
+  var ECprivkey_CryptoKey = await crypto.subtle.importKey(
     "jwk",
     {
     "crv":"P-256",
@@ -646,7 +650,7 @@ async function verify_tlsn(data) {
 //imported_data is an array of numbers
 async function verify_tlsn_and_show_data(imported_data, create) {
   try {
-    var a = await verify_tlsn(imported_data);
+    var a = await verify_pgsg(imported_data);
   } catch (e) {
     sendAlert({
       title: 'PageSigner failed to import file',
@@ -888,4 +892,14 @@ function loadNormalIcon() {
 
 //This must be at the bottom, otherwise we'd have to define each function
 //before it gets used.
-main();
+if (typeof(window) != 'undefined') {
+  //only run main() in browser environment
+  main();
+}
+
+if (typeof module !== 'undefined'){ //we are in node.js environment
+  module.exports={
+    save_session,
+    verify_pgsg
+  }
+}

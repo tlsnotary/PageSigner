@@ -196,7 +196,7 @@ function checkGetUser(xmlDoc, ownerId) {
 async function fetch_and_parse(url){
   var req = await fetch(url)
   var text = await req.text()
-  var xmlDoc = new window.DOMParser().parseFromString(text, "text/xml")
+  var xmlDoc = new DOMParser().parseFromString(text, "text/xml")
   return xmlDoc
 }
 
@@ -240,5 +240,12 @@ async function check_oracle(o) {
   }
   assert(new Set(ids).size === 1);
   console.log('oracle verification successfully finished');
-    
+  return true;
+}
+
+if (typeof module !== 'undefined'){ //we are in node.js environment
+  module.exports={
+    check_oracle,
+    oracle
+  }
 }

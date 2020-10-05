@@ -18,8 +18,8 @@ AbstractSocket.prototype.recv = function(is_handshake) {
     var resolved = false;
 
     var timer = setTimeout(function() {
-      reject('recv: socket timed out');
       resolved = true;
+      reject('recv: socket timed out');
     }, that.recv_timeout);
 
     var check = function() {
@@ -183,5 +183,11 @@ function check_complete_records(d) {
       d = d.slice(l + 5);
       continue;
     }
+  }
+}
+
+if (typeof module !== 'undefined'){ //we are in node.js environment
+  module.exports={
+    check_complete_records
   }
 }
