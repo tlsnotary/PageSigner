@@ -1,0 +1,33 @@
+pgsg-node allows you to run PageSigner without the browser using nodejs
+
+Install the dependencies:
+
+npm install node-fetch asn1js pkijs universal-dom-parser @peculiar/webcrypto
+
+
+NB! You must supply the file with HTTP headers with --headers path/to/headers
+The most basic headers file looks like this:
+
+GET /r/worldnews/ HTTP/1.1
+Host: www.reddit.com <---first /r/n
+<---second /r/n
+
+Note that there are two carriage returns '/r/n/r/n' after the last header's last letter  
+
+
+
+
+Usage: pgsg-node <command> [option]
+
+where <command> is one of notarize, verify, awscheck
+
+Examples:
+
+pgsg-node notarize example.com --headers headers.txt
+Notarize example.com using HTTP headers from headers.txt
+
+pgsg-node verify imported.pgsg
+Verify a Pagesigner session from imported.pgsg. This will create a session directory with the decrypted cleartext and the copy of the pgsg file.
+
+pgsg-node awscheck
+Check that Pagesigner's oracle server is correctly set up. This check must be performed only once on the first use of pgsg-node. There is no need to perform the check more than once because the oracle server's parameters are hardcoded. Once the check completes successfully, the hardcoded parameters can be trusted for all future invocations of pgsg-node.
