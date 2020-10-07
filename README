@@ -1,9 +1,12 @@
-Firefox addon creation is not supported anymore due to missing API in Firefox.
+PageSigner works with many Chromium-based browsers (e.g. Chromium, Vivaldi, Brave, Google Chrome)
 
-To create a Chrome extension:
+You can load PageSigner from the source files of this repo this way:
 
 1. go to chrome://extensions and Enable "Developer mode"
 
 2. Click "Load unpacked" 
 
 3. Navigate inside pagesigner's top folder and click Open.
+
+-----
+Firefox addon creation is not supported anymore due to missing API in Firefox.
