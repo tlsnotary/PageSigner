@@ -118,17 +118,37 @@ function openFilePicker(){
 
   chrome.tabs.create({url: url},
   async function(t){
-    setTimeout(async function(){
-      var myViews = chrome.extension.getViews();
-      for (let win of myViews){
-        if (myTabs.includes(win.tabid)) continue;
-        //found a new tab
-        win.showFilePicker()
-        win.tabid = t.id;
-        var is_testing = await getPref('testing')
-        if (is_testing) win.prepare_testing()
-      }
-    }, 100)
+
+    function check(){
+
+      console.log('checking if file picker is ready...')
+      setTimeout(async function(){
+        var myViews = chrome.extension.getViews();
+        //sometimes the View for the newly opened tab may not yet be available 
+        //so we must wait a little longer
+        var isViewReady = false;
+        for (let win of myViews){
+          if (myTabs.includes(win.tabid)) continue;
+          //found a new tab
+          if (typeof(win.showFilePicker) == 'undefined') {
+            //viewer.js hasnt yet been loaded into the DOM
+            check();
+            return;
+          }
+          isViewReady = true;
+          win.showFilePicker()
+          win.tabid = t.id;
+          var is_testing = await getPref('testing')
+          if (is_testing) win.prepare_testing()
+        }
+        if (! isViewReady){
+          check();
+        }
+      }, 10)
+
+    }
+    check();
+
   })
 }
 
