@@ -3,14 +3,14 @@
 
   "name": "PageSigner",
   "description": "PageSigner - a cryptographically secure webpage screenshot tool",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "TLSNotary Group",
 
   "permissions": [
     "webRequest",
-    "management",
     "activeTab"
   ],
+
 
   "icons": {
     "64": "icon.png"

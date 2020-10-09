@@ -105,8 +105,14 @@ Socket.prototype.connect = function() {
         'uid': that.uid
       },
       function(response) {
-        console.log('in connect response', response);
+        //we need to access runtime.lastError to prevent Chrome from complaining
+        //about unchecked error 
+        chrome.runtime.lastError
         clearInterval(timer);
+        if (response === undefined){
+          reject(undefined);
+          return;
+        }
         if (response.retval === 'success') {
           //endless data fetching loop for the lifetime of this Socket
           var fetch = function() {

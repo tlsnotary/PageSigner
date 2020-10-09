@@ -34,7 +34,7 @@ function openChromeExtensions(){
 
 
 //Pagesigner's popup has been clicked 
-function popupProcess(){
+async function popupProcess(){
   if (notarization_in_progress) {
     sendToPopup({
       'destination': 'popup',
@@ -67,36 +67,33 @@ function popupProcess(){
     return;
   }
   //else{} the checks below are only for Chrome
-  chrome.management.get(appId, function(info) {
-    if (!info) {
+  //probe a non-existent port, if reject()ed with undefined, then the helper app is not running
+  try{
+    await new Socket('127.0.0.1', -1).connect();
+  }
+  catch(error){
+    if (error === undefined){
       chrome.runtime.sendMessage({
         'destination': 'popup',
         'message': 'app_not_installed'
       });
       return;
     }
-    if (info.enabled === false) {
-      chrome.runtime.sendMessage({
-        'destination': 'popup',
-        'message': 'app_disabled'
-      });
-      return;
-    }
-    if (popupError) {
-      chrome.runtime.sendMessage({
-        'destination': 'popup',
-        'message': 'popup error',
-        'data': popupError
-      });
-      popupError = null;
-      loadNormalIcon();
-    } else {
-      chrome.runtime.sendMessage({
-        'destination': 'popup',
-        'message': 'show_menu'
-      });
-    }
-  });
+  }
+  if (popupError) {
+    chrome.runtime.sendMessage({
+      'destination': 'popup',
+      'message': 'popup error',
+      'data': popupError
+    });
+    popupError = null;
+    loadNormalIcon();
+  } else {
+    chrome.runtime.sendMessage({
+      'destination': 'popup',
+      'message': 'show_menu'
+    });
+  }
 }
 
 
