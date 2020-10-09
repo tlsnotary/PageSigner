@@ -46,7 +46,16 @@ const start_audit = async function(server, port, headers){
   server_name_extension = server_name_extension.concat(bi2ba(server_name.length, {fixed:2})) //Server Name Length
   server_name_extension = server_name_extension.concat(server_name)
 
-  let extlen = supported_groups_extension.length + signature_algorithm_extension.length + server_name_extension.length
+  let max_fragment_length_extension = []
+  if (use_max_fragment_length){
+    max_fragment_length_extension.push(0x00, 0x01) //Type: max_fragment_length
+    max_fragment_length_extension.push(0x00, 0x01) //Length
+    //allowed values 0x01 = 512 0x02 = 1024 0x03 = 2048 0x04 = 4096
+    //some servers support 0x04 but send alert if < 0x04
+    max_fragment_length_extension.push(0x04)
+  }
+  
+  let extlen = supported_groups_extension.length + signature_algorithm_extension.length + server_name_extension.length + max_fragment_length_extension.length
 
   ch = []
   ch.push(0x01) //Handshake type: Client Hello 
@@ -61,7 +70,7 @@ const start_audit = async function(server, port, headers){
   ch.push(0x00) //Compression Method: null
 
   ch = ch.concat( bi2ba((extlen), {fixed:2}) )
-  ch = [].concat(ch, supported_groups_extension, signature_algorithm_extension, server_name_extension)
+  ch = [].concat(ch, supported_groups_extension, signature_algorithm_extension, server_name_extension, max_fragment_length_extension)
   all_handshakes = all_handshakes.concat(ch)
 
   var tls_record_header = []
