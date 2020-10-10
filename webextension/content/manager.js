@@ -29,9 +29,21 @@ function onload() {
           return ab;
         };
 
+        //converts string to bytearray
+        function str2ba(str) {
+          if (typeof(str) !== "string") {
+            throw ("Only type string is allowed in str2ba");
+          }
+          ba = [];
+          for (var i = 0; i < str.length; i++) {
+            ba.push(str.charCodeAt(i));
+          }
+          return ba;
+        }
+
         //.payload contains {pgsg: pgsg_blob, name: session_name}
-        var ba = data.payload.pgsg
-        var ab = ba2ab(ba);
+        var str = data.payload.pgsg
+        var ab = ba2ab(str2ba(str));
         var exportedBlob = new Blob([ab]);
         var exportedBlobUrl = URL.createObjectURL(exportedBlob, {
           type: 'application/octet-stream'

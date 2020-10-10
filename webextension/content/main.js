@@ -1,4 +1,3 @@
-var browser_init_finished = false; //signal to test script when it can start
 var mustVerifyCert = true; //set to false during debugging to be able to work with self-signed certs
 var portPopup;
 var portManager = null;
@@ -7,7 +6,6 @@ var waiting_for_click = false;
 var appId = null; //Chrome uses to send message to external Chrome app. Firefox uses it's own id
 var popupError = null; //set to non-null when there is some error message that must be shown
 //via the popup
-var testing = false;
 var tabid = 0; //a signal that this is the main window when querying with .getViews()
 
 
@@ -344,12 +342,12 @@ async function process_message(data) {
       sendSessions(dataarray);
       break;
     case 'import':
-      verify_tlsn_and_show_data(data.args.data, true);
+      verify_pgsg_and_show_data(data.args.data, true);
       break;
     case 'export':
       let pgsg = await getPGSG(data.args.dir)
       let value = await getSession(data.args.dir)
-      sendToManager({'pgsg':pgsg, 'name':value.sessionName}, 'export')
+      sendToManager({'pgsg':JSON.stringify(pgsg), 'name':value.sessionName}, 'export')
       break;
     case 'notarize':
       prepareNotarizing(false);
@@ -418,7 +416,7 @@ async function main() {
           console.log('in filepicker-to-extension got data', data);
           if (data.destination !== 'extension') return;
           if (data.message !== 'import') return;
-          verify_tlsn_and_show_data(data.args.data, true);
+          verify_pgsg_and_show_data(data.args.data, true);
         });
       } else if (port.name == 'notification-to-extension') {
         port.onMessage.addListener(function(data) {
@@ -443,6 +441,14 @@ async function main() {
 
 async function init() {
   await init_db();
+  var alreadyConverted = await getPref('alreadyConverted');
+  if (alreadyConverted != true){
+    //will be run only once when Pagesigner 2.1.0 is released
+    //converts db's binary pgsgs into json 
+    await addNewPreference('alreadyConverted', false)
+    await convert_db();
+    await setPref('alreadyConverted', true);
+  }
   await parse_certs();
   var is_verbose = await getPref('verbose');
   if (is_verbose !== true && !is_chrome) {
@@ -520,6 +526,8 @@ async function startNotarizing(headers, server, port) {
 }
 
 
+
+
 async function save_session(args) {  
   assert(args.length === 11, "wrong args length");
   var idx = -1;
@@ -529,35 +537,31 @@ async function save_session(args) {
   var rsa_sig = args[idx+=1]
   var ec_pubkey_server = args[idx+=1]
   var ec_pubkey_client = args[idx+=1]
-  var server_reply = args[idx+=1]
+  var server_response = args[idx+=1]
   var cleartext = args[idx+=1]
   var notary_signature = args[idx+=1]
   var ec_privkey = args[idx+=1]
   var time = args[idx+=1]
 
-  var server_chain_serialized = []; //3-byte length prefix followed by cert
-  for (let cert of server_certchain) {
-    server_chain_serialized = [].concat(server_chain_serialized,
-      bi2ba(cert.length, {'fixed': 3}), cert);
+  var pgsg_json = {}
+  pgsg_json["title"] = "PageSigner notarization file"
+  pgsg_json["version"] = 3
+  pgsg_json["client random"] = b64encode(client_random)
+  pgsg_json["server random"] = b64encode(server_random)
+  pgsg_json["certificate chain"] = {}
+  for (let [idx, cert] of server_certchain.entries()) {
+    let key = 'cert'+idx.toString()
+    pgsg_json["certificate chain"][key] = b64encode(cert)
   }
-
-  var pgsg = [].concat(
-    str2ba('tlsnotary notarization file\n\n'), [0x00, 0x03],
-    client_random,
-    server_random,
-    bi2ba(server_chain_serialized.length, {'fixed': 3}),
-    server_chain_serialized,
-    bi2ba(rsa_sig.length, {'fixed': 2}),
-    rsa_sig,
-    ec_pubkey_server,
-    ec_pubkey_client,
-    bi2ba(server_reply.length, {'fixed': 4}),
-    server_reply,
-    bi2ba(notary_signature.length, {'fixed': 1}),
-    notary_signature,
-    ec_privkey,
-    time
-  );
+  pgsg_json["server RSA signature over EC pubkey"] = b64encode(rsa_sig)
+  pgsg_json["server EC pubkey"] = b64encode(ec_pubkey_server)
+  pgsg_json["client EC pubkey"] = b64encode(ec_pubkey_client)
+  pgsg_json["server response"] = b64encode(server_response)
+  pgsg_json["notary signature"] = b64encode(notary_signature)
+  pgsg_json["client EC privkey"] = b64encode(ec_privkey)
+  pgsg_json["notarization time"] = b64encode(time)
+  pgsg_json["notary name"] = chosen_notary.name
+  var pgsg = pgsg_json
 
   var commonName = getCommonName(server_certchain[0]);
   var creationTime = getTime();
@@ -573,8 +577,12 @@ async function showData (sid){
 }
 
 
-//imported_data is an array of ints
-async function verify_pgsg(data) {
+//convert an old binary-formatted pgsg into a json formatted one
+function convertPgsg(data){
+  if (ba2str(data.slice(0,1)) == '{') {
+    //data is in json already nothing to convert
+    return data
+  }
   var o = 0; //offset
   if (ba2str(data.slice(o, o += 29)) !== "tlsnotary notarization file\n\n") {
     throw ('wrong header');
@@ -591,7 +599,7 @@ async function verify_pgsg(data) {
   var ec_pubkey_server = data.slice(o, o += 65)
   var ec_pubkey_client = data.slice(o, o += 65);
   var server_reply_len = ba2int(data.slice(o, o += 4));
-  var server_reply = data.slice(o, o += server_reply_len);
+  var server_response = data.slice(o, o += server_reply_len);
   var notary_signature_len = ba2int(data.slice(o, o += 1));
   var notary_signature = data.slice(o, o += notary_signature_len);
   var ec_privkey = data.slice(o, o += 32);
@@ -606,9 +614,52 @@ async function verify_pgsg(data) {
     chain.push(cert);
   }
 
-  var commonName = getCommonName(chain[0]);
+  var pgsg_json = {}
+  pgsg_json["title"] = "PageSigner notarization file"
+  pgsg_json["version"] = 3
+  pgsg_json["client random"] = b64encode(client_random)
+  pgsg_json["server random"] = b64encode(server_random)
+  pgsg_json["certificate chain"] = {}
+  for (let [idx, cert] of chain.entries()) {
+    let key = 'cert'+idx.toString()
+    pgsg_json["certificate chain"][key] = b64encode(cert)
+  }
+  pgsg_json["server RSA signature over EC pubkey"] = b64encode(rsa_sig)
+  pgsg_json["server EC pubkey"] = b64encode(ec_pubkey_server)
+  pgsg_json["client EC pubkey"] = b64encode(ec_pubkey_client)
+  pgsg_json["server response"] = b64encode(server_response)
+  pgsg_json["notary signature"] = b64encode(notary_signature)
+  pgsg_json["client EC privkey"] = b64encode(ec_privkey)
+  pgsg_json["notarization time"] = b64encode(time)
+  pgsg_json["notary name"] = "tlsnotarygroup8"
+  var pgsg = str2ba(JSON.stringify(pgsg_json))
+  return pgsg
+}
+
+
+
+
+//pgsg is in json
+async function verifyPgsg(json) {
+  var client_random = b64decode(json['client random'])
+  var server_random = b64decode(json['server random'])
+  var chain = []
+  var certNumber = Object.keys(json['certificate chain']).length
+  for (var i=0; i<certNumber; i++){
+    let key = 'cert' + i.toString()
+    chain.push(b64decode(json['certificate chain'][key]))
+  }
+  var rsa_sig = b64decode(json['server RSA signature over EC pubkey'])
+  var ec_pubkey_server = b64decode(json['server EC pubkey']) 
+  var ec_pubkey_client = b64decode(json['client EC pubkey'])
+  var server_response = b64decode(json['server response'])
+  var notary_signature = b64decode(json['notary signature'])
+  var ec_privkey = b64decode(json['client EC privkey'])
+  var time = b64decode(json['notarization time'])
+  
   var seconds = ba2int(time)
   var date = new Date(seconds*1000)
+  var commonName = getCommonName(chain[0]);
   var vcrv = await verifyChain(chain, date); 
   if (vcrv[0] != true) {
     throw ('certificate verification failed');
@@ -651,23 +702,25 @@ async function verify_pgsg(data) {
   var server_write_IV = keys[3]
   console.log('server_write_key, server_write_IV', server_write_key, server_write_IV)
   
-  //calculate commit_hash from server_reply
-  var commit_hash = await sha256(server_reply)
+  var commit_hash = await sha256(server_response)
   //check notary server signature
   var signed_data_ba = await sha256([].concat(ec_privkey, ec_pubkey_server, commit_hash, time))
   assert(await verifyNotarySig(notary_signature, chosen_notary.pubkeyPEM, signed_data_ba) == true)
   //aesgcm decrypt the data
-  var cleartext = await decrypt_tls_response (server_reply, server_write_key, server_write_IV)
+  var cleartext = await decrypt_tls_response (server_response, server_write_key, server_write_IV)
   var dechunked = dechunk_http(ba2str(cleartext))
   var ungzipped = gunzip_http(dechunked)
   return [ungzipped, commonName];
 }
 
 
-//imported_data is an array of numbers
-async function verify_tlsn_and_show_data(imported_data, create) {
+//imported_data is ba
+async function verify_pgsg_and_show_data(imported_data, create) {
   try {
-    var a = await verify_pgsg(imported_data);
+    //convert old binary format (if any) to json
+    imported_data = convertPgsg(imported_data)
+    var json = JSON.parse(ba2str(imported_data))
+    var a = await verifyPgsg(json);
   } catch (e) {
     sendAlert({
       title: 'PageSigner failed to import file',
@@ -679,7 +732,7 @@ async function verify_tlsn_and_show_data(imported_data, create) {
   var cleartext = a[0];
   var commonName = a[1];
   var creationTime = getTime();
-  await createNewSession (creationTime, commonName, cleartext, imported_data, true)
+  await createNewSession (creationTime, commonName, cleartext, json, true)
   await openTab(creationTime);
   var allSessions = await getAllSessions();
   sendSessions(allSessions); //refresh manager
@@ -917,6 +970,6 @@ if (typeof(window) != 'undefined') {
 if (typeof module !== 'undefined'){ //we are in node.js environment
   module.exports={
     save_session,
-    verify_pgsg
+    verifyPgsg
   }
 }

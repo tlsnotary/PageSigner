@@ -55,6 +55,109 @@ async function init_db() {
 }
 
 
+async function addNewPreference(key, value){
+  //check if the preference already exists
+  var p = new Promise(function(resolve, reject) {
+
+    let tx = db.transaction(['preferences'], 'readonly');
+    let store = tx.objectStore('preferences');
+    let req = store.getAll();
+
+    req.onsuccess = function(event) {
+    // The result of req.onsuccess is an array
+    resolve(event.target.result)
+    console.log('end db')
+    }
+    req.onerror = function(event) {
+    alert('error in cursor request ' + event.target.errorCode);
+    reject('error in cursor request ' + event.target.errorCode)
+    }
+  })
+  var allPreferences = await p;
+  for (let pref of allPreferences){
+    if (pref['name'] == key){
+      return;
+    }
+  }
+  //preference does not exist, add it
+  return new Promise(function(resolve, reject) {
+    let tx = db.transaction(['preferences'], 'readwrite');
+    let store = tx.objectStore('preferences');
+    store.add({name:key, value:value});
+    tx.oncomplete = function() { 
+      resolve();
+    }
+    tx.onerror = function(event) {
+      alert('error storing ' + event.target.errorCode);
+      reject();
+    }
+  })
+}
+
+
+//converts all binary pgsgs into json format
+async function convert_db(){
+  var all = new Promise(function(resolve, reject) {
+
+    console.log('begin db')
+    let tx = db_blobs.transaction(['sessions'], 'readwrite');
+    let store = tx.objectStore('sessions');
+    let req = store.getAll();
+
+    req.onsuccess = function(event) {
+      // The result of req.onsuccess is an array
+      resolve(event.target.result)
+      console.log('end db')
+    }
+    req.onerror = function(event) {
+      alert('error in cursor request ' + event.target.errorCode);
+      reject('error in cursor request ' + event.target.errorCode)
+    }
+  })
+
+  var allSessions = await all;
+  for (let session of allSessions){
+    var id = session['creationTime']
+    var p = new Promise(function(resolve, reject) {
+  
+      // Start a database transaction and get the object store
+      let tx = db_blobs.transaction(['sessions'], 'readwrite');
+      let sessions = tx.objectStore('sessions')
+      var request = sessions.get(id)
+    
+      request.onsuccess = function(event) {
+        // Get the old value that we want to update
+        var data = event.target.result;
+        
+        // update the value(s) in the object that you want to change
+        var oldPgsg = data.pgsg
+        if (oldPgsg.slice == undefined){
+          //a json object which we don't need to touch
+          resolve();
+          return;
+        }
+        var newPgsg = convertPgsg(oldPgsg)
+        data.pgsg = JSON.parse(ba2str(newPgsg));
+      
+        // Put this updated object back into the database.
+        var requestUpdate = sessions.put(data);
+         requestUpdate.onerror = function(event) {
+           // Do something with the error
+           reject()
+         };
+         requestUpdate.onsuccess = function(event) {
+           // Success - the data is updated!
+           resolve();
+         };
+      };
+      })
+      await p;
+  } 
+
+
+}
+
+
 function deleteSession(session) {
     return new Promise(function(resolve, reject) {
   
@@ -88,7 +191,6 @@ return new Promise(function(resolve, reject) {
     let tx = db.transaction(['sessions'], 'readonly');
     let store = tx.objectStore('sessions');
     let req = store.getAll();
-    let allSessions = [];
 
     req.onsuccess = function(event) {
     // The result of req.onsuccess is an array
@@ -104,14 +206,14 @@ return new Promise(function(resolve, reject) {
 
   
 
-async function createNewSession (creationTime, commonName, cleartext, pgsg, is_imported){
+async function createNewSession (creationTime, commonName, notaryName, cleartext, pgsg, is_imported){
     return new Promise(function(resolve, reject) {
       let tx = db.transaction(['sessions'], 'readwrite');
       let store = tx.objectStore('sessions');
       let was_imported = false;
       if (is_imported == true) was_imported = true;
       let entry = {creationTime: creationTime, sessionName: commonName,
-        serverName:commonName, is_imported:was_imported};
+        serverName:commonName, notaryName:notaryName, is_imported:was_imported};
       store.add(entry);
       tx.oncomplete = function() { 
         resolve();

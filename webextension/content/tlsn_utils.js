@@ -179,7 +179,15 @@ function b64encode(aBytes) {
     return Buffer.from(aBytes).toString('base64');
   }
   else {
-    return btoa(String.fromCharCode.apply(null, aBytes));
+    //if aBytes is too large > ~100 KB, we may get an error
+    //RangeError: Maximum call stack size exceeded
+    //therefore we split the input into chunks
+    var strings = '';
+    var chunksize = 4096;
+    for (var i = 0; i * chunksize < aBytes.length; i++){
+      strings += String.fromCharCode.apply(null, aBytes.slice(i * chunksize, (i + 1) * chunksize));
+    }
+    return btoa(strings);
   }
 }
 
