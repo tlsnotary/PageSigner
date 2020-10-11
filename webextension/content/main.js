@@ -656,6 +656,20 @@ async function verifyPgsg(json) {
   var notary_signature = b64decode(json['notary signature'])
   var ec_privkey = b64decode(json['client EC privkey'])
   var time = b64decode(json['notarization time'])
+  var notaryName = json["notary name"]
+  var notary;
+  if (notaryName == oracle.name){
+    notary = oracle;
+  }
+  else{
+    var rv = await verifyOldOracle(notaryName);
+    if (rv.result == true){
+      notary = rv.oracle;
+    }
+    else{
+      throw('unrecognized oracle in the imported file')
+    }
+  }
   
   var seconds = ba2int(time)
   var date = new Date(seconds*1000)
@@ -705,12 +719,12 @@ async function verifyPgsg(json) {
   var commit_hash = await sha256(server_response)
   //check notary server signature
   var signed_data_ba = await sha256([].concat(ec_privkey, ec_pubkey_server, commit_hash, time))
-  assert(await verifyNotarySig(notary_signature, chosen_notary.pubkeyPEM, signed_data_ba) == true)
+  assert(await verifyNotarySig(notary_signature, notary.pubkeyPEM, signed_data_ba) == true)
   //aesgcm decrypt the data
   var cleartext = await decrypt_tls_response (server_response, server_write_key, server_write_IV)
   var dechunked = dechunk_http(ba2str(cleartext))
   var ungzipped = gunzip_http(dechunked)
-  return [ungzipped, commonName];
+  return [ungzipped, commonName, notaryName];
 }
 
 
@@ -731,8 +745,9 @@ async function verify_pgsg_and_show_data(imported_data, create) {
   if (!create) return;
   var cleartext = a[0];
   var commonName = a[1];
+  var notaryName = a[2]
   var creationTime = getTime();
-  await createNewSession (creationTime, commonName, cleartext, json, true)
+  await createNewSession (creationTime, commonName, notaryName, cleartext, json, true)
   await openTab(creationTime);
   var allSessions = await getAllSessions();
   sendSessions(allSessions); //refresh manager
@@ -828,11 +843,18 @@ async function viewRaw(sid) {
 function sendSessions(sessions) {
   var rows = []
   for (let session of sessions){
+    var verifier;
+    if (session.notaryName == undefined){
+      verifier = 'tlsnotarygroup8'
+    }
+    else {
+      verifier = session.notaryName;
+    }
     rows.push({
       'sessionName': session.sessionName,
       'serverName': session.serverName,
       'is_imported': session.is_imported,
-      'verifier': 'tlsnotarygroup8',
+      'verifier': verifier,
       'creationTime': session.creationTime,
     });
   }

@@ -1,8 +1,8 @@
-var snapshotID = 'snap-0f838cf4591ac24e0';
-var imageID = 'ami-0a93db37bec3fda42';
 var oracles_intact = false; //must be explicitely set to true
 
 var oracle = {
+  'snapshotId': 'snap-0f838cf4591ac24e0',
+  'imageId': 'ami-0a93db37bec3fda42',
   'name': 'tlsnotarygroup8',
   'IP': '34.229.208.191',
   'port': '10011',
@@ -13,8 +13,20 @@ var oracle = {
   'DIAud':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=userData&Expires=2025-01-01&InstanceId=i-0c4f98aeeac5308da&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=mu8lWuB688ouVOkSL7M5ZS0y%2FLCcxMME4%2Bg6iikS5TE%3D',
   'DIAk':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=kernel&Expires=2025-01-01&InstanceId=i-0c4f98aeeac5308da&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=MmEJF7Ic4eOnWeH%2BGyheVApqKh8mrQX2rwQabiyvWhw%3D',
   'DIAr':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=ramdisk&Expires=2025-01-01&InstanceId=i-0c4f98aeeac5308da&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=IqNgbD%2FlGhvYQ8ndbMCz3PMFQjeGqBPvTU83repfJEs%3D',
+  'DImg':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeImages&Expires=2025-01-01&ImageId.1=ami-0a93db37bec3fda42&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=xFhBqWoOyltYXRv%2F5SDCMfQBpDXFH2QPQBkgQahE8Ic%3D',
   'instanceId': 'i-0c4f98aeeac5308da',
   'pubkeyPEM': '-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE1XR5GYA7XmgMqH87HNaay4Xlzozs\nRflEv4VHWchpJteey5MRTn31e+pycFpOdaw6ybH8qfzkml1apoSl8+mO2A==\n-----END PUBLIC KEY-----'
+}
+
+//until we deploy tlsnotarygroup9 this is just a placeholder
+var old_oracle = {
+  // 'snapshotId': 'snap-0f838cf4591ac24e0',
+  // 'imageId': 'ami-0a93db37bec3fda42',
+  // 'name': 'tlsnotarygroup7',
+  // 'IP': '34.229.208.191',
+  // 'port': '10011',
+  // 'instanceId': 'i-0c4f98aeeac5308da',
+  // 'pubkeyPEM': '-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE1XR5GYA7XmgMqH87HNaay4Xlzozs\nRflEv4VHWchpJteey5MRTn31e+pycFpOdaw6ybH8qfzkml1apoSl8+mO2A==\n-----END PUBLIC KEY-----'
 }
 
 
@@ -43,7 +55,7 @@ function getSecondsDelta(later, sooner) {
 
 
 
-function checkDescribeInstances(xmlDoc, instanceId, IP) {
+function checkDescribeInstances(xmlDoc, instanceId, IP, imageId) {
   try {
     var rs = xmlDoc.getElementsByTagName('reservationSet');
     assert(rs.length === 1);
@@ -56,7 +68,7 @@ function checkDescribeInstances(xmlDoc, instanceId, IP) {
     assert(instances.length === 1);
     var parent = instances[0];
     assert(parent.getElementsByTagName('instanceId')[0].textContent === instanceId);
-    assert(parent.getElementsByTagName('imageId')[0].textContent === imageID);
+    assert(parent.getElementsByTagName('imageId')[0].textContent === imageId);
     assert(parent.getElementsByTagName('instanceState')[0].getElementsByTagName('name')[0].textContent === 'running');
     var launchTime = parent.getElementsByTagName('launchTime')[0].textContent;
     assert(parent.getElementsByTagName('ipAddress')[0].textContent === IP);
@@ -83,13 +95,13 @@ function checkDescribeInstances(xmlDoc, instanceId, IP) {
 }
 
 
-function checkDescribeVolumes(xmlDoc, instanceId, volumeId, volAttachTime) {
+function checkDescribeVolumes(xmlDoc, instanceId, volumeId, volAttachTime, snapshotId) {
   try {
     var volumes = xmlDoc.getElementsByTagName('volumeSet')[0].children;
     assert(volumes.length === 1);
     var volume = volumes[0];
     assert(volume.getElementsByTagName('volumeId')[0].textContent === volumeId);
-    assert(volume.getElementsByTagName('snapshotId')[0].textContent === snapshotID);
+    assert(volume.getElementsByTagName('snapshotId')[0].textContent === snapshotId);
     assert(volume.getElementsByTagName('status')[0].textContent === 'in-use');
     var volCreateTime = volume.getElementsByTagName('createTime')[0].textContent;
     var attVolumes = volume.getElementsByTagName('attachmentSet')[0].getElementsByTagName('item');
@@ -193,24 +205,49 @@ function checkGetUser(xmlDoc, ownerId) {
 }
 
 
-async function fetch_and_parse(url){
-  var req = await fetch(url)
-  var text = await req.text()
+function checkDescribeImages(xmlDoc, imageId, snapshotId){
+  var images = xmlDoc.getElementsByTagName('imagesSet')[0].children;
+  assert(images.length == 1);
+  var image = images[0];
+  assert(image.getElementsByTagName('imageId')[0].textContent == imageId);
+  assert(image.getElementsByTagName('rootDeviceName')[0].textContent == '/dev/xvda');
+  var devices = image.getElementsByTagName('blockDeviceMapping')[0].children;
+  assert(devices.length == 1);
+  var device = devices[0];
+  var ebs = device.getElementsByTagName('ebs')[0];
+  assert(ebs.getElementsByTagName('snapshotId')[0].textContent == snapshotId);
+  return true;
+}
+
+
+
+async function fetch_and_parse(resource){
+  var text;
+  if (typeof(resource) == 'string'){
+    var req = await fetch(resource)
+    text = await req.text()
+  }
+  else if (typeof(resource) == 'object'){
+    text = resource.text
+  }
+  else {
+    throw('unknown resource type in fetch_and_parse')
+  }
   var xmlDoc = new DOMParser().parseFromString(text, "text/xml")
   return xmlDoc
 }
 
 
-async function check_oracle(o) {
+async function check_oracle(o, isOld) {
   var xmlDocDI = await fetch_and_parse(o.DI)
-  var rv = checkDescribeInstances(xmlDocDI, o.instanceId, o.IP);
+  var rv = checkDescribeInstances(xmlDocDI, o.instanceId, o.IP, o.imageId);
   var volumeId = rv.volumeId
   var volAttachTime = rv.volAttachTime
   var ownerId = rv.ownerId
   var launchTime = rv.launchTime
 
   var xmlDocDV = await fetch_and_parse(o.DV)
-  checkDescribeVolumes(xmlDocDV, o.instanceId, volumeId, volAttachTime);
+  checkDescribeVolumes(xmlDocDV, o.instanceId, volumeId, volAttachTime, o.snapshotId);
 
   var xmlDocGU = await fetch_and_parse(o.GU)
   checkGetUser(xmlDocGU, ownerId);
@@ -227,13 +264,23 @@ async function check_oracle(o) {
   var xmlDocDIAr = await fetch_and_parse(o.DIAr)
   checkDescribeInstanceAttributeRamdisk(xmlDocDIAr, o.instanceId);
 
+  var xmlDocDImg = await fetch_and_parse(o.DImg)
+  checkDescribeImages(xmlDocDImg, o.imageId, o.snapshotId);
+
+  if (isOld == true){
+    //unfortunately there is no way to perform the 'AWSAccessKeyId=' check (see below)
+    //for an old oracle server
+    console.log('oracle verification successfully finished');
+    return true;
+  }
+
   var mark = 'AWSAccessKeyId=';
   var start;
   var id;
   var ids = [];
   //"AWSAccessKeyId" should be the same to prove that the queries are made on behalf of AWS user "root".
   //The attacker can be a user with limited privileges for whom the API would report only partial information.
-  for (var url in [o.DI, o.DV, o.GU, o.GCO, o.DIA]) {
+  for (var url in [o.DI, o.DV, o.GU, o.GCO, o.DIAud, o.DIAk, o.DIAr, o.DImg]) {
     start = url.search(mark) + mark.length;
     id = url.slice(start, start + url.slice(start).search('&'));
     ids.push(id);
@@ -242,6 +289,32 @@ async function check_oracle(o) {
   console.log('oracle verification successfully finished');
   return true;
 }
+
+
+async function verifyOldOracle(name){
+  if (old_oracle.name != name){
+    return {result:false}
+  }
+  var o = old_oracle;
+  for (let key of ['DI', 'DV', 'GU', 'GCO', 'DIAud', 'DIAk', 'DIAr', 'DImg']){
+    var pgsg = await import_resource('old oracles/'+name+'/'+key+'.pgsg')
+    var rv = await verifyPgsg(JSON.parse(pgsg))
+    var serverName = rv[1]
+    assert(serverName.split('.').slice(-2).join('.') == 'amazonaws.com')
+    var clearText = rv[0]
+    //remove HTTP headers
+    var httpBody = clearText.split('\r\n\r\n').slice(1)
+    o[key] = {text:httpBody}
+  }
+  var rv = await check_oracle(o, true);
+  if (rv == true){
+    return {result:true, oracle:o};
+  }
+  return {{result:false};
+}
+
+
+
 
 if (typeof module !== 'undefined'){ //we are in node.js environment
   module.exports={
