@@ -176,6 +176,14 @@ function openManager() {
 
 
 async function prepareNotarizing(after_click) {
+  if (!oracles_intact) {
+    sendAlert({
+      title: 'PageSigner error',
+      text: 'Cannot notarize because something is wrong with PageSigner server. Please try again later'
+    });
+    return;
+  }
+
   var clickTimeout = null;
 
   var active_tab = await new Promise(function(resolve, reject) {
@@ -492,15 +500,6 @@ async function import_resource(filename) {
 
 
 async function startNotarizing(headers, server, port) {
-  if (!oracles_intact) {
-    //NotarizeAfterClick already changed the icon at this point, revert to normal
-    loadNormalIcon();
-    sendAlert({
-      title: 'PageSigner error',
-      text: 'Cannot notarize because something is wrong with PageSigner server. Please try again later'
-    });
-    return;
-  }
   loadBusyIcon();
   try{
     let rv = await start_audit(server, port, headers);
@@ -529,43 +528,44 @@ async function startNotarizing(headers, server, port) {
 
 
 async function save_session(args) {  
+
   assert(args.length === 11, "wrong args length");
   var idx = -1;
-  var client_random = args[idx+=1]
-  var server_random= args[idx+=1]
   var server_certchain = args[idx+=1]
   var rsa_sig = args[idx+=1]
+  var client_random = args[idx+=1]
+  var server_random = args[idx+=1]
   var ec_pubkey_server = args[idx+=1]
-  var ec_pubkey_client = args[idx+=1]
+  var server_write_key = args[idx+=1]
+  var server_write_IV = args[idx+=1]
   var server_response = args[idx+=1]
   var cleartext = args[idx+=1]
   var notary_signature = args[idx+=1]
-  var ec_privkey = args[idx+=1]
   var time = args[idx+=1]
 
   var pgsg_json = {}
   pgsg_json["title"] = "PageSigner notarization file"
-  pgsg_json["version"] = 3
-  pgsg_json["client random"] = b64encode(client_random)
-  pgsg_json["server random"] = b64encode(server_random)
+  pgsg_json["version"] = 4
   pgsg_json["certificate chain"] = {}
   for (let [idx, cert] of server_certchain.entries()) {
     let key = 'cert'+idx.toString()
     pgsg_json["certificate chain"][key] = b64encode(cert)
   }
   pgsg_json["server RSA signature over EC pubkey"] = b64encode(rsa_sig)
+  pgsg_json['client random'] = b64encode(client_random)
+  pgsg_json['server random'] = b64encode(server_random)
   pgsg_json["server EC pubkey"] = b64encode(ec_pubkey_server)
-  pgsg_json["client EC pubkey"] = b64encode(ec_pubkey_client)
+  pgsg_json["server write key"] = b64encode(server_write_key)
+  pgsg_json["server write IV"] = b64encode(server_write_IV)
   pgsg_json["server response"] = b64encode(server_response)
   pgsg_json["notary signature"] = b64encode(notary_signature)
-  pgsg_json["client EC privkey"] = b64encode(ec_privkey)
   pgsg_json["notarization time"] = b64encode(time)
   pgsg_json["notary name"] = chosen_notary.name
   var pgsg = pgsg_json
 
   var commonName = getCommonName(server_certchain[0]);
   var creationTime = getTime();
-  await createNewSession (creationTime, commonName, cleartext, pgsg, false);
+  await createNewSession (creationTime, commonName, chosen_notary.name, cleartext, pgsg, false);
   return creationTime; //creationTime is also a session ID
 }
 
@@ -637,10 +637,79 @@ function convertPgsg(data){
 }
 
 
+async function verifyPgsg(json){
+  if (json['version'] == 3){
+    return await verifyPgsgV3(json);
+  }
+  else if (json['version'] == 4){
+    return await verifyPgsgV4(json);
+  }
+  else {
+    throw ('Unrecognized version of the imported pgsg file.')
+  }
+}
 
 
 //pgsg is in json
-async function verifyPgsg(json) {
+async function verifyPgsgV4(json) {
+  var server_write_key = b64decode(json['server write key'])
+  var server_write_IV = b64decode(json['server write IV'])
+  var chain = []
+  var certNumber = Object.keys(json['certificate chain']).length
+  for (var i=0; i<certNumber; i++){
+    let key = 'cert' + i.toString()
+    chain.push(b64decode(json['certificate chain'][key]))
+  }
+  var rsa_sig = b64decode(json['server RSA signature over EC pubkey'])
+  var client_random = b64decode(json['client random'])
+  var server_random = b64decode(json['server random'])
+  var ec_pubkey_server = b64decode(json['server EC pubkey']) 
+  var server_response = b64decode(json['server response'])
+  var notary_signature = b64decode(json['notary signature'])
+  var time = b64decode(json['notarization time'])
+  var notaryName = json["notary name"]
+  var notary;
+  if (notaryName == oracle.name){
+    notary = oracle;
+  }
+  else{
+    var rv = await verifyOldOracle(notaryName);
+    if (rv.result == true){
+      notary = rv.oracle;
+    }
+    else{
+      throw('unrecognized oracle in the imported file')
+    }
+  }
+  
+  var seconds = ba2int(time)
+  var date = new Date(seconds*1000)
+  var commonName = getCommonName(chain[0]);
+  var vcrv = await verifyChain(chain, date); 
+  if (vcrv[0] != true) {
+    throw ('certificate verification failed');
+  }
+  var rv = await verifyECParamsSig(chain[0], ec_pubkey_server, rsa_sig, client_random, server_random)
+  if (rv != true){
+    throw ('EC parameters signature verification failed');
+  }
+
+  var commit_hash = await sha256(server_response)
+  //check notary server signature
+  var signed_data_ba = await sha256([].concat(ec_pubkey_server, server_write_key, server_write_IV, commit_hash, time))
+  assert(await verifyNotarySig(notary_signature, notary.pubkeyPEM, signed_data_ba) == true)
+  //aesgcm decrypt the data
+  var cleartext = await decrypt_tls_response (server_response, server_write_key, server_write_IV)
+  var dechunked = dechunk_http(ba2str(cleartext))
+  var ungzipped = gunzip_http(dechunked)
+  return [ungzipped, commonName, notaryName];
+}
+
+
+
+
+//pgsg is in json
+async function verifyPgsgV3(json) {
   var client_random = b64decode(json['client random'])
   var server_random = b64decode(json['server random'])
   var chain = []

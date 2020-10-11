@@ -1,7 +1,12 @@
 async function send_and_recv(command, data, expected_response, uid) {
   var url = "http://" + chosen_notary.IP + ":" + chosen_notary.port
   var payload = JSON.stringify({'request':command, 'uid': uid, 'data':b64encode(data)})
-  var req = await fetch(url, {method:'POST', body: payload, cache: 'no-store'})
+  try{
+    var req = await fetch(url, {method:'POST', body: payload, cache: 'no-store'})
+  }
+  catch (err){
+    throw('Could not connect to the PageSigner server. The error was:' + err)
+  }
   var text_ab = await req.arrayBuffer()
   var text = ba2str(ab2ba(text_ab))
   console.log(text.length, text.slice(-100))
@@ -201,12 +206,26 @@ const start_audit = async function(server, port, headers){
 
   all_handshakes = all_handshakes.concat(shd)
 
-  var reply_data = await send_and_recv('cr_sr_spk_commpk', [].concat(
-    client_random, server_random, ec_pubkey_server, commRawPubkey_ba), 'cpk_commpk', uid)
-  var cpk = reply_data.slice(0,65) //Client's pubkey for ECDH
-  var comm_pk = reply_data.slice(65,130) //Notary's EC pubkey for ECDH secret for communication
-
+  var reply_data_enc = await send_and_recv('cr_sr_spk_commpk', [].concat(
+    client_random, server_random, ec_pubkey_server, commRawPubkey_ba), 'commpk_commpksig_cpk_cwk_cwi', uid)
+  //communication pubkey is not encrypted
+  //Notary's EC pubkey for ECDH secret for communication
+  var comm_pk = reply_data_enc.slice(0,65)
   var commSymmetricKey = await getECDHSecret(comm_pk, commPrivkey)
+  var reply_data = await decryptNotaryResponse(commSymmetricKey, reply_data_enc.slice(65))
+
+  var o = 0 //offset
+  //get signature over communication pubkey
+  var siglen = ba2int(reply_data.slice(o,o+=1))
+  var commpk_sig = reply_data.slice(o, o+=siglen)
+  //check signature
+  var to_be_signed = await sha256(comm_pk)
+  assert(await verifyNotarySig(commpk_sig, chosen_notary.pubkeyPEM, to_be_signed) == true)
+
+  var cpk = reply_data.slice(o,o+=65) //Client's pubkey for ECDH
+  client_write_key = reply_data.slice(o, o+=16)
+  client_write_IV = reply_data.slice(o, o+=4)
+
   
   //Send Client Key Exchange, Change Cipher Spec and Encrypted Handshake Message
   var cke_tls_record_header = [0x16, 0x03, 0x03, 0x00, 0x46] //Type: Handshake, Version: TLS 1.3, Length 
@@ -222,13 +241,13 @@ const start_audit = async function(server, port, headers){
   all_handshakes = [].concat(all_handshakes, cke)
   var hs_hash = await sha256(all_handshakes)
 
-  var reply_data_enc = await send_and_recv('hshash', hs_hash, 'vd_cwk_cwi', uid)
+  var enc = await encryptNotaryRequest(commSymmetricKey, hs_hash)
+  var reply_data_enc = await send_and_recv('hshash', enc, 'vd', uid)
   var reply_data = await decryptNotaryResponse(commSymmetricKey, reply_data_enc)
 
-  assert(reply_data.length == 32)
+  assert(reply_data.length == 12)
   verify_data = reply_data.slice(0, 12)
-  client_write_key = reply_data.slice(12, 28)
-  client_write_IV = reply_data.slice(28, 32)
+
 
   var client_finished = await (async function encrypt_client_finished(){
     let finished = [].concat([0x14, 0x00, 0x00, 0x0c], verify_data) //Finished (0x14) with length 12
@@ -281,7 +300,10 @@ const start_audit = async function(server, port, headers){
   //Send Server's encrypted Finished for decryption and Handshake hash to check server's verify data
   let hshash2 = await sha256(all_handshakes)
 
-  var reply_data = await send_and_recv('encf_hshash2', [].concat(enc_f, hshash2), 'verify_status', uid)
+  var enc = await encryptNotaryRequest(commSymmetricKey, [].concat(enc_f, hshash2))
+  var reply_data_enc = await send_and_recv('encf_hshash2', enc, 'verify_status', uid)
+  var reply_data = await decryptNotaryResponse(commSymmetricKey, reply_data_enc)
+
   assert(eq(reply_data, [0x01]))
 
 
@@ -311,7 +333,8 @@ const start_audit = async function(server, port, headers){
   console.log('server_reply.length', server_reply.length)
 
   var commit_hash = await sha256(server_reply)
-  var reply_data_enc = await send_and_recv('commithash', commit_hash, 'swk_swi_sig_ecpriv_ecpub_time', uid)
+  var enc = await encryptNotaryRequest(commSymmetricKey, commit_hash)
+  var reply_data_enc = await send_and_recv('commithash', enc, 'swk_swi_sig_time', uid)
   var reply_data = await decryptNotaryResponse(commSymmetricKey, reply_data_enc)
 
   var o = 0; //offset
@@ -320,16 +343,12 @@ const start_audit = async function(server, port, headers){
   console.log('server_write_key, server_write_IV', server_write_key, server_write_IV)
   var sig_len = ba2int(reply_data.slice(o, o+=1))
   var notary_signature = reply_data.slice(o, o+=sig_len)
-  var ec_privkey = reply_data.slice(o, o+=32)
-  var ec_pubkey_client = reply_data.slice(o, o+=65) 
-  //we could derive ec_pubkey_client from ec_privkey but that would require an extra library.
-  //Crypto.subtle refuses to import EC private key unless EC pubkey is also given
   var time = reply_data.slice(o, o+=4)
   console.log('resp.length', reply_data.length)
   assert(reply_data.length == o)
 
   //Check notary server signature
-  var signed_data = await sha256([].concat(ec_privkey, ec_pubkey_server, commit_hash, time))
+  var signed_data = await sha256([].concat(ec_pubkey_server, server_write_key, server_write_IV, commit_hash, time))
   assert(await verifyNotarySig(notary_signature, chosen_notary.pubkeyPEM, signed_data) == true)
 
   var cleartexts = await decrypt_tls_response(server_reply, server_write_key, server_write_IV)
@@ -338,8 +357,7 @@ const start_audit = async function(server, port, headers){
   var ungzipped = gunzip_http(dechunked)
   console.log('ungzipped.length', ungzipped.length)
 
-  return [client_random, server_random, certs, rsa_sig, ec_pubkey_server,
-    ec_pubkey_client, server_reply, ungzipped, notary_signature, ec_privkey, time ]
+  return [certs, rsa_sig, client_random, server_random, ec_pubkey_server, server_write_key, server_write_IV, server_reply, ungzipped, notary_signature, time ]
 }
 
 
@@ -353,6 +371,18 @@ async function decryptNotaryResponse (key, enc){
   var data = ab2ba(data_ab)
   return data;
 }
+
+
+async function encryptNotaryRequest(key, cleartext){
+  var IV = getRandom(12)
+  var enc = await crypto.subtle.encrypt(
+    {name: 'AES-GCM', iv: ba2ab(IV)},
+    key,
+    ba2ab(cleartext));
+  var data = [].concat(IV, ab2ba(enc))
+  return data;
+}
+
 
 //pub/privkey must be in WebCrypto format
 async function getExpandedKeys(hisPubkey, myPrivkey, cr, sr){

@@ -1,33 +1,32 @@
 var oracles_intact = false; //must be explicitely set to true
 
-var oracle = {
+var old_oracle = {
   'snapshotId': 'snap-0f838cf4591ac24e0',
   'imageId': 'ami-0a93db37bec3fda42',
   'name': 'tlsnotarygroup8',
   'IP': '34.229.208.191',
-  'port': '10011',
-  'DI':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstances&Expires=2025-01-01&InstanceId=i-0c4f98aeeac5308da&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=jjGBh1uwmvK2CQ%2B1WRwFCZ9FIVeAnRWErdBPd3JV4g4%3D',
-  'DV':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeVolumes&Expires=2025-01-01&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&VolumeId=vol-075589b4c06dce11b&Signature=fmvB1pROTMbwjVyFm87F1DyCKKIgSirfzOYkdbbH4cA%3D',
-  'GCO':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=GetConsoleOutput&Expires=2025-01-01&InstanceId=i-0c4f98aeeac5308da&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=cHCEeTBpKVOErTJeK254MbCGJJA9SreZb9HxW2fc2Cg%3D',
-  'GU':'https://iam.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=GetUser&Expires=2025-01-01&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2010-05-08&Signature=N%2BsdNA6z3QReVsHsf7RV4uZLzS5Pqi0n3QSfqBAMs8o%3D',
-  'DIAud':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=userData&Expires=2025-01-01&InstanceId=i-0c4f98aeeac5308da&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=mu8lWuB688ouVOkSL7M5ZS0y%2FLCcxMME4%2Bg6iikS5TE%3D',
-  'DIAk':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=kernel&Expires=2025-01-01&InstanceId=i-0c4f98aeeac5308da&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=MmEJF7Ic4eOnWeH%2BGyheVApqKh8mrQX2rwQabiyvWhw%3D',
-  'DIAr':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=ramdisk&Expires=2025-01-01&InstanceId=i-0c4f98aeeac5308da&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=IqNgbD%2FlGhvYQ8ndbMCz3PMFQjeGqBPvTU83repfJEs%3D',
-  'DImg':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeImages&Expires=2025-01-01&ImageId.1=ami-0a93db37bec3fda42&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=xFhBqWoOyltYXRv%2F5SDCMfQBpDXFH2QPQBkgQahE8Ic%3D',
   'instanceId': 'i-0c4f98aeeac5308da',
   'pubkeyPEM': '-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE1XR5GYA7XmgMqH87HNaay4Xlzozs\nRflEv4VHWchpJteey5MRTn31e+pycFpOdaw6ybH8qfzkml1apoSl8+mO2A==\n-----END PUBLIC KEY-----'
 }
 
-//until we deploy tlsnotarygroup9 this is just a placeholder
-var old_oracle = {
-  // 'snapshotId': 'snap-0f838cf4591ac24e0',
-  // 'imageId': 'ami-0a93db37bec3fda42',
-  // 'name': 'tlsnotarygroup7',
-  // 'IP': '34.229.208.191',
-  // 'port': '10011',
-  // 'instanceId': 'i-0c4f98aeeac5308da',
-  // 'pubkeyPEM': '-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE1XR5GYA7XmgMqH87HNaay4Xlzozs\nRflEv4VHWchpJteey5MRTn31e+pycFpOdaw6ybH8qfzkml1apoSl8+mO2A==\n-----END PUBLIC KEY-----'
+var oracle = {
+  'snapshotId': 'snap-0bf942f29a64f0f50',
+  'imageId': 'ami-016509fc994427733',
+  'name': 'tlsnotarygroup9',
+  'IP': '35.174.184.105',
+  'port': '10011',
+  'DI':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstances&Expires=2025-01-01&InstanceId=i-04f8cbc53fcc36f1d&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=v9cJaD1mkA%2FP5VbyfpxuZlwgCazeac9dA0QMCWUoDkQ%3D',
+  'DV':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeVolumes&Expires=2025-01-01&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&VolumeId=vol-05e08c73b01abe269&Signature=QAZk8%2BTdnRCeIeUMa10WufH2tmHdzzHT3Fi5VdLPnik%3D',
+  'GCO':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=GetConsoleOutput&Expires=2025-01-01&InstanceId=i-04f8cbc53fcc36f1d&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=g9t%2FcEduhoLrr9kOEMm0dxqSq%2F5%2F8vhEM3QXHh%2Fzu5g%3D',
+  'GU':'https://iam.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=GetUser&Expires=2025-01-01&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2010-05-08&Signature=N%2BsdNA6z3QReVsHsf7RV4uZLzS5Pqi0n3QSfqBAMs8o%3D',
+  'DIAud':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=userData&Expires=2025-01-01&InstanceId=i-04f8cbc53fcc36f1d&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=akyi3eDbFSjsumu%2BHUjBV4bgKyZBvbQPyfSI26SzCF4%3D',
+  'DIAk':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=kernel&Expires=2025-01-01&InstanceId=i-04f8cbc53fcc36f1d&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=1RtprpwQlU62ILIdN70WjsdnLnq9Eh2u0KSX7dnXpg8%3D',
+  'DIAr':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=ramdisk&Expires=2025-01-01&InstanceId=i-04f8cbc53fcc36f1d&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=qPP8A7QKvH0PHpEBYzusz4efaB5zalc49IwxG1NfHfE%3D',
+  'DImg':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeImages&Expires=2025-01-01&ImageId.1=ami-016509fc994427733&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=HZKaD7ue3HE9e34F7pWmw5CeYvjidgV%2FOi6hrbvX2JQ%3D',
+  'instanceId': 'i-04f8cbc53fcc36f1d',
+  'pubkeyPEM': '-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaXM2Lxec8G3XJ6P86J3Qng+DKNzP\n0zGPlI7AqNLr+kCZ0obomrcvGS8QO0xyAVUaqK+oNIWFVKQf6LZPwP9m4w==\n-----END PUBLIC KEY-----'
 }
+
 
 
 
@@ -57,6 +56,7 @@ function getSecondsDelta(later, sooner) {
 
 function checkDescribeInstances(xmlDoc, instanceId, IP, imageId) {
   try {
+    assert(xmlDoc.getElementsByTagName('DescribeInstancesResponse').length == 1)
     var rs = xmlDoc.getElementsByTagName('reservationSet');
     assert(rs.length === 1);
     var rs_items = rs[0].children;
@@ -97,6 +97,7 @@ function checkDescribeInstances(xmlDoc, instanceId, IP, imageId) {
 
 function checkDescribeVolumes(xmlDoc, instanceId, volumeId, volAttachTime, snapshotId) {
   try {
+    assert(xmlDoc.getElementsByTagName('DescribeVolumesResponse').length == 1)
     var volumes = xmlDoc.getElementsByTagName('volumeSet')[0].children;
     assert(volumes.length === 1);
     var volume = volumes[0];
@@ -125,6 +126,7 @@ function checkDescribeVolumes(xmlDoc, instanceId, volumeId, volAttachTime, snaps
 
 function checkGetConsoleOutput(xmlDoc, instanceId, launchTime, pubkeyPEM) {
   try {
+    assert(xmlDoc.getElementsByTagName('GetConsoleOutputResponse').length == 1)
     assert(xmlDoc.getElementsByTagName('instanceId')[0].textContent === instanceId);
     var timestamp = xmlDoc.getElementsByTagName('timestamp')[0].textContent;
     //prevent funny business: last consoleLog entry no later than 5 minutes after instance starts
@@ -165,6 +167,7 @@ function checkGetConsoleOutput(xmlDoc, instanceId, launchTime, pubkeyPEM) {
 // This is a sanity check because the instance is stripped of the code which parses userData.
 function checkDescribeInstanceAttributeUserdata(xmlDoc, instanceId) {
   try {
+    assert(xmlDoc.getElementsByTagName('DescribeInstanceAttributeResponse').length == 1)
     assert(xmlDoc.getElementsByTagName('instanceId')[0].textContent === instanceId);
     assert(xmlDoc.getElementsByTagName('userData')[0].textContent === "");
   } catch (e) {
@@ -175,6 +178,7 @@ function checkDescribeInstanceAttributeUserdata(xmlDoc, instanceId) {
 
 function checkDescribeInstanceAttributeKernel(xmlDoc, instanceId) {
   try {
+    assert(xmlDoc.getElementsByTagName('DescribeInstanceAttributeResponse').length == 1)
     assert(xmlDoc.getElementsByTagName('instanceId')[0].textContent === instanceId);
     assert(xmlDoc.getElementsByTagName('kernel')[0].textContent === "");
   } catch (e) {
@@ -185,6 +189,7 @@ function checkDescribeInstanceAttributeKernel(xmlDoc, instanceId) {
 
 function checkDescribeInstanceAttributeRamdisk(xmlDoc, instanceId) {
   try {
+    assert(xmlDoc.getElementsByTagName('DescribeInstanceAttributeResponse').length == 1)
     assert(xmlDoc.getElementsByTagName('instanceId')[0].textContent === instanceId);
     assert(xmlDoc.getElementsByTagName('ramdisk')[0].textContent === "");
   } catch (e) {
@@ -196,6 +201,7 @@ function checkDescribeInstanceAttributeRamdisk(xmlDoc, instanceId) {
 
 function checkGetUser(xmlDoc, ownerId) {
   try {
+    assert(xmlDoc.getElementsByTagName('GetUserResponse').length == 1)
     assert(xmlDoc.getElementsByTagName('UserId')[0].textContent === ownerId);
     assert(xmlDoc.getElementsByTagName('Arn')[0].textContent.slice(-(ownerId.length + ':root'.length)) === ownerId + ':root');
   } catch (e) {
@@ -206,16 +212,21 @@ function checkGetUser(xmlDoc, ownerId) {
 
 
 function checkDescribeImages(xmlDoc, imageId, snapshotId){
-  var images = xmlDoc.getElementsByTagName('imagesSet')[0].children;
-  assert(images.length == 1);
-  var image = images[0];
-  assert(image.getElementsByTagName('imageId')[0].textContent == imageId);
-  assert(image.getElementsByTagName('rootDeviceName')[0].textContent == '/dev/xvda');
-  var devices = image.getElementsByTagName('blockDeviceMapping')[0].children;
-  assert(devices.length == 1);
-  var device = devices[0];
-  var ebs = device.getElementsByTagName('ebs')[0];
-  assert(ebs.getElementsByTagName('snapshotId')[0].textContent == snapshotId);
+  try {  
+    assert(xmlDoc.getElementsByTagName('DescribeImagesResponse').length == 1)
+    var images = xmlDoc.getElementsByTagName('imagesSet')[0].children;
+    assert(images.length == 1);
+    var image = images[0];
+    assert(image.getElementsByTagName('imageId')[0].textContent == imageId);
+    assert(image.getElementsByTagName('rootDeviceName')[0].textContent == '/dev/xvda');
+    var devices = image.getElementsByTagName('blockDeviceMapping')[0].children;
+    assert(devices.length == 1);
+    var device = devices[0];
+    var ebs = device.getElementsByTagName('ebs')[0];
+    assert(ebs.getElementsByTagName('snapshotId')[0].textContent == snapshotId);
+  } catch (e) {
+    throw('checkDescribeImages exception')
+  }
   return true;
 }
 
@@ -310,7 +321,7 @@ async function verifyOldOracle(name){
   if (rv == true){
     return {result:true, oracle:o};
   }
-  return {{result:false};
+  return {result:false};
 }
 
 

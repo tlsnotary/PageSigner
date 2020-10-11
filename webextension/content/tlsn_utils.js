@@ -142,7 +142,7 @@ function ba2str(ba) {
 
 
 async function sha256(ba) {
-  var digest =  await crypto.subtle.digest('SHA-256', ba2ab(ba))
+  var digest = await crypto.subtle.digest('SHA-256', ba2ab(ba))
   return (ab2ba(digest))
 }
 
