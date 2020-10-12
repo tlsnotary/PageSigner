@@ -1,4 +1,4 @@
-var oracles_intact = false; //must be explicitely set to true
+var oracles_intact = false; //will be set to true after the oracle check completes
 
 var old_oracle = {
   'snapshotId': 'snap-0f838cf4591ac24e0',
@@ -28,14 +28,10 @@ var oracle = {
 }
 
 
-
-
 //there can be potentially multiple oracles to choose from
 var oracles = [];
 oracles.push(oracle);
-//all servers trusted to perform notary (including non-oracles)
-//TODO: configurable
-var pagesigner_servers = [oracle];
+
 
 //assuming both events happened on the same day, get the time
 //difference between them in seconds
@@ -330,6 +326,7 @@ async function verifyOldOracle(name){
 if (typeof module !== 'undefined'){ //we are in node.js environment
   module.exports={
     check_oracle,
-    oracle
+    oracle,
+    verifyOldOracle
   }
 }

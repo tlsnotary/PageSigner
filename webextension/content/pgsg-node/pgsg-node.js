@@ -45,6 +45,7 @@ getExpandedKeys = tlsn.getExpandedKeys
 getModulus = verifychain.getModulus
 getTime = utils.getTime
 gunzip_http = utils.gunzip_http
+oracle = oracles.oracle
 parse_certs = verifychain.parse_certs
 pem2ab = utils.pem2ab
 pubkeyPEM2raw = utils.pubkeyPEM2raw
@@ -55,6 +56,8 @@ wildTest = utils.wildTest
 verifyChain = verifychain.verifyChain
 verifyECParamsSig = tlsn.verifyECParamsSig
 verifyNotarySig = tlsn.verifyNotarySig
+verifyOldOracle = oracles.verifyOldOracle
+verifyPgsg = mainjs.verifyPgsg
 
 
 //override 
@@ -162,14 +165,15 @@ import_resource = async function(path){
 //override
 Certificate = pkijs.Certificate;
 CertificateChainValidationEngine = pkijs.CertificateChainValidationEngine
+use_max_fragment_length = false;
 
 //override
-createNewSession = async function(creationTime, commonName, cleartext, pgsg, is_imported){
+createNewSession = async function(creationTime, commonName, notaryName, cleartext, pgsg, is_imported){
     var suffix = is_imported ? "_imported" : ""
     var dirname = 'session_'+ creationTime + "_" + commonName + suffix 
     fs.mkdirSync(dirname)
     fs.writeFileSync(path.join(__dirname, dirname, "cleartext"), cleartext)
-    fs.writeFileSync(path.join(__dirname, dirname, commonName+'.pgsg'), Buffer.from(pgsg))
+    fs.writeFileSync(path.join(__dirname, dirname, commonName+'.pgsg'), Buffer.from(JSON.stringify(pgsg)))
     return dirname
 }
 
@@ -219,13 +223,13 @@ if (argv[2] === 'verify') {
     }
     var pgsgfile = argv[3]
     var pgsgBuf = fs.readFileSync(pgsgfile)
-    var pgsg = pgsgBuf.toJSON().data
-    console.log('pgsg.length', pgsg.length)
+    console.log('pgsg.length', pgsgBuf.length)
+    var pgsg = JSON.parse(pgsgBuf)
     await verifychain.parse_certs()
-    var rv = await mainjs.verify_pgsg(pgsg)
+    var rv = await mainjs.verifyPgsg(pgsg)
     var server_name = rv[1]
     var cleartext = rv[0]
-    var dirname = await createNewSession(getTime(), server_name, cleartext, pgsg, true)
+    var dirname = await createNewSession(getTime(), server_name, 'notary name', cleartext, pgsg, true)
     console.log('session saved in', dirname)
     exit()
 }
