@@ -541,7 +541,7 @@ async function startNotarizing(headers, server, port) {
 async function save_session(args) {  
 
   assert(args.length === 11, "wrong args length");
-  var idx = -1;
+  var idx = -1
   var server_certchain = args[idx+=1]
   var rsa_sig = args[idx+=1]
   var client_random = args[idx+=1]
@@ -549,7 +549,7 @@ async function save_session(args) {
   var ec_pubkey_server = args[idx+=1]
   var server_write_key = args[idx+=1]
   var server_write_IV = args[idx+=1]
-  var server_response = args[idx+=1]
+  var encRecords = args[idx+=1]
   var cleartext = args[idx+=1]
   var notary_signature = args[idx+=1]
   var time = args[idx+=1]
@@ -568,7 +568,11 @@ async function save_session(args) {
   pgsg_json["server EC pubkey"] = b64encode(ec_pubkey_server)
   pgsg_json["server write key"] = b64encode(server_write_key)
   pgsg_json["server write IV"] = b64encode(server_write_IV)
-  pgsg_json["server response"] = b64encode(server_response)
+  pgsg_json['encrypted records'] = {}
+  for (let [idx, rec] of encRecords.entries()) {
+    let key = 'rec'+idx.toString()
+    pgsg_json["encrypted records"][key] = b64encode(rec)
+  }
   pgsg_json["notary signature"] = b64encode(notary_signature)
   pgsg_json["notarization time"] = b64encode(time)
   pgsg_json["notary name"] = chosen_notary.name
@@ -674,8 +678,13 @@ async function verifyPgsgV4(json) {
   var rsa_sig = b64decode(json['server RSA signature over EC pubkey'])
   var client_random = b64decode(json['client random'])
   var server_random = b64decode(json['server random'])
-  var ec_pubkey_server = b64decode(json['server EC pubkey']) 
-  var server_response = b64decode(json['server response'])
+  var ec_pubkey_server = b64decode(json['server EC pubkey'])
+  var encRecords = []
+  var encRecNumber = Object.keys(json['encrypted records']).length
+  for (var i=0; i<encRecNumber; i++){
+    let key = 'rec' + i.toString()
+    encRecords.push(b64decode(json['encrypted records'][key]))
+  }
   var notary_signature = b64decode(json['notary signature'])
   var time = b64decode(json['notarization time'])
   var notaryName = json["notary name"]
@@ -705,12 +714,12 @@ async function verifyPgsgV4(json) {
     throw ('EC parameters signature verification failed');
   }
 
-  var commit_hash = await sha256(server_response)
+  var commit_hash = await computeCommitHash(encRecords)
   //check notary server signature
   var signed_data_ba = await sha256([].concat(ec_pubkey_server, server_write_key, server_write_IV, commit_hash, time))
   assert(await verifyNotarySig(notary_signature, notary.pubkeyPEM, signed_data_ba) == true)
   //aesgcm decrypt the data
-  var cleartext = await decrypt_tls_response (server_response, server_write_key, server_write_IV)
+  var cleartext = await decrypt_tls_response (encRecords, server_write_key, server_write_IV)
   var dechunked = dechunk_http(ba2str(cleartext))
   var ungzipped = gunzip_http(dechunked)
   return [ungzipped, commonName, notaryName];

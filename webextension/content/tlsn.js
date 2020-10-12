@@ -101,7 +101,7 @@ const start_audit = async function(server, port, headers){
   //Parse Server Hello, Certificate, Server Key Exchange, Server Hello Done
   if (eq(s.slice(0,2), [0x15, 0x03])){
     console.log('Server sent Alert instead of Server Hello')
-    throw ('Server sent Alert instead of Server Hello');
+    throw ('Unfortunately PageSigner is not yet able to notarize this website. You can contact the PageSigner developers and ask to add support for this website.');
   }
   var p = 0 //current position in byte stream
   assert(eq(s.slice(p, p+=1), [0x16])) //Type: Handshake
@@ -151,7 +151,7 @@ const start_audit = async function(server, port, headers){
   }
   var vcrv = await verifyChain(certs);
   if (vcrv[0] != true) {
-    throw ('certificate verification failed');
+    throw ('Cannot notarize because the website presented an untrusted certificate');
   }
   if (vcrv[1]) certs.push(vcrv[1]) //add an intermediate certificate which was missing from the chain
 
@@ -328,12 +328,13 @@ const start_audit = async function(server, port, headers){
   })()
 
   sckt.send(appdata)
-  var server_reply = await sckt.recv();
+  var server_response = await sckt.recv();
+  console.log('server_reply.length', server_response.length)
 
-  console.log('server_reply.length', server_reply.length)
+  var encRecords = splitResponseIntoRecords(server_response)
+  var commitHash = await computeCommitHash(encRecords)
 
-  var commit_hash = await sha256(server_reply)
-  var enc = await encryptNotaryRequest(commSymmetricKey, commit_hash)
+  var enc = await encryptNotaryRequest(commSymmetricKey, commitHash)
   var reply_data_enc = await send_and_recv('commithash', enc, 'swk_swi_sig_time', uid)
   var reply_data = await decryptNotaryResponse(commSymmetricKey, reply_data_enc)
 
@@ -348,16 +349,64 @@ const start_audit = async function(server, port, headers){
   assert(reply_data.length == o)
 
   //Check notary server signature
-  var signed_data = await sha256([].concat(ec_pubkey_server, server_write_key, server_write_IV, commit_hash, time))
+  var signed_data = await sha256([].concat(ec_pubkey_server, server_write_key, server_write_IV, commitHash, time))
   assert(await verifyNotarySig(notary_signature, chosen_notary.pubkeyPEM, signed_data) == true)
 
-  var cleartexts = await decrypt_tls_response(server_reply, server_write_key, server_write_IV)
+  var cleartexts = await decrypt_tls_response(encRecords, server_write_key, server_write_IV)
   
   var dechunked = dechunk_http(ba2str(cleartexts))
   var ungzipped = gunzip_http(dechunked)
   console.log('ungzipped.length', ungzipped.length)
 
-  return [certs, rsa_sig, client_random, server_random, ec_pubkey_server, server_write_key, server_write_IV, server_reply, ungzipped, notary_signature, time ]
+  return [certs, rsa_sig, client_random, server_random, ec_pubkey_server, server_write_key, server_write_IV, encRecords, ungzipped, notary_signature, time ]
+}
+
+
+//split a raw TLS response into encrypted application layer records
+function splitResponseIntoRecords(s){
+  var records = []
+  var p = 0 //position in the stream
+
+  while (p < s.length){
+    if (! eq(s.slice(p,p+3), [0x17,0x03,0x03])){
+      if (eq(s.slice(p,p+3), [0x15,0x03,0x03])){
+        console.log('Server sent Alert instead of response')
+        throw('Server sent Alert instead of response')
+      }
+      else{
+        console.log('Server sent an unknown message')
+        throw('Server sent an unknown message')
+      }
+    }
+    
+    p+=3 
+    let reclen = ba2int(s.slice(p, p+=2))
+    let record = s.slice(p, p+=reclen)
+    records.push(record)
+  }
+  assert(p == s.length, 'The server sent a misformatted reponse')
+  return records
+}
+
+ 
+//commit hash inputs are sha256 hashes of "AES GCM authentication tag" for each TLS record
+async function computeCommitHash(encRecords){
+  var hashesOfAuthTags = []
+  for (let encRec of encRecords){
+    //The last 16 bytes of encrypted TLS application layer record (in AES GCM)
+    //is the record's authentication tag  
+    var authTag = encRec.slice(-16)
+    //poseidon works with ints
+    var hash = await sha256(authTag)
+    hashesOfAuthTags.push(hash)
+  }
+  //convert all hashes into a byte array
+  var commitHashInput = []
+  for (let hash of hashesOfAuthTags){
+    commitHashInput = commitHashInput.concat(hash)
+  }
+  var commitHash = await sha256(commitHashInput)
+  return commitHash
 }
 
 
@@ -449,34 +498,16 @@ async function getECDHSecret(hisPubkeyRaw_ba, myPrivkey){
 }
 
 
-async function decrypt_tls_response(s, server_write_key, server_write_IV){
+async function decrypt_tls_response(encRecords, server_write_key, server_write_IV){
 
   var swkCryptoKey = await crypto.subtle.importKey("raw", 
     ba2ab(server_write_key), "AES-GCM", true, ["encrypt", "decrypt"]);
 
-  //split up into TLS segments
-  var p = 0 //position in the stream
   var seq_num = 0 // seq_num 0 was in the Server Finished message, we will start with seq_num 1
   var cleartext = []
-
-  while (p < s.length){
-    p+=3 
-    let seglen = ba2int(s.slice(p, p+=2))
-    p-=5 //go back
-    let segment = s.slice(p, p+=5+seglen)
-    if (! eq(segment.slice(0,3), [0x17,0x03,0x03])){
-      if (eq(segment.slice(0,3), [0x15,0x03,0x03])){
-        console.log('Server sent Alert')
-        throw('Server sent Alert')
-      }
-      else{
-        console.log('Server sent an unknown message')
-        throw('Server sent an unknown message')
-      }
-    }
-
-    var seg_enc = segment.slice(5)
-    var explicit_nonce = seg_enc.slice(0,8)
+    
+  for (let rec of encRecords){
+    var explicit_nonce = rec.slice(0,8)
     var nonce = [].concat(server_write_IV, explicit_nonce)
 
     var aad = [] //additional_data
@@ -484,13 +515,13 @@ async function decrypt_tls_response(s, server_write_key, server_write_IV){
     aad = [].concat(aad, bi2ba(seq_num, {fixed:8}))
     aad = [].concat(aad, [0x17,0x03,0x03]) //type 0x17 = Application Data, TLS Version 1.2
     //len(unencrypted data) == len (encrypted data) - len(explicit nonce) - len (auth tag)
-    aad = [].concat(aad, bi2ba(seg_enc.length - 8 - 16, {fixed:2}))
+    aad = [].concat(aad, bi2ba(rec.length - 8 - 16, {fixed:2}))
 
     try {
       var cleartext_segment = await crypto.subtle.decrypt(
         {name: 'AES-GCM', iv: ba2ab(nonce), additionalData: ba2ab(aad)}, 
         swkCryptoKey, 
-        ba2ab(seg_enc.slice(8))); //encrypted segment is prepended with 8 bytes of IV
+        ba2ab(rec.slice(8))); //encrypted segment is prepended with 8 bytes of IV
     }
     catch (e) {
       console.log(e)
@@ -498,7 +529,6 @@ async function decrypt_tls_response(s, server_write_key, server_write_IV){
     }
     cleartext = [].concat(cleartext, ab2ba(cleartext_segment))
   }
-  assert(p == s.length)
   return cleartext
 }
 
