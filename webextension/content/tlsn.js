@@ -352,7 +352,7 @@ const start_audit = async function(server, port, headers){
   var signed_data = await sha256([].concat(ec_pubkey_server, server_write_key, server_write_IV, commitHash, time))
   assert(await verifyNotarySig(notary_signature, chosen_notary.pubkeyPEM, signed_data) == true)
 
-  var cleartexts = await decrypt_tls_response(encRecords, server_write_key, server_write_IV)
+  var cleartexts = await decrypt_tls_responseV4(encRecords, server_write_key, server_write_IV)
   
   var dechunked = dechunk_http(ba2str(cleartexts))
   var ungzipped = gunzip_http(dechunked)
@@ -498,7 +498,62 @@ async function getECDHSecret(hisPubkeyRaw_ba, myPrivkey){
 }
 
 
-async function decrypt_tls_response(encRecords, server_write_key, server_write_IV){
+async function decrypt_tls_responseV3(s, server_write_key, server_write_IV){
+
+  var swkCryptoKey = await crypto.subtle.importKey("raw", 
+    ba2ab(server_write_key), "AES-GCM", true, ["encrypt", "decrypt"]);
+
+  //split up into TLS segments
+  var p = 0 //position in the stream
+  var seq_num = 0 // seq_num 0 was in the Server Finished message, we will start with seq_num 1
+  var cleartext = []
+
+  while (p < s.length){
+    p+=3 
+    let seglen = ba2int(s.slice(p, p+=2))
+    p-=5 //go back
+    let segment = s.slice(p, p+=5+seglen)
+    if (! eq(segment.slice(0,3), [0x17,0x03,0x03])){
+      if (eq(segment.slice(0,3), [0x15,0x03,0x03])){
+        console.log('Server sent Alert')
+        throw('Server sent Alert')
+      }
+      else{
+        console.log('Server sent an unknown message')
+        throw('Server sent an unknown message')
+      }
+    }
+
+    var seg_enc = segment.slice(5)
+    var explicit_nonce = seg_enc.slice(0,8)
+    var nonce = [].concat(server_write_IV, explicit_nonce)
+
+    var aad = [] //additional_data
+    seq_num += 1
+    aad = [].concat(aad, bi2ba(seq_num, {fixed:8}))
+    aad = [].concat(aad, [0x17,0x03,0x03]) //type 0x17 = Application Data, TLS Version 1.2
+    //len(unencrypted data) == len (encrypted data) - len(explicit nonce) - len (auth tag)
+    aad = [].concat(aad, bi2ba(seg_enc.length - 8 - 16, {fixed:2}))
+
+    try {
+      var cleartext_segment = await crypto.subtle.decrypt(
+        {name: 'AES-GCM', iv: ba2ab(nonce), additionalData: ba2ab(aad)}, 
+        swkCryptoKey, 
+        ba2ab(seg_enc.slice(8))); //encrypted segment is prepended with 8 bytes of IV
+    }
+    catch (e) {
+      console.log(e)
+      throw('Decryption error', e.name)
+    }
+    cleartext = [].concat(cleartext, ab2ba(cleartext_segment))
+  }
+  assert(p == s.length)
+  return cleartext
+}
+
+
+
+async function decrypt_tls_responseV4(encRecords, server_write_key, server_write_IV){
 
   var swkCryptoKey = await crypto.subtle.importKey("raw", 
     ba2ab(server_write_key), "AES-GCM", true, ["encrypt", "decrypt"]);

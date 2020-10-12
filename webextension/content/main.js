@@ -719,7 +719,7 @@ async function verifyPgsgV4(json) {
   var signed_data_ba = await sha256([].concat(ec_pubkey_server, server_write_key, server_write_IV, commit_hash, time))
   assert(await verifyNotarySig(notary_signature, notary.pubkeyPEM, signed_data_ba) == true)
   //aesgcm decrypt the data
-  var cleartext = await decrypt_tls_response (encRecords, server_write_key, server_write_IV)
+  var cleartext = await decrypt_tls_responseV4 (encRecords, server_write_key, server_write_IV)
   var dechunked = dechunk_http(ba2str(cleartext))
   var ungzipped = gunzip_http(dechunked)
   return [ungzipped, commonName, notaryName];
@@ -810,7 +810,7 @@ async function verifyPgsgV3(json) {
   var signed_data_ba = await sha256([].concat(ec_privkey, ec_pubkey_server, commit_hash, time))
   assert(await verifyNotarySig(notary_signature, notary.pubkeyPEM, signed_data_ba) == true)
   //aesgcm decrypt the data
-  var cleartext = await decrypt_tls_response (server_response, server_write_key, server_write_IV)
+  var cleartext = await decrypt_tls_responseV3 (server_response, server_write_key, server_write_IV)
   var dechunked = dechunk_http(ba2str(cleartext))
   var ungzipped = gunzip_http(dechunked)
   return [ungzipped, commonName, notaryName];
