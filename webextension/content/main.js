@@ -160,17 +160,29 @@ function openManager() {
 
   chrome.tabs.create({url: url},
   function(t) {
-    setTimeout(async function(){
-      for (let win of chrome.extension.getViews()){
-        if (! win.is_manager) continue;
-        //found manager window
-        win.tabid = t.id
-        var is_testing = await getPref('testing')
-        if (is_testing){
-          win.prepare_testing()
+
+    function check(){
+      console.log('checking if manager tab is ready...')
+      setTimeout(async function(){
+        var isViewReady = false;
+        for (let win of chrome.extension.getViews()){
+           //sometimes the View for the newly opened tab may not yet be available 
+          //so we must wait a little longer
+          if (! win.is_manager) continue;
+          //found manager window
+          isViewReady = true
+          win.tabid = t.id
+          var is_testing = await getPref('testing')
+          if (is_testing){
+            win.prepare_testing()
+          }
         }
-      }
-    }, 100)
+        if (!isViewReady){
+          check();
+        }
+      }, 10)
+    }
+    check()
   });
 }
 
@@ -505,7 +517,6 @@ async function startNotarizing(headers, server, port) {
     let rv = await start_audit(server, port, headers);
     let sessionId = await save_session(rv);
     await showData(sessionId);
-
   }
   catch (err){
     console.log('There was an error: ' + err);
@@ -864,28 +875,45 @@ async function openTab(sid) {
     });
 
     await new Promise(function(resolve, reject) {
-      setTimeout(async function(){
-        var myViews = chrome.extension.getViews();
-        for (let win of myViews){
-          if (myTabs.includes(win.tabid)) continue;
-          //found a new viewer tab
-          win.tabid = newtab.id;
-          resolve();
-        }
-      }, 100)
+
+      function check(){
+        console.log('checking if tab is ready...')
+        setTimeout(async function(){
+          var myViews = chrome.extension.getViews();
+          //sometimes the View for the newly opened tab may not yet be available 
+          //so we must wait a little longer
+          var isViewReady = false;
+          for (let win of myViews){
+            if (myTabs.includes(win.tabid)) continue;
+            //found a new viewer tab
+            if (typeof(win.main) == 'undefined') {
+              //viewer.js hasnt yet been loaded into the DOM
+              check();
+              return;
+            }
+            isViewReady = true;
+            win.tabid = newtab.id;
+            resolve();
+          }
+          if (! isViewReady){
+            check();
+          }
+        }, 10)
+      }
+      check();
+
     });
   }
 
-  //give the tab some time to load
-  setTimeout(function() {
-    chrome.runtime.sendMessage({
-      destination: 'viewer',
-      data: cleartext,
-      sessionId: sid,
-      type: 'unknown',
-      serverName: commonName
-    });
-  }, 100);
+  //the tab is either an already opened import tab or a fully-loaded new viewer tab
+  //We already checked that the new viewer's tab DOM was loaded. Proceed to send the data
+  chrome.runtime.sendMessage({
+    destination: 'viewer',
+    data: cleartext,
+    sessionId: sid,
+    type: 'unknown',
+    serverName: commonName
+  });
 }
 
 
@@ -894,18 +922,56 @@ async function viewRaw(sid) {
   var blob = await getSessionBlob(sid)
   var prefix = is_chrome ? 'webextension/' : '';
   var url = chrome.extension.getURL(prefix + 'content/viewer.html');
-  chrome.tabs.create({url: url},
-  function(t) {
-    setTimeout(function() {
-      chrome.runtime.sendMessage({
-        destination: 'viewer',
-        data: blob.cleartext,
-        type: 'raw',
-        sessionId: sid,
-        serverName: data.serverName
-      });
-    }, 100);
+  //remember my Views which are already open
+  var myTabs = []
+  var myViews = chrome.extension.getViews();
+  for (let win of myViews ){
+    myTabs.push(win.tabid)
+  }
+  //open my tab
+  var newtab = await new Promise(function(resolve, reject) {
+    chrome.tabs.create({url: url},
+    function(t) {
+      resolve(t)})
   });
+  //check that my tab's view is available and its DOM loaded
+  await new Promise(function(resolve, reject) {
+
+    function check(){
+      console.log('checking if raw viewer tab is ready...')
+      setTimeout(async function(){
+        var myViews = chrome.extension.getViews();
+        //sometimes the View for the newly opened tab may not yet be available 
+        //so we must wait a little longer
+        var isViewReady = false;
+        for (let win of myViews){
+          if (myTabs.includes(win.tabid)) continue;
+          //found a new viewer tab
+          if (typeof(win.main) == 'undefined') {
+            //viewer.js hasnt yet been loaded into the DOM
+            check();
+            return;
+          }
+          isViewReady = true;
+          win.tabid = newtab.id;
+          resolve();
+        }
+        if (! isViewReady){
+          check();
+        }
+      }, 10)
+    }
+    check();
+
+  });
+  chrome.runtime.sendMessage({
+    destination: 'viewer',
+    data: blob.cleartext,
+    type: 'raw',
+    sessionId: sid,
+    serverName: data.serverName
+  });
+
 }
 
 
