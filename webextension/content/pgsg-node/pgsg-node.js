@@ -37,6 +37,7 @@ check_oracle = oracles.check_oracle
 check_complete_records = socket.check_complete_records
 checkCertSubjName = verifychain.checkCertSubjName
 chosen_notary = oracles.oracle
+computeCommitHash = tlsn.computeCommitHash
 dechunk_http = utils.dechunk_http
 decrypt_tls_response = tlsn.decrypt_tls_response
 eq = utils.eq
