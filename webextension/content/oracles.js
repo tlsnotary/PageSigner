@@ -1,30 +1,30 @@
 var oracles_intact = false; //will be set to true after the oracle check completes
 
 var old_oracle = {
-  'snapshotId': 'snap-0f838cf4591ac24e0',
-  'imageId': 'ami-0a93db37bec3fda42',
-  'name': 'tlsnotarygroup8',
-  'IP': '34.229.208.191',
-  'instanceId': 'i-0c4f98aeeac5308da',
-  'pubkeyPEM': '-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE1XR5GYA7XmgMqH87HNaay4Xlzozs\nRflEv4VHWchpJteey5MRTn31e+pycFpOdaw6ybH8qfzkml1apoSl8+mO2A==\n-----END PUBLIC KEY-----'
-}
-
-var oracle = {
   'snapshotId': 'snap-0bf942f29a64f0f50',
   'imageId': 'ami-016509fc994427733',
   'name': 'tlsnotarygroup9',
   'IP': '35.174.184.105',
-  'port': '10011',
-  'DI':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstances&Expires=2025-01-01&InstanceId=i-04f8cbc53fcc36f1d&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=v9cJaD1mkA%2FP5VbyfpxuZlwgCazeac9dA0QMCWUoDkQ%3D',
-  'DV':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeVolumes&Expires=2025-01-01&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&VolumeId=vol-05e08c73b01abe269&Signature=QAZk8%2BTdnRCeIeUMa10WufH2tmHdzzHT3Fi5VdLPnik%3D',
-  'GCO':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=GetConsoleOutput&Expires=2025-01-01&InstanceId=i-04f8cbc53fcc36f1d&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=g9t%2FcEduhoLrr9kOEMm0dxqSq%2F5%2F8vhEM3QXHh%2Fzu5g%3D',
-  'GU':'https://iam.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=GetUser&Expires=2025-01-01&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2010-05-08&Signature=N%2BsdNA6z3QReVsHsf7RV4uZLzS5Pqi0n3QSfqBAMs8o%3D',
-  'DIAud':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=userData&Expires=2025-01-01&InstanceId=i-04f8cbc53fcc36f1d&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=akyi3eDbFSjsumu%2BHUjBV4bgKyZBvbQPyfSI26SzCF4%3D',
-  'DIAk':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=kernel&Expires=2025-01-01&InstanceId=i-04f8cbc53fcc36f1d&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=1RtprpwQlU62ILIdN70WjsdnLnq9Eh2u0KSX7dnXpg8%3D',
-  'DIAr':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeInstanceAttribute&Attribute=ramdisk&Expires=2025-01-01&InstanceId=i-04f8cbc53fcc36f1d&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=qPP8A7QKvH0PHpEBYzusz4efaB5zalc49IwxG1NfHfE%3D',
-  'DImg':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAIHZGACNJKBHFWOTQ&Action=DescribeImages&Expires=2025-01-01&ImageId.1=ami-016509fc994427733&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=HZKaD7ue3HE9e34F7pWmw5CeYvjidgV%2FOi6hrbvX2JQ%3D',
   'instanceId': 'i-04f8cbc53fcc36f1d',
   'pubkeyPEM': '-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaXM2Lxec8G3XJ6P86J3Qng+DKNzP\n0zGPlI7AqNLr+kCZ0obomrcvGS8QO0xyAVUaqK+oNIWFVKQf6LZPwP9m4w==\n-----END PUBLIC KEY-----'
+}
+
+var oracle = {
+  'snapshotId': 'snap-0ca15091021ef43fc',
+  'imageId': 'ami-08514e4e0cd45a2f4',
+  'name': 'tlsnotarygroup10',
+  'IP': '54.174.129.130',
+  'port': '10011',
+  'DI':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAI2NJVYXCCAQDCC5Q&Action=DescribeInstances&Expires=2030-01-01&InstanceId=i-0b39e16ddbb48f05e&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=DSk%2B%2BwQqVGPv%2FC5vyq8zvfFHxSFvLkmXsGipeNUYBQQ%3D',
+  'DV':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAI2NJVYXCCAQDCC5Q&Action=DescribeVolumes&Expires=2030-01-01&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&VolumeId=vol-0d245f72f3413ae86&Signature=EDM414fdY2jHT0mhGofbuJU73vqwLWlKnJgOsw8U4dc%3D',
+  'GCO':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAI2NJVYXCCAQDCC5Q&Action=GetConsoleOutput&Expires=2030-01-01&InstanceId=i-0b39e16ddbb48f05e&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=ekQyfK7f%2FSj9i%2B5fiLc4B3Wui2fz9JmW2%2BGtSNgtr0o%3D',
+  'GU':'https://iam.amazonaws.com/?AWSAccessKeyId=AKIAI2NJVYXCCAQDCC5Q&Action=GetUser&Expires=2030-01-01&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2010-05-08&Signature=jgeLNTQY1yVtUs2JCChV1AlzaQLkyn6%2BKx%2BQIxmlLew%3D',
+  'DIAud':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAI2NJVYXCCAQDCC5Q&Action=DescribeInstanceAttribute&Attribute=userData&Expires=2030-01-01&InstanceId=i-0b39e16ddbb48f05e&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=LSb9dFBO0faQvY9EjjF6axvQoal%2FqmMcAiruMJchBxg%3D',
+  'DIAk':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAI2NJVYXCCAQDCC5Q&Action=DescribeInstanceAttribute&Attribute=kernel&Expires=2030-01-01&InstanceId=i-0b39e16ddbb48f05e&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=XWMW8%2FaGlZn2%2BgJGCmj%2FXHQ5%2FELC%2Bs0pWgpSzv2dcfw%3D',
+  'DIAr':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAI2NJVYXCCAQDCC5Q&Action=DescribeInstanceAttribute&Attribute=ramdisk&Expires=2030-01-01&InstanceId=i-0b39e16ddbb48f05e&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=%2BhpRfE08kuIuNC9irB0YkoHxLzEvcjomGcgbdfE31MA%3D',
+  'DImg':'https://ec2.us-east-1.amazonaws.com/?AWSAccessKeyId=AKIAI2NJVYXCCAQDCC5Q&Action=DescribeImages&Expires=2030-01-01&ImageId.1=ami-08514e4e0cd45a2f4&SignatureMethod=HmacSHA256&SignatureVersion=2&Version=2014-10-01&Signature=CHGkCkAEshf366SEVqz091IHM0ifQmmvIpXtrTeKNyA%3D',
+  'instanceId': 'i-0b39e16ddbb48f05e',
+  'pubkeyPEM': '-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7kyCJQVb6z2qqZmwxE3Uhqtpg0b6\nTn4YzrusUrajjARpy11GvrCpJaa+6LjUwZVNAS6fQ1s7LthGa2AHRJeWpQ==\n-----END PUBLIC KEY-----'
 }
 
 
