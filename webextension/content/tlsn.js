@@ -630,7 +630,7 @@ async function verifyNotarySig(sigDER, pkPEM, signed_data_ba){
 if (typeof module !== 'undefined'){ //we are in node.js environment
   module.exports={
     computeCommitHash,
-    decrypt_tls_response,
+    decrypt_tls_responseV4,
     start_audit,
     verifyECParamsSig,
     verifyNotarySig,
