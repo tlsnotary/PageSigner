@@ -366,12 +366,21 @@ const start_audit = async function(server, port, headers){
 function splitResponseIntoRecords(s){
   var records = []
   var p = 0 //position in the stream
+  var alertSeen = false
 
   while (p < s.length){
+    if (alertSeen){
+      console.log('Server unexpectedly sent more data after Alert')
+      throw('Server unexpectedly sent more data after Alert')
+    }
     if (! eq(s.slice(p,p+3), [0x17,0x03,0x03])){
       if (eq(s.slice(p,p+3), [0x15,0x03,0x03])){
-        console.log('Server sent Alert instead of response')
-        throw('Server sent Alert instead of response')
+        if (records.length == 0){
+          console.log('Server sent Alert instead of response')
+          throw('Server sent Alert instead of response')
+        }
+        alertSeen = true
+        console.log('server sent Alert, presumably Close Notify')
       }
       else{
         console.log('Server sent an unknown message')
@@ -382,7 +391,12 @@ function splitResponseIntoRecords(s){
     p+=3 
     let reclen = ba2int(s.slice(p, p+=2))
     let record = s.slice(p, p+=reclen)
-    records.push(record)
+    if (alertSeen){
+      continue
+    }
+    else {
+      records.push(record)
+    }
   }
   assert(p == s.length, 'The server sent a misformatted reponse')
   return records
