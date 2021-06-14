@@ -211,6 +211,7 @@ if (argv[2] === 'notarize') {
     var server = argv[3]
     var headersfile = argv[5]
     var headers = fs.readFileSync(headersfile).toString()
+    headers = headers.replace(/\n/g, '\r\n')
     await verifychain.parse_certs()
     var rv = await tlsn.start_audit(server, 443, headers)
     var dirname = await mainjs.save_session(rv)
