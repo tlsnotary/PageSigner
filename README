@@ -1,6 +1,6 @@
 ----------------------------------------------------------------
 UPDATE: Jul 2021
-A flaw in PageSigner has been discovered which allows to forge PageSigner's signatures under certain circumstances.
+A flaw in PageSigner has been brought to our attention which allows to create forged proofs under certain conditions.
 We are working on a mitigation.
 
 Read more here:
