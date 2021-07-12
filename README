@@ -1,3 +1,13 @@
+----------------------------------------------------------------
+UPDATE: Jul 2021
+A flaw in PageSigner has been discovered which allows to forge PageSigner's signatures under certain circumstances.
+We are working on a mitigation.
+
+Read more here:
+https://github.com/tlsnotary/pagesigner/issues/46
+----------------------------------------------------------------
+
+
 PageSigner works with many Chromium-based browsers (e.g. Chromium, Vivaldi, Brave, Google Chrome)
 
 You can load PageSigner from the source files of this repo this way:
