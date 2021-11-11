@@ -1,0 +1,32 @@
+body{
+  background-image: linear-gradient(to right bottom, #d1d1d1, #d8d8d8, #dfdfdf, #e7e7e7, #eeeeee);
+  margin-top: 20px;
+  margin-bottom: 20px;
+  margin-left: 60px;
+  margin-right: 60px;
+  font-family: 'Lucida Grande', 'Segoe UI', Tahoma, 'DejaVu Sans', Arial, sans-serif;
+  font-size: 75%;
+}
+
+.btn {
+	box-shadow: 0px 0px 0px 2px #9fb4f2;
+	background-color:#475bbf;
+	border-radius:10px;
+	border:1px solid #4e6096;
+	cursor:pointer;
+	color:#ffffff;
+	font-family:Arial;
+	font-size:12px;
+	text-decoration:none;
+  text-shadow:0px 1px 0px #283966;
+  margin-left: 20px;
+}
+
+
+.icon:hover{
+  cursor:pointer;
+}
+        
+
+
+

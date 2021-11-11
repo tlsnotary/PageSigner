@@ -1,0 +1,202 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <style>
+    body {
+      margin-top: 0px;
+      margin-bottom: 0px;
+      margin-left: 0px;
+      margin-right: 0px;
+      /*width: 16em;*/
+      /* Fonts Chrome specifies for each OS:     */
+      /* Linux: 'DejaVu Sans', Arial, sans-serif */
+      /* Mac: 'Lucida Grande', sans-serif        */
+      /* Windows: 'Segoe UI', Tahoma, sans-serif */
+      font-family: 'Lucida Grande', 'Segoe UI', Tahoma, 'DejaVu Sans', Arial, sans-serif;
+      font-size: 75%;
+      color: #303942;
+    }
+
+    tr.border_bottom td {
+      border-bottom: 1pt solid grey;
+    }
+
+    tr:hover {
+      background-color: #eee;
+    }
+
+    td {
+      font-size: 11pt;
+      padding-top: 7px;
+      padding-bottom: 7px;
+      padding-right: 0px;
+      padding-left: 0px;
+    }
+
+    td.pointer{
+      cursor: pointer;
+    }
+
+    .menu_img {
+      width: 16px;
+      height: 16px;
+      padding-right: 0px;
+    }
+
+    .myButton {
+      box-shadow:inset 0px -3px 7px 0px #29bbff;
+      background:linear-gradient(to bottom, #2dabf9 5%, #0688fa 100%);
+      background-color:#2dabf9;
+      border-radius:3px;
+      border:1px solid #0b0e07;
+      display:inline-block;
+      cursor:pointer;
+      color:#ffffff;
+      font-family:Arial;
+      font-size:15px;
+      padding:9px 23px;
+      text-decoration:none;
+      text-shadow:0px 1px 0px #263666;
+    }
+
+    .myButton:hover {
+      background:linear-gradient(to bottom, #0688fa 5%, #2dabf9 100%);
+      background-color:#0688fa;
+    }
+
+    .myButton:active {
+      position:relative;
+      top:1px;
+    }
+    
+    .warning{
+      margin-top: 20px;
+      margin-bottom: 20px;
+      margin-left: 20px;
+      margin-right: 20px;
+      width: 32em;
+    }
+
+    .progDiv {
+      width: 100%;
+      background-color: #ddd;
+      padding-top: 6px;
+    }
+
+    .progBar {
+      width: 0%;
+      height: 20px;
+      background-color: #1b92cd;
+      text-align: center;
+      line-height: 20px;
+      color: white;
+    }
+  </style>
+</head>
+
+
+<body>
+
+  <div style='padding: 5px; word-wrap: break-word;' id='aboutWindow' hidden>
+    <h1 align="center">PageSigner v3.0</h1>
+    <p align="center">Email the developers: </p>
+    <p align="center">
+      <a href="mailto:tlsnotarygroup@gmail.com">tlsnotarygroup@gmail.com</a>
+    </p>
+  </div>
+
+  <div style='padding: 5px; word-wrap: break-word;' id='grantPermission' hidden>
+    <h3>Please allow PageSigner to access this page.</h3>   
+  </div>
+
+  <div id='managerTable'>
+  <table style="width: 16em;" id='menu' hidden>
+    <tr class="border_bottom">
+      <td class="pointer" id="notarize">
+        <img class='menu_img' src="../img/icon.svg"></img>
+        <text style='padding-right: 5px;'>Notarize this page</text>
+      </td>
+      <!-- notarizeAfter is not currently in use -->
+      <td id="notarizeAfter" hidden>
+        <img style="cursor:pointer;width:12px;height:12px;position:fixed;right:0px;top:2px" title="Click this tiny cursor icon if you want to make a click on the page first. As soon as you click on the page, PageSigner will start notarizing" class='menu_img'
+          src="../img/arrow16.png"></img>
+      </td>
+
+      <tr class="border_bottom">
+        <td class="pointer" id="manage">
+          <img class='menu_img' src="../img/files.svg"></img>
+          <text>Manage sessions</text>
+        </td>
+      </tr>
+      <tr class="border_bottom">
+        <td class="pointer" id="import">
+          <img class='menu_img' src="../img/import.svg"></img>
+          <text>Import session</text>
+      </tr>
+      <tr>
+        <td class="pointer" id="about">
+          <img class='menu_img' src="../img/icon.svg"></img>
+          <text>About</text>
+      </tr>
+  </table>
+  </div>
+
+  <div style="width: 14em;" id='appNotInstalledChrome' class='warning' hidden>
+    <h3>PageSigner requires that you install a helper app from Chrome web store to perform notarizations.</h3>
+    <input id="openWebStore" type="button" class="myButton" value="Open web store."/>
+  </div>
+
+  <div style="width: 14em;" id='appNotInstalledFirefox' class='warning' hidden>
+    <h3>PageSigner requires that a Python script must be running while performing notarizations.</h3>
+    <input id='showPythonScript' type="button" class="myButton" value="Show me the script."/>
+  </div>
+
+  <div id='app_disabled' class='warning' hidden>
+    <h3>Please enable PageSigner helper app on the extensions page.</h3>
+    <input type="button" class="myButton" click="location.href='chrome://extensions';" value="Open extensions page" />
+  </div>
+
+  <div id="in_progress" hidden>
+    <div id='notarization_in_progress' class='warning'>
+      <h3>Notarization in progress. Please wait...</h3>
+    </div>
+    <div class='progDiv' id='first_time_progress_div' hidden>
+      <h3 style="display:inline;" id='first_time_progress_text'>First-time setup (takes about 30 sec) </h3>
+      <div class="progBar" id="first_time_progress_bar">0%</div>
+    </div>
+    <div class='progDiv' id='garbling_progress_div'>
+      <h3 style="display:inline;" id='garbling_progress_text'>Performing secure two-party computation (2PC) </h3>
+      <div class="progBar" id="garbling_progress_bar">0%</div>
+    </div>
+    <div class='progDiv' id='download_progress_div'>
+      <h3 style="display:inline;">Downloading </h3>
+      <h3 style="display:inline;" id="download_MB">...</h3>
+      <h3 style="display:inline;">MB of 2PC data from the notary</h3>
+      <div class="progBar" id="download_progress_bar">0%</div>
+    </div>
+    <div class='progDiv' id='upload_progress_div'>
+      <h3 style="display:inline;">Uploading </h3>
+      <h3 style="display:inline;"  id="upload_MB">...</h3>
+      <h3 style="display:inline;">MB of 2PC data to the notary</h3>
+      <div class="progBar" id="upload_progress_bar">0%</div>
+    </div>
+    <div class='progDiv' id='last_stage_progress_div'>
+      <h3 style="display:inline;" id='last_stage_progress_text'>Performing final 2PC </h3>
+      <div class="progBar" id="last_stage_progress_bar">0%</div>
+    </div>
+  </div>
+
+  <div id='waiting_for_click' class='warning' hidden>
+    <h3>Waiting for you to click any https:// link on the page...</h3>
+  </div>
+
+  <div id='popup_error' class='warning' hidden>
+    <h3 id='popup_error_text'></h3>
+  </div>
+
+
+  <script type="module" src="../Popup.js"></script>
+
+</body>

@@ -1,0 +1,32 @@
+pkijs folder contains files from the following sources:
+
+bytestream.js from https://github.com/PeculiarVentures/ByteStream.js/blob/681f2d08b1102dcd39b8a57e989dcdeadf34623d/src/bytestream.js
+asn1.js from https://github.com/PeculiarVentures/ASN1.js/blob/5c64632d8d08955f07a9f80b9518a84d76f605cd/src/asn1.js
+pvutils.js from https://github.com/PeculiarVentures/pvutils/blob/2d15272c34f05581eb268802c5bcfab7c4c04e03/src/utils.js
+the rest of the *.js files are from
+https://github.com/PeculiarVentures/PKI.js/tree/fa83e1ef003c8b450832b8c878cd36b73aaa0dee/src
+
+After putting all the files into the same folder, we changed the paths with
+sed -i 's#from "asn1js"#from "./asn1.js"#g' *
+sed -i 's#from "pvutils"#from "./pvutils.js"#g' *
+sed -i 's#from "bytestreamjs"#from "./bytestream.js"#g' *
+
+
+bigint-crypto-utils.esm.js from
+https://github.com/juanelas/bigint-crypto-utils/tree/954321199d4a8038c3d27113aec825ff2e5bf544/dist/bundles
+
+https://github.com/Azero123/simple-js-ec-math
+browserify simple-js-ec-math/src/index.js --standalone ECSimple > simple-js-ec-math.js
+
+https://raw.githubusercontent.com/dchest/fast-sha256-js/master/sha256.js > fastsha256.js
+
+cbor.js and cose.js are used to verify the enclave attestation document
+cbor.js is from https://github.com/paroga/cbor-js/blob/master/cbor.js
+cose.js was built with browserify coseverify.js --standalone COSE > cose.js	
+
+pako.js ---> SOURCE???
+
+certs.txt is Mozilla'a root store taken from
+https://ccadb-public.secure.force.com/mozilla/IncludedCACertificateReportPEMCSV
+
+
