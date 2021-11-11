@@ -1,0 +1,112 @@
+<script type="module" src="../Viewer.js"></script>
+  
+<meta charset=utf-8>
+
+<style>
+  html, body {
+    height: 100%;
+    padding: 0;
+    margin: 0;
+  }
+
+  body {
+    /* background-image: linear-gradient(to right bottom, #d1d1d1, #d8d8d8, #dfdfdf, #e7e7e7, #eeeeee); */
+  }
+  label { 
+    position: absolute;
+    top: 100px;
+    right: 40px;
+  }
+  
+  .div-1 {
+    display: inline
+  }
+
+  /* .div-1:hover {
+    background-color: yellow;
+  } */
+
+  .div-toggled {
+    background-color: rgb(19, 19, 8) !important;
+    color: blue;
+  }
+
+  input[type="file"] {
+    display: none;
+  }
+  .custom-file-upload {
+    display: inline-block;
+    background-color: #456bbf;
+    border-radius: 10px;
+    border: 4px double #cccccc;
+    color: #eeeeee;
+    text-align: center;
+    font-size: 28px;
+    padding: 20px;
+    width: 200px;
+    -webkit-transition: all 0.5s;
+    -moz-transition: all 0.5s;
+    -o-transition: all 0.5s;
+    transition: all 0.5s;
+    cursor: pointer;
+    margin: 5px;
+  }
+
+  .loader {
+  border: 16px solid #f3f3f3; /* Light grey */
+  border-top: 16px solid #3498db; /* Blue */
+  border-radius: 50%;
+  width: 120px;
+  height: 120px;
+  animation: spin 2s linear infinite;
+  position: absolute;
+    top: 100px;
+    right: 40px;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  } 
+  .m-fadeOut {
+  visibility: hidden;
+  opacity: 0;
+  transition: visibility 0s linear 300ms, opacity 300ms;
+  }
+  .m-fadeIn {
+  visibility: visible;
+  opacity: 1;
+  transition: visibility 0s linear 0s, opacity 300ms;
+  }
+
+</style>
+
+
+<body>
+
+  <div id='duplicate notice' hidden>
+    <h3>The session you are trying to import already exists.</h3>
+    <h3>The name of the session is: </h3>
+    <h3 id='dup name'></h3>
+    <h3>The notarization time is: </h3>
+    <h3 id='dup date'></h3>
+    <h3 id='dup open manager' style="cursor:pointer;">Click here to view this session.</h3>
+  </div>
+  <label id="import_label" for="import" class="custom-file-upload" style="display:none;">
+     Click to open a pgsg file
+  </label>
+  <input id="import" type="file" hidden>
+  <div class="loader" id="loader" hidden></div> 
+
+  <div id='view file' hidden>
+    <br>
+    <br>
+    <br>
+    <br>
+    <text>PageSigner notarized a </text>
+    <text id='type'></text>
+    <text> file  </text>
+    <button id='view file button'>View file</button>
+  </div>
+
+</body>

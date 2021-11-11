@@ -1,22 +1,15 @@
-----------------------------------------------------------------
-UPDATE: Jul 2021
-A flaw in PageSigner has been brought to our attention which allows to create forged proofs under certain conditions.
-We are working on a mitigation.
+PageSigner - a cryptographically secure webpage screenshot tool.
 
-Read more here:
-https://github.com/tlsnotary/pagesigner/issues/46
-----------------------------------------------------------------
+PageSigner is a Chromium extension implementing a client for the TLSNotary protocol.
+
+You can install PageSigner from Chrome webstore:
+
+https://chrome.google.com/webstore/detail/pagesigner/abblaaeblmamacadkdmnejjikbdkemcj
 
 
-PageSigner works with many Chromium-based browsers (e.g. Chromium, Vivaldi, Brave, Google Chrome)
+Or you can install it by cloning this repo with:
 
-You can load PageSigner from the source files of this repo this way:
-
-1. go to chrome://extensions and Enable "Developer mode"
-
-2. Click "Load unpacked" 
-
-3. Navigate inside pagesigner's top folder and click Open.
-
------
-Firefox addon creation is not supported anymore due to missing API in Firefox.
+- git clone --recurse-submodules https://github.com/tlsnotary/pagesigner
+- go to chrome://extensions and Enable "Developer mode"
+- Click "Load unpacked" 
+- Navigate inside pagesigner's top folder and click Open.
