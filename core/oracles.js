@@ -46,6 +46,9 @@ function checkDescribeInstances(xmlDoc, instanceId, imageId, volumeId) {
     assert(parent.getElementsByTagName('instanceId')[0].textContent === instanceId);
     assert(parent.getElementsByTagName('imageId')[0].textContent === imageId);
     assert(parent.getElementsByTagName('instanceState')[0].getElementsByTagName('name')[0].textContent === 'running');
+    // other instance types may use non-nvme disks and thus would bypass the check that 
+    // only one nvme* disk is allowed 
+    assert (parent.getElementsByTagName('instanceType')[0].textContent.startsWith('t3'));
     var launchTime = parent.getElementsByTagName('launchTime')[0].textContent;
     assert(parent.getElementsByTagName('rootDeviceType')[0].textContent === 'ebs');
     assert(parent.getElementsByTagName('rootDeviceName')[0].textContent === '/dev/sda1');
@@ -58,6 +61,7 @@ function checkDescribeInstances(xmlDoc, instanceId, imageId, volumeId) {
     // get seconds from "2015-04-15T19:00:59.000Z"
     assert(getSecondsDelta(volAttachTime, launchTime) <= 2);
     assert(parent.getElementsByTagName('virtualizationType')[0].textContent === 'hvm');
+    assert(parent.getElementsByTagName('hypervisor')[0].textContent === 'xen');
   } catch (e) {
     throw('checkDescribeInstances exception');
   }
@@ -195,12 +199,16 @@ function checkDescribeImages(xmlDoc, imageId, snapshotId){
     assert(images.length == 1);
     const image = images[0];
     assert(image.getElementsByTagName('imageId')[0].textContent == imageId);
+    assert(image.getElementsByTagName('imageState')[0].textContent == 'available');
     assert(image.getElementsByTagName('rootDeviceName')[0].textContent == '/dev/sda1');
     const devices = image.getElementsByTagName('blockDeviceMapping')[0].children;
     assert(devices.length == 1);
     const device = devices[0];
+    assert(device.getElementsByTagName('deviceName')[0].textContent == '/dev/sda1');
     const ebs = device.getElementsByTagName('ebs')[0];
     assert(ebs.getElementsByTagName('snapshotId')[0].textContent == snapshotId);
+    assert(image.getElementsByTagName('virtualizationType')[0].textContent == 'hvm');
+    assert(image.getElementsByTagName('hypervisor')[0].textContent == 'xen');
   } catch (e) {
     throw('checkDescribeImages exception');
   }
