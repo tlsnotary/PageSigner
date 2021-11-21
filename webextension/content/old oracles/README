@@ -1,6 +1,0 @@
-This folder contains notarization files of previous oracles done by the succeeding oracle, e.g.
-
-suppose that we switched from tlsnotarygroup8 to tlsnotarygroup9. We notarize tlsnotarygroup8's AWS URLs using the newly-launched tlsnotarygroup9 oracle and placed the notarization files into the tlsnotarygroup8 folder.
-Whenever a user imports an old pgsg notarized by tlsnotarygroup8, we verify each file in the tlsnotarygroup8 folder to ascertain that tlsnotarygroup8 was indeed a properly set up oracle. 
-
-
