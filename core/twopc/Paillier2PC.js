@@ -1,8 +1,14 @@
 /* eslint-disable no-console */
 /* eslint-disable max-classes-per-file */
 
-import * as bcu from './../third-party/math.js';
-import {ba2str, concatTA, int2ba, str2ba, ba2hex, ba2int} from './../utils.js';
+var bcu
+if (typeof(window) !== 'undefined'){
+  bcu = await import('./../third-party/math.js');
+} else {
+  // we are in node. bcuNode must have been made global
+  bcu = bcuNode
+}
+import {ba2str, concatTA, int2ba, str2ba, ba2int} from './../utils.js';
 
 function pad(str) {
   if (str.length % 2 === 1) {

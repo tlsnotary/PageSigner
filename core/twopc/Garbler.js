@@ -72,7 +72,7 @@ export class Garbler{
 
     // garble the rest of the circuits asyncronously
     const allPromises = [];
-    for (let cNo =1; cNo < this.s.cs.length; cNo++){
+    for (let cNo = 1; cNo < this.s.cs.length; cNo++){
       if (cNo === 5){
         allPromises.push(Promise.resolve('empty'));
         continue;  

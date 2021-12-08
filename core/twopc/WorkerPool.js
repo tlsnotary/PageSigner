@@ -25,12 +25,10 @@ export default class WorkerPool{
       promises.push(Promise.resolve('empty'));
     }
     for (let i=0; i < batch.length; i++){
-      console.log('round ', i);
+      // console.log('round ', i);
       // wait until we have a free worker
       const out = await Promise.any(promises);
-      if (pm != undefined){
-        pm.update(pmtype, {'current': i+1, 'total': batch.length});
-      }
+      if (pm){pm.update(pmtype, {'current': i+1, 'total': batch.length});}
       // find which worker resolved
       let worker = null;
       let idx = null;
