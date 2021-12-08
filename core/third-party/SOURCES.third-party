@@ -13,7 +13,7 @@ sed -i 's#from "bytestreamjs"#from "./bytestream.js"#g' *
 
 
 bigint-crypto-utils.esm.js from
-https://github.com/juanelas/bigint-crypto-utils/tree/954321199d4a8038c3d27113aec825ff2e5bf544/dist/bundles
+https://github.com/juanelas/bigint-crypto-utils/tree/954321199d4a8038c3d27113aec825ff2e5bf544/dist/bundles -> math.js
 
 https://github.com/Azero123/simple-js-ec-math
 browserify simple-js-ec-math/src/index.js --standalone ECSimple > simple-js-ec-math.js
@@ -24,7 +24,7 @@ cbor.js and cose.js are used to verify the enclave attestation document
 cbor.js is from https://github.com/paroga/cbor-js/blob/master/cbor.js
 cose.js was built with browserify coseverify.js --standalone COSE > cose.js	
 
-pako.js ---> SOURCE???
+https://github.com/jedisct1/libsodium.js/blob/354ec814b92e2e5ba0471e9a8a96c1e21c30f171/dist/browsers-sumo/sodium.js --> sodium.js
 
 certs.txt is Mozilla'a root store taken from
 https://ccadb-public.secure.force.com/mozilla/IncludedCACertificateReportPEMCSV

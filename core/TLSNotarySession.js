@@ -1,6 +1,6 @@
 import {TWOPC} from './twopc/TWOPC.js';
 import {TLS} from './TLS.js';
-import {concatTA, sha256, assert, eq, xor, str2ba, pubkeyPEM2raw} from './utils.js';
+import {concatTA, sha256, assert, xor, str2ba} from './utils.js';
   
 
 // class TLSNotarySession impements one notarization session 
@@ -17,7 +17,7 @@ export class TLSNotarySession{
     request;
     notary;
     pm;
-    constructor(server, port, request, notary, sessionOptions, circuits, progressMonitor){
+      constructor(server, port, request, notary, sessionOptions, circuits, progressMonitor){
       this.twopc = new TWOPC(notary, request.length, circuits, progressMonitor);
       this.tls = new TLS(server, port, request, sessionOptions);
       this.probeTLS = new TLS(server, port, request, sessionOptions);
@@ -35,9 +35,9 @@ export class TLSNotarySession{
       const serverEcPubkey = await this.tls.receiveAndParseServerHello();
       const serverX = serverEcPubkey.slice(1,33);
       const serverY = serverEcPubkey.slice(33,65);
-      this.pm.update('last_stage', {'current': 3, 'total': 10});
+      if ( this.pm) this.pm.update('last_stage', {'current': 3, 'total': 10});
       const [pmsShare, cpubBytes] = await this.twopc.getECDHShare(serverX, serverY);
-      this.pm.update('last_stage', {'current': 4, 'total': 10});
+      if ( this.pm) this.pm.update('last_stage', {'current': 4, 'total': 10});
 
       await this.tls.buildClientKeyExchange(cpubBytes);
       const [cr, sr] = await this.tls.getRandoms();
@@ -47,13 +47,13 @@ export class TLSNotarySession{
       await this.tls.sendClientFinished(encCF, tagCF);
       const encSF = await this.tls.receiveServerFinished();
       await this.twopc.checkServerFinished(encSF, this.tls.getAllHandshakes());
-      this.pm.update('last_stage', {'current': 5, 'total': 10});
+      if ( this.pm) this.pm.update('last_stage', {'current': 5, 'total': 10});
 
       const encCountersForRequest = await this.twopc.getEncryptedCounters();
-      this.pm.update('last_stage', {'current': 9, 'total': 10});
+      if ( this.pm) this.pm.update('last_stage', {'current': 9, 'total': 10});
       const encRequestBlocks = this.encryptRequest(this.request, encCountersForRequest);
       const gctrBlocks = await this.twopc.getGctrBlocks();
-      this.pm.update('last_stage', {'current': 10, 'total': 10});
+      if ( this.pm) this.pm.update('last_stage', {'current': 10, 'total': 10});
       const [ghashOutputs, ghashInputsBlob] = await this.twopc.getTagFromPowersOfH(encRequestBlocks);
       await this.tls.buildAndSendRequest(gctrBlocks, ghashOutputs, encRequestBlocks);
       const serverRecords = await this.tls.receiveServerResponse();

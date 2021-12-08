@@ -1,8 +1,5 @@
-import {TWOPC} from './twopc/TWOPC.js';
-import {global} from './globals.js';
-import {ba2str, b64decode, concatTA, int2ba, sha256, b64encode, str2ba, assert,
-  ba2int, dechunk_http, gunzip_http, getRandom, sigDER2p1363, pubkeyPEM2raw, eq,
-  xor, AESECBencrypt, buildChunkMetadata, b64urlencode} from './utils.js';
+import {concatTA, int2ba, sha256, str2ba, assert, ba2int, getRandom, sigDER2p1363,
+  pubkeyPEM2raw, eq, xor, AESECBencrypt, b64urlencode} from './utils.js';
 import {verifyChain, checkCertSubjName} from './verifychain.js';
 import {Socket} from './Socket.js';
 
@@ -44,7 +41,12 @@ export class TLS {
     this.useMaxFragmentLength = options.useMaxFragmentLength;
     this.notaryWillEncryptRequest = options.notaryWillEncryptRequest;
     this.mustVerifyCert = options.mustVerifyCert;
-    this.sckt = new Socket(serverName, port);
+    if (typeof(window) !== 'undefined'){
+      this.sckt = new Socket(serverName, port);
+    } else {
+      // in node SocketNode was made global 
+      this.sckt = new SocketNode(serverName, port);
+    }
   }
 
   buildClientHello(){
@@ -614,14 +616,4 @@ export async function getExpandedKeys(preMasterSecret, cr, sr){
   const client_write_IV = ek.slice(32, 36);
   const server_write_IV = ek.slice(36, 40);
   return [client_write_key, server_write_key, client_write_IV, server_write_IV, MS_CryptoKey];
-}
-
-
-if (typeof module !== 'undefined'){ // we are in node.js environment
-  module.exports={
-    computeCommitHash,
-    decrypt_tls_responseV5,
-    start_audit,
-    getExpandedKeys
-  };
 }

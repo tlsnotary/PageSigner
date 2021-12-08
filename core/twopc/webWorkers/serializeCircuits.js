@@ -1,10 +1,30 @@
 // Serializes the circuit into a compact representation
 
-self.onmessage = function(event) {
-  const text = event.data.text;
-  const [obj, blob] = serializeCircuit(text);
-  postMessage({'obj': obj, blob: blob.buffer});
-};
+if (typeof(importScripts) === 'undefined'){
+  // we are in nodejs
+  import('module').then((module) => {
+    // we cannot use the "import" keyword here because on first pass the browser unconditionaly
+    // parses this if clause and will error out if "import" is found
+    // using process.argv instead of import.meta.url to get the name of this script
+    const filePath = 'file://' + process.argv[1];
+    // this workaround allows to require() from ES6 modules, which is not allowed by default 
+    const require = module.createRequire(filePath)
+    const { parentPort } = require('worker_threads');
+    parentPort.on('message', msg => {
+      const text = msg.text;
+      const [obj, blob] = serializeCircuit(text);
+      parentPort.postMessage({data: {'obj': obj, blob: blob.buffer}});
+    })
+  });
+}
+else {
+  self.onmessage = function(event) {
+    const text = event.data.text;
+    const [obj, blob] = serializeCircuit(text);
+    postMessage({'obj': obj, blob: blob.buffer});
+  };
+}
+
 
 function serializeCircuit(text){
   const obj = {};

@@ -168,9 +168,9 @@ export async function verifySig(pubkeyRaw, sig_p1363, signed_digest){
 // input is Uint8Array
 export async function verifyAttestationDoc(doc){
   // extract x,y from EC pubkey
-  const decoded = window.CBOR.decode(doc.buffer);
+  const decoded = CBOR.decode(doc.buffer);
   const payload = decoded[2].slice(); // need to copy otherwise .buffer will access ab
-  const doc_obj = window.CBOR.decode(payload.buffer);
+  const doc_obj = CBOR.decode(payload.buffer);
   const leafCertDer = doc_obj.certificate.slice();
   const cert_asn1 = asn1js.fromBER(leafCertDer.buffer);
   const leafCert = new Certificate({ schema: cert_asn1.result });  
@@ -205,7 +205,7 @@ export async function verifyAttestationDoc(doc){
 
 export function b64encode(ba) {
   assert(ba instanceof Uint8Array);
-  if (typeof window === 'undefined') {
+  if (typeof(window) === 'undefined') {
     // running in nodejs
     return Buffer.from(ba).toString('base64');
   }
@@ -224,29 +224,23 @@ export function b64encode(ba) {
 
 
 export function b64decode(str) {
-  if (typeof window === 'undefined') {
+  let dec;
+  if (typeof(window) === 'undefined') {
     // running in nodejs
-    return Buffer.from(str, 'base64').toJSON().data;
+    dec = Buffer.from(str, 'base64');
   }
   else {
-    const arr = atob(str).split('').map(function(c) {
+    dec = atob(str).split('').map(function(c) {
       return c.charCodeAt(0);
     });
-    return new Uint8Array(arr);
   }
+  return new Uint8Array(dec);
 }
 
 // conform to base64url format replace +/= with -_ 
 export function b64urlencode (ba){
   assert(ba instanceof Uint8Array);
-  let str;
-  if (typeof window === 'undefined') {
-    // running in nodejs
-    str = Buffer.from(ba).toString('base64');
-  }
-  else {
-    str = b64encode(ba);
-  }
+  let str = b64encode(ba);
   return str.split('+').join('-').split('/').join('_').split('=').join('');
 }
 

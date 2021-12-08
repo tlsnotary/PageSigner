@@ -1,10 +1,11 @@
 // this file is not used by the extension, it serves as an input to to create cose.js with:
 // browserify coseverify.js --standalone COSE > cose.js
 
-const cose = require('cose-js');
+//const cose = require('cose-js');
+import * as cose from 'cose-js'
 
 // x,y,doc is an ArrayBuffer
-const verify = function (x, y, doc){
+export const verify = function (x, y, doc){
     const verifier = {
         'key': {
             'x': Buffer.from(x),

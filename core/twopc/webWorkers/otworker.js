@@ -1,32 +1,67 @@
 // otworker.js is a WebWorker where most of the heavy computations for
-// oblivious transfer happen
+// Oblivious Transfer happen. Based on Chou-Orlandi "Simplest OT"
 
-importScripts('./../../third-party/sodium.js');
+var sodium
+var parentPort_;
 
-self.onmessage = function(event) {
-  const msg = event.data.msg;
-  const data = event.data.data;
+
+if (typeof(importScripts) === 'undefined'){
+  // we are in nodejs
+  import('module').then((module) => {
+    // we cannot use the "import" keyword here because on first pass the browser unconditionaly
+    // parses this if clause and will error out if "import" is found
+    // using process.argv instead of import.meta.url to get the name of this script
+    const filePath = 'file://' + process.argv[1];
+    // this workaround allows to require() from ES6 modules, which is not allowed by default 
+    const require = module.createRequire(filePath)
+    const { parentPort } = require('worker_threads');
+    parentPort_ = parentPort
+    sodium = require('libsodium-wrappers-sumo');
+    parentPort.on('message', msg => {
+      processMessage(msg);
+    })
+  })
+} else {
+  importScripts('./../../third-party/sodium.js');
+  self.onmessage = function(event) {
+    processMessage(event.data);
+  };
+}
+
+
+function processMessage(obj){
+  const msg = obj.msg;
+  const data = obj.data;
   if (msg === 'saveDecryptionKeys'){
     const bytes = new Uint8Array(data.bytes);
     const A = new Uint8Array(data.A);
     const rv = saveDecryptionKeys(bytes, A);
-    postMessage({'blob': rv.buffer});
+    postMsg({'blob': rv.buffer});
 
   }
   else if (msg === 'precomputePool'){
     const count = data.count;
     const A = new Uint8Array(data.A);
     const rv = precomputePool(count, A);
-    postMessage({'blob': rv.buffer});
+    postMsg({'blob': rv.buffer});
   }
   else if (msg === 'prepareEncryptionKeys'){
     const bytes = new Uint8Array(data.bytes);
     const a = new Uint8Array(data.a, data.A);
     const A = new Uint8Array(data.A);
     const rv = prepareEncryptionKeys(bytes, a, A);
-    postMessage({'blob': rv.buffer});
+    postMsg({'blob': rv.buffer});
   }
-};
+}
+
+
+function postMsg(value, transferList){
+  if (typeof importScripts !== 'function'){
+    parentPort_.postMessage({data:value}, transferList)
+  } else {
+    postMessage(value, transferList);
+  }
+}
 
 
 function prepareEncryptionKeys(bytes, a, A){
