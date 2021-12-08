@@ -13,7 +13,7 @@ sed -i 's#from "bytestreamjs"#from "./bytestream.js"#g' *
 
 
 bigint-crypto-utils.esm.js from
-https://github.com/juanelas/bigint-crypto-utils/tree/954321199d4a8038c3d27113aec825ff2e5bf544/dist/bundles
+https://github.com/juanelas/bigint-crypto-utils/tree/954321199d4a8038c3d27113aec825ff2e5bf544/dist/bundles -> math.js
 
 https://github.com/Azero123/simple-js-ec-math
 browserify simple-js-ec-math/src/index.js --standalone ECSimple > simple-js-ec-math.js
@@ -25,6 +25,8 @@ cbor.js is from https://github.com/paroga/cbor-js/blob/master/cbor.js
 cose.js was built with browserify coseverify.js --standalone COSE > cose.js	
 
 pako.js ---> SOURCE???
+math.js ---> https://github.com/juanelas/bigint-mod-arith  Added const self = {} on top to make node happy
+sodium.js ----> SOURCE???
 
 certs.txt is Mozilla'a root store taken from
 https://ccadb-public.secure.force.com/mozilla/IncludedCACertificateReportPEMCSV

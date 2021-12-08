@@ -2,8 +2,7 @@
 // of garbled circuits
 
 // eslint-disable-next-line no-undef
-importScripts('./../../third-party/nacl-fast.js');
-
+var parentPort_;
 let circuit = null;
 let truthTable = null;
 let timeEvaluating = 0;
@@ -16,11 +15,41 @@ const byteArray = new Uint8Array(24);
 let randomPool; 
 // randomPoolOffset will be moved after data was read from randomPool
 let randomPoolOffset = 0; 
-let garbledAssigment; 
+let garbledAssigment;
+var crypto_;
+var nacl;
 
-self.onmessage = function(event) {
-  const msg = event.data.msg;
-  const data = event.data.data;
+if (typeof(importScripts) !== 'undefined') {
+  importScripts('./../../third-party/nacl-fast.js');
+  crypto_ = self.crypto;
+  self.onmessage = function(event) {
+    processMessage(event.data);
+  };
+} else {
+  // we are in nodejs
+  import('module').then((module) => {
+    // we cannot use the "import" keyword here because on first pass the browser unconditionaly
+    // parses this if clause and will error out if "import" is found
+    // using process.argv instead of import.meta.url to get the name of this script
+    const filePath = 'file://' + process.argv[1];
+    // this workaround allows to require() from ES6 modules, which is not allowed by default 
+    const require = module.createRequire(filePath)
+    nacl = require('tweetnacl')
+    const { parentPort } = require('worker_threads');
+    parentPort_ = parentPort
+    const { Crypto } = require("@peculiar/webcrypto");
+    crypto_ = new Crypto();
+    const perf = {'now':function(){return 0;}}
+    global.performance = perf;
+    parentPort.on('message', msg => {
+      processMessage(msg);
+    })
+  })
+} 
+
+function processMessage(obj){
+  const msg = obj.msg;
+  const data = obj.data;
   if (msg === 'parse'){
     circuit = data;
     garbledAssigment = new Uint8Array(32*(circuit.wiresCount));
@@ -31,7 +60,6 @@ self.onmessage = function(event) {
     truthTable = new Uint8Array(data);
   }
   else if (msg === 'garble'){
-    console.log('in garble with circuit', circuit);
     if (circuit == null){
       console.log('error: need to parse circuit before garble');
       return;
@@ -47,7 +75,7 @@ self.onmessage = function(event) {
     assert (outputLabels.length === circuit.outputSize*32);
     const obj = {'tt': truthTable.buffer, 'il': inputLabels.buffer, 'ol': outputLabels.buffer, 'R': R};
     console.timeEnd('garbling done in');
-    postMessage(obj, [truthTable.buffer, inputLabels.buffer, outputLabels.buffer]);
+    postMsg(obj, [truthTable.buffer, inputLabels.buffer, outputLabels.buffer]);
   }
   else if (msg === 'evaluate'){
     if (circuit == null || truthTable == null){
@@ -59,12 +87,22 @@ self.onmessage = function(event) {
     assert (inputLabels.length === circuit.clientInputSize*16 + circuit.notaryInputSize*16);
     const outputLabels = evaluate(circuit, garbledAssigment, truthTable, inputLabels);
     assert (outputLabels.length === circuit.outputSize*16);
-    postMessage(outputLabels.buffer);
+    postMsg(outputLabels.buffer);
   }
   else {
     console.log('Error: unexpected message in worker');
   }
-};
+}
+
+
+function postMsg(value, transferList){
+  if (typeof importScripts !== 'function'){
+    parentPort_.postMessage({data:value}, transferList)
+  } else {
+    postMessage(value, transferList);
+  }
+}
+
 
 function newR(){
   const R = getRandom(16);
@@ -324,7 +362,7 @@ function encrypt(a, b, t, m) {
 }
 
 function randomOracle(m, t) {
-  return self.nacl.secretbox(
+  return nacl.secretbox(
     m,
     longToByteArray(t),
     sha0,
@@ -372,7 +410,7 @@ function fillRandom(count){
   const randomChunks = [];
   const chunkCount = Math.ceil(count/65536);
   for (let i=0; i < chunkCount; i++){
-    randomChunks.push(self.crypto.getRandomValues(new Uint8Array(65536)));
+    randomChunks.push(crypto_.getRandomValues(new Uint8Array(65536)));
   } 
   randomPool = concatTA(...randomChunks);
   randomPoolOffset = 0;

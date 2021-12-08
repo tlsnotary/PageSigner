@@ -1,20 +1,19 @@
 /* eslint-disable no-import-assign */
 /* eslint-disable no-case-declarations */
-import {parse_certs, verifyChain, checkCertSubjName, getCommonName, getAltNames} from './verifychain.js';
-import {ba2str, b64decode, concatTA, int2ba, sha256, b64encode, str2ba, verifySig, assert,
-  ba2int, getTime, dechunk_http, gunzip_http, xor, eq, wait, AESECBencrypt, wildcardTest,
-  pubkeyPEM2raw, ba2hex} from './utils.js';
-import {getPref, getSessionBlob, getSession, getAllSessions, saveNewSession as saveNewSession, init_db,
+import {parse_certs, verifyChain, getCommonName, getAltNames} from './verifychain.js';
+import {ba2str, b64decode, concatTA, int2ba, sha256, b64encode, verifySig, assert,
+  ba2int, xor, eq, wait, AESECBencrypt, wildcardTest, pubkeyPEM2raw, import_resource} from './utils.js';
+import {getPref, getSessionBlob, getSession, getAllSessions, saveNewSession, init_db,
   addNewPreference, setPref, renameSession, deleteSession} from './indexeddb.js';
-import {global} from './globals.js';
+import {globals} from './globals.js';
 import {Socket} from './Socket.js';
 import {TLS, getExpandedKeys, decrypt_tls_responseV6} from './TLS.js';
-import {verify_oracle as verifyNotary, getURLFetcherDoc} from './oracles.js';
+import {verifyNotary, getURLFetcherDoc} from './oracles.js';
 import {TLSNotarySession} from './TLSNotarySession.js';
 import {ProgressMonitor} from './ProgressMonitor.js';
 import {FirstTimeSetup} from './FirstTimeSetup.js';
 
-class Main{
+export class Main{
   constructor(){
     this.messageListener;
     this.notarization_in_progress = false;
@@ -31,13 +30,15 @@ class Main{
     // trustedOracle is an object {'IP':<IP address>, 'pubkeyPEM':<pubkey in PEM format>}
     // describing the oracle server which was verified and can be used for notarization.
     this.trustedOracle = null;
-    this.is_chrome = window.navigator.userAgent.match('Chrome') ? true : false;
-    this.is_firefox = window.navigator.userAgent.match('Firefox') ? true : false;
-    this.is_edge = window.navigator.userAgent.match('Edg') ? true : false;
-    this.is_opera = window.navigator.userAgent.match('OPR') ? true : false;
-    // pm is the only instance of ProgressMonitor that is reused between
-    // notarization sesions
-    this.pm = new ProgressMonitor();
+    if (typeof(window) != 'undefined') {
+      this.is_chrome = window.navigator.userAgent.match('Chrome') ? true : false;
+      this.is_firefox = window.navigator.userAgent.match('Firefox') ? true : false;
+      this.is_edge = window.navigator.userAgent.match('Edg') ? true : false;
+      this.is_opera = window.navigator.userAgent.match('OPR') ? true : false;
+      // pm is the only instance of ProgressMonitor that is reused between
+      // notarization sesions
+      this.pm = new ProgressMonitor();
+    }
     // trustedOracleReady will be set to true after we performed AWS HTTP queries
     // and verified that an oracle is trusted (we verify only once)
     this.trustedOracleReady = false;
@@ -46,7 +47,7 @@ class Main{
   async main() {   
     // perform browser-specific init first   
     if (this.is_edge || this.is_firefox || this.is_opera){
-      global.usePythonBackend = true;
+      globals.usePythonBackend = true;
     }
     if (this.is_firefox){
     // Firefox asks user for permission to access the current website. 
@@ -84,9 +85,13 @@ class Main{
     if (await getPref('trustedOracle') === null){
       await addNewPreference('trustedOracle', {});
     }
-    await parse_certs();
-    if (global.useNotaryNoSandbox){
-      await this.queryNotaryNoSandbox(global.defaultNotaryIP);
+    const text = await import_resource('core/third-party/certs.txt');
+    await parse_certs(text);
+    if (globals.useNotaryNoSandbox){
+      const obj = await this.queryNotaryNoSandbox(globals.defaultNotaryIP);
+      this.trustedOracle = obj;
+      this.trustedOracleReady = true;
+      await setPref('trustedOracle', obj);
       return;
     }
     this.trustedOracle = await getPref('trustedOracle');
@@ -100,17 +105,17 @@ class Main{
       return;
     }
     // on first launch trustedOracle is not set, verify the default one asynchronously
-    if (await this.pingNotary(global.defaultNotaryIP) !== true){
-      await this.tryBackupNotary(global.defaultNotaryIP);
+    if (await this.pingNotary(globals.defaultNotaryIP) !== true){
+      await this.tryBackupNotary(globals.defaultNotaryIP);
       return;
     }
     // notary is online
-    const URLFetcherDoc = await getURLFetcherDoc(global.defaultNotaryIP);
+    const URLFetcherDoc = await getURLFetcherDoc(globals.defaultNotaryIP, globals.defaultNotaryPort);
     const trustedPubkeyPEM = await verifyNotary(URLFetcherDoc);
     assert(trustedPubkeyPEM != undefined);
     // verification was successful
     const obj = {
-      'IP': global.defaultNotaryIP,
+      'IP': globals.defaultNotaryIP,
       'pubkeyPEM': trustedPubkeyPEM,
       'URLFetcherDoc': URLFetcherDoc
     };
@@ -121,25 +126,22 @@ class Main{
 
   async queryNotaryNoSandbox(IP){
     // just fetch the pubkey and trust it
-    const resp = await fetch('http://'+IP+':' + global.defaultNotaryPort + '/getPubKey', {
+    const resp = await fetch('http://'+IP+':' + globals.defaultNotaryPort + '/getPubKey', {
       method: 'POST',
       mode: 'cors',
       cache: 'no-store',
     });
     const trustedPubkeyPEM = await resp.text();
-    const obj = {
+    return {
       'IP': IP,
       'pubkeyPEM': trustedPubkeyPEM,
     };
-    await setPref('trustedOracle', obj);
-    this.trustedOracle = obj;
-    this.trustedOracleReady = true;
   }
 
   // pingNotary returns true if notary's IP address is reachable
   async pingNotary(IP){
     // ping the notary, it should respond with 404 not found
-    const fProm = fetch('http://'+IP+':'+ global.defaultNotaryPort + '/ping', {
+    const fProm = fetch('http://'+IP+':'+ globals.defaultNotaryPort + '/ping', {
       mode: 'no-cors'
     });
     const out = await Promise.race([fProm, wait(5000)])
@@ -156,7 +158,7 @@ class Main{
   // tryBackupNotary tries to use a backup notary. It checks that the backup notary
   // is not the same as failedNotaryIP 
   async tryBackupNotary(failedNotaryIP){
-    const resp = await fetch(global.backupUrl);
+    const resp = await fetch(globals.backupUrl);
     const backupIP = await resp.text();
     if (backupIP === failedNotaryIP){
       throw('Notary is unreachable. Please let the Pagesigner devs know about this.');
@@ -165,7 +167,7 @@ class Main{
       console.log('Backup notary is unreachable.');
       throw('Notary is unreachable. Please let the Pagesigner devs know about this.');
     }
-    const URLFetcherDoc = await getURLFetcherDoc(backupIP);
+    const URLFetcherDoc = await getURLFetcherDoc(backupIP, globals.defaultNotaryPort);
     const trustedPubkeyPEM = await verifyNotary(URLFetcherDoc);
     assert(trustedPubkeyPEM != undefined);
     const obj = {
@@ -458,7 +460,7 @@ class Main{
     x.splice(0, 3);
     const resource_url = x.join('/');
     
-    const http_version = global.useHTTP11 ? ' HTTP/1.1':' HTTP/1.0';
+    const http_version = globals.useHTTP11 ? ' HTTP/1.1':' HTTP/1.0';
     let headers = obj.method + ' /' + resource_url + http_version + '\r\n';
     // Chrome doesnt add Host header. Firefox does
     if (this.is_chrome){
@@ -604,11 +606,11 @@ class Main{
     }
     const circuits = await getPref('parsedCircuits');
     const session = new TLSNotarySession(
-      server, port, headers, this.trustedOracle, global.sessionOptions, circuits, this.pm);
+      server, port, headers, this.trustedOracle, globals.sessionOptions, circuits, this.pm);
     const obj = await session.start();
     obj['title'] = 'PageSigner notarization file';
     obj['version'] = 6;
-    if (! global.useNotaryNoSandbox){
+    if (! globals.useNotaryNoSandbox){
       obj['URLFetcher attestation'] = this.trustedOracle.URLFetcherDoc;
     }
     const [host, request, response, date] = await this.verifyPgsgV6(obj);
@@ -704,7 +706,7 @@ class Main{
     assert(obj['version'] === 6);
 
     // Step 1. Verify URLFetcher attestation doc and get notary's pubkey
-    if (! global.useNotaryNoSandbox){
+    if (! globals.useNotaryNoSandbox){
       // by default we verify that the notary is indeed a properly sandboxed machine 
       var URLFetcherDoc = obj['URLFetcher attestation'];
       var notaryPubkey = await verifyNotary(URLFetcherDoc);
@@ -844,9 +846,7 @@ class Main{
     const responseRecords = await decrypt_tls_responseV6(
       obj['server response records'], swk, siv);
     const response = ba2str(concatTA(...responseRecords));
-    console.log(response);
-    return [host, request, response, date.toGMTString()];
-    
+    return [host, request, response, date.toGMTString()];    
   }
   
   async importPgsgAndShow(importedData) {
@@ -1045,8 +1045,8 @@ class Main{
   }
 
   async useNotaryNoSandbox(IP){
-    global.defaultNotaryIP = IP;
-    global.useNotaryNoSandbox = true;
+    globals.defaultNotaryIP = IP;
+    globals.useNotaryNoSandbox = true;
     await this.queryNotaryNoSandbox(IP);
   }
 }
@@ -1062,12 +1062,4 @@ if (typeof(window) != 'undefined') {
         text: err
       });
     });
-}
-
-
-if (typeof module !== 'undefined'){ // we are in node.js environment
-  module.exports={
-    save_session,
-    verifyPgsg
-  };
 }

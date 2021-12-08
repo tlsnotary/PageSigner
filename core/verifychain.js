@@ -8,7 +8,7 @@ var trustedCertificates = [];
 
 
 // extract PEMs from Mozilla's CA store and convert into asn1js's Certificate object
-export async function parse_certs(){
+export async function parse_certs(text){
   // wait for pkijs module to load
   while (typeof(asn1js) == 'undefined'){
     console.log('waiting for pkijs');
@@ -19,7 +19,6 @@ export async function parse_certs(){
     });
   }
 
-  const text = await import_resource('core/third-party/certs.txt');
   const lines = text.split('"\n"').slice(1); // discard the first line - headers
   for (const line of lines){
     const fields = line.split('","');

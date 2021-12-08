@@ -3,7 +3,7 @@ import {concatTA, int2ba, assert, encrypt_generic, decrypt_generic} from './../u
 
 export class OT{
   // class OT implements oblivious transfer protocol based on
-  // [1] The Simplest Protocol for Oblivious Transfer
+  // Chou-Orlandi "Simplest OT"
   // as much pre-computation as possiblle is done in the offline phase
   
   constructor(){

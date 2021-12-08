@@ -10,7 +10,7 @@ import {Evaluator}  from './Evaluator.js';
 import {OT}         from './OT.js';
 import {Paillier2PC} from './Paillier2PC.js';
 import {GCWorker}   from './GCWorker.js';
-import {global} from './../globals.js';
+import {globals} from './../globals.js';
 
 
 // class C is initialized once and then it is a read-only struct
@@ -132,7 +132,7 @@ export class TWOPC {
 
   // destroy de-registers listeners, terminates workers
   destroy(){
-    this.pm.destroy();
+    if (this.pm) this.pm.destroy();
     for (let i=1; i < this.workers.length; i++){
       const gcworker = this.workers[i];
       for (let j=0; j < gcworker.workers.length; j++){
@@ -784,12 +784,13 @@ export class TWOPC {
     }
 
     const fetchPromise = fetch(
-      'http://'+this.notary.IP+':'+global.defaultNotaryPort+'/'+cmd+'?'+this.uid, 
+      'http://'+this.notary.IP+':'+globals.defaultNotaryPort+'/'+cmd+'?'+this.uid, 
       {
         method: 'POST',
         mode: 'cors',
         cache: 'no-store',
-        // keepalive: true, <-- trips up chrome
+        agent: typeof(window) === 'undefined' ? keepAliveAgent : null,
+        //keepalive: true, // <-- trips up chrome
         body: to_be_sent.buffer
       });
     const that = this;
@@ -839,7 +840,7 @@ export class TWOPC {
     console.log('allFixedInputs.length', allFixedInputsCount);
     console.log('precomputePool size', allNonFixedInputsCount + this.ghashOTNeeded);
    
-    this.pm.update('last_stage', {'current': 1, 'total': 10});
+    if (this.pm) this.pm.update('last_stage', {'current': 1, 'total': 10});
     const receiverBs = await this.ot.saveDecryptionKeys([].concat(...allFixedInputs));
     await this.ot.precomputePool(allNonFixedInputsCount + this.ghashOTNeeded);
 
@@ -867,7 +868,7 @@ export class TWOPC {
       }
     }
     assert(fixedOTBlob.length === idx*32);
-    this.pm.update('last_stage', {'current': 2, 'total': 10});
+    if (this.pm) this.pm.update('last_stage', {'current': 2, 'total': 10});
   }
 
   // preCompute() should be called before run() is called
@@ -954,7 +955,7 @@ export class TWOPC {
       let chunk = blob.slice(sentSoFar, sentSoFar + oneMB);
       await that.send('setBlobChunk', chunk);
       sentSoFar += chunk.length;
-      that.pm.update('upload', {'current': i+1, 'total': chunkCount});
+      if (that.pm) that.pm.update('upload', {'current': i+1, 'total': chunkCount});
     }
     that.send('setBlobChunk', str2ba('magic: no more data'));
   }
@@ -975,7 +976,7 @@ export class TWOPC {
       let chunk = await this.send('getBlobChunk', int2ba(needBytes, 4));
       allChunks.push(chunk);
       soFarBytes += chunk.length;
-      this.pm.update('download', {'current': soFarBytes, 'total': totalBytes});
+      if (this.pm) this.pm.update('download', {'current': soFarBytes, 'total': totalBytes});
     }
     const rv = concatTA(...allChunks);
     assert(rv.length === totalBytes);

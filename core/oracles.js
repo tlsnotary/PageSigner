@@ -1,4 +1,3 @@
-import {global} from './globals.js';
 import {ba2str, b64decode, assert, ba2int, verifyAttestationDoc, ba2hex, eq, 
   sha256} from './utils.js';
 
@@ -224,11 +223,11 @@ async function fetch_and_parse(obj){
   return xmlDoc;
 }
 
-export async function getURLFetcherDoc(IP){
+export async function getURLFetcherDoc(IP, port = 10011){
   // get URLFetcher document containing attestation for AWS HTTP API URLs needed to 
   // verify that the oracle was correctly set up.
   // https://github.com/tlsnotary/URLFetcher
-  const resp = await fetch('http://' + IP + ':' + global.defaultNotaryPort + '/getURLFetcherDoc', {
+  const resp = await fetch('http://' + IP + ':' + port + '/getURLFetcherDoc', {
     method: 'POST',
     mode: 'cors',
     cache: 'no-store',
@@ -236,7 +235,7 @@ export async function getURLFetcherDoc(IP){
   return new Uint8Array(await resp.arrayBuffer());
 }
 
-export async function verify_oracle(URLFetcherDoc) {
+export async function verifyNotary(URLFetcherDoc) {
   // URLFetcherDoc is a concatenation of 4-byte transcript length | transcript | attestation doc
   const transcriptLen = ba2int(URLFetcherDoc.slice(0,4));
   const transcript = URLFetcherDoc.slice(4,4+transcriptLen);

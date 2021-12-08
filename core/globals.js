@@ -1,4 +1,4 @@
-export const global = {
+export const globals = {
   // defaultNotaryIP/Port is the default IP address/port of the notary server.
   // If this IP address becomes unavailable, Pagesigner will query backupUrl for
   // a new notary's IP address and will save the new IP address in the preferences.

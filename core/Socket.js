@@ -8,7 +8,7 @@
 // We do not communicate directly with the server but we send messages to the helper app
 // It is the helper app which opens a TCP socket and sends/receives data
 
-import {global} from './globals.js';
+import {globals} from './globals.js';
 import {ba2str, b64decode, concatTA, b64encode, str2ba, ba2int} from './utils.js';
 
 export class Socket {
@@ -42,7 +42,7 @@ export class Socket {
       }, that.connectTimeout);
 
       const msg = {'command': 'connect','args': {'name': that.name,'port': that.port},'uid': that.uid};
-      if (global.usePythonBackend){
+      if (globals.usePythonBackend){
         const url = 'http://127.0.0.1:' + that.backendPort;
         const payload = JSON.stringify(msg);
         try{
@@ -58,7 +58,7 @@ export class Socket {
         return;
       }
       else {
-        chrome.runtime.sendMessage(global.appId, msg, function(response) {resolve(response);});
+        chrome.runtime.sendMessage(globals.appId, msg, function(response) {resolve(response);});
       }
     })
       .catch(function(e){
@@ -87,13 +87,13 @@ export class Socket {
 
   async send(data_in) {
     var msg = {'command': 'send', 'args': {'data': Array.from(data_in)}, 'uid': this.uid};
-    if (global.usePythonBackend){
+    if (globals.usePythonBackend){
       msg.args.data = Array.from(b64encode(msg.args.data));
       await fetch('http://127.0.0.1:20022', {method:'POST', body: JSON.stringify(msg),
         cache: 'no-store'});
     }
     else{
-      chrome.runtime.sendMessage(global.appId, msg);
+      chrome.runtime.sendMessage(globals.appId, msg);
     }
   }
 
@@ -105,7 +105,7 @@ export class Socket {
     var that = this;
     var response = await new Promise(async function(resolve){
       var msg = {'command': 'recv', 'uid': that.uid};
-      if (global.usePythonBackend){
+      if (globals.usePythonBackend){
         var req = await fetch('http://127.0.0.1:20022', {method:'POST', body: JSON.stringify(msg),
           cache: 'no-store'});
         var text = new Uint8Array(await req.arrayBuffer());
@@ -116,7 +116,7 @@ export class Socket {
         resolve(response);
       }
       else {
-        chrome.runtime.sendMessage(global.appId, msg, function(response) {resolve(response);});
+        chrome.runtime.sendMessage(globals.appId, msg, function(response) {resolve(response);});
       }
     });
     if (response.data.length > 0){
@@ -130,11 +130,8 @@ export class Socket {
  
   // fetchLoop has built up the recv buffer
   // check if there are complete records in the buffer,return them if yes or wait some more if no
-  recv (is_handshake) {
-    if (is_handshake == undefined) {
-      is_handshake = false;
-    }
-    var that = this;
+  recv (is_handshake = false) {
+    const that = this;
     return new Promise(function(resolve, reject) {
       var dataLastSeen = new Date().getTime();
       var complete_records = new Uint8Array();
@@ -179,7 +176,7 @@ export class Socket {
         const rv = that.check_complete_records(buf);
         complete_records = concatTA(complete_records, rv.comprecs);
         if (!rv.is_complete) {
-          console.log('check_complete_records failed', that.uid);
+          console.log('waiting for complete records...', that.uid);
           buf = rv.incomprecs;
           setTimeout(function() {check();}, 100);
           return;
@@ -210,12 +207,12 @@ export class Socket {
     this.wasClosed = true;
     var msg = {'command': 'close','uid': this.uid};
     console.log('closing socket', this.uid);
-    if (global.usePythonBackend){
+    if (globals.usePythonBackend){
       await fetch('http://127.0.0.1:20022', {method:'POST', body: JSON.stringify(msg),
         cache: 'no-store'});
     }
     else {
-      chrome.runtime.sendMessage(global.appId, msg);
+      chrome.runtime.sendMessage(globals.appId, msg);
     }
   }
 
