@@ -1,10 +1,10 @@
 import {ba2str, b64decode, assert, ba2int, verifyAttestationDoc, ba2hex, eq, 
   sha256} from './utils.js';
 
-// rootOfTrust id the id of an EBS snapshot
+// rootsOfTrust contains an array of trusted EBS snapshots
 // essentially the whole oracle verification procedure boils down to proving that an EC2 instance was
-// launched from an AMI which was created from the "rootOfTrust" snapshot id.
-const rootOfTrust = 'snap-0ccb00d0e0fb4d4da';
+// launched from an AMI which was created from one of the "rootsOfTrust" snapshot ids.
+const rootsOfTrust = ['snap-0ccb00d0e0fb4d4da', 'snap-07eda3ed4836f82fb'];
 // URLFetcher trusted enclave measurements, see
 // https://github.com/tlsnotary/URLFetcher
 const URLFetcherPCR0 = 'f70217239e8a1cb0f3c010b842a279e2b8d30d3700d7e4722fef22291763479a13783dc76d5219fabbd7e5aa92a7b255';
@@ -72,14 +72,14 @@ function checkDescribeInstances(xmlDoc, instanceId, imageId, volumeId) {
 }
 
 
-function checkDescribeVolumes(xmlDoc, instanceId, volumeId, volAttachTime, snapshotId) {
+function checkDescribeVolumes(xmlDoc, instanceId, volumeId, volAttachTime, snapshotIds) {
   try {
     assert(xmlDoc.getElementsByTagName('DescribeVolumesResponse').length == 1);
     const volumes = xmlDoc.getElementsByTagName('volumeSet')[0].children;
     assert(volumes.length === 1);
     const volume = volumes[0];
     assert(volume.getElementsByTagName('volumeId')[0].textContent === volumeId);
-    assert(volume.getElementsByTagName('snapshotId')[0].textContent === snapshotId);
+    assert(snapshotIds.includes(volume.getElementsByTagName('snapshotId')[0].textContent));
     assert(volume.getElementsByTagName('status')[0].textContent === 'in-use');
     const volCreateTime = volume.getElementsByTagName('createTime')[0].textContent;
     const attVolumes = volume.getElementsByTagName('attachmentSet')[0].getElementsByTagName('item');
@@ -191,7 +191,7 @@ function checkGetUser(xmlDoc, ownerId) {
 }
 
 
-function checkDescribeImages(xmlDoc, imageId, snapshotId){
+function checkDescribeImages(xmlDoc, imageId, snapshotIds){
   try {  
     assert(xmlDoc.getElementsByTagName('DescribeImagesResponse').length == 1);
     const images = xmlDoc.getElementsByTagName('imagesSet')[0].children;
@@ -205,7 +205,7 @@ function checkDescribeImages(xmlDoc, imageId, snapshotId){
     const device = devices[0];
     assert(device.getElementsByTagName('deviceName')[0].textContent == '/dev/sda1');
     const ebs = device.getElementsByTagName('ebs')[0];
-    assert(ebs.getElementsByTagName('snapshotId')[0].textContent == snapshotId);
+    assert(snapshotIds.includes(ebs.getElementsByTagName('snapshotId')[0].textContent));
     assert(image.getElementsByTagName('virtualizationType')[0].textContent == 'hvm');
     assert(image.getElementsByTagName('hypervisor')[0].textContent == 'xen');
   } catch (e) {
@@ -309,7 +309,7 @@ export async function verifyNotary(URLFetcherDoc) {
   const ownerId = rv.ownerId;
 
   const xmlDocDV = await fetch_and_parse(o.DV);
-  checkDescribeVolumes(xmlDocDV, instanceId, volumeId, volAttachTime, rootOfTrust);
+  checkDescribeVolumes(xmlDocDV, instanceId, volumeId, volAttachTime, rootsOfTrust);
 
   const xmlDocGU = await fetch_and_parse(o.GU);
   checkGetUser(xmlDocGU, ownerId);
@@ -327,7 +327,7 @@ export async function verifyNotary(URLFetcherDoc) {
   checkDescribeInstanceAttributeRamdisk(xmlDocDIAr, instanceId);
 
   const xmlDocDImg = await fetch_and_parse(o.DImg);
-  checkDescribeImages(xmlDocDImg, amiId, rootOfTrust);
+  checkDescribeImages(xmlDocDImg, amiId, rootsOfTrust);
 
   // verify the attestation document
   const attestRV = await verifyAttestationDoc(attestation);

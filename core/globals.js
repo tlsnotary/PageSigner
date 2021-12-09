@@ -3,7 +3,7 @@ export const globals = {
   // If this IP address becomes unavailable, Pagesigner will query backupUrl for
   // a new notary's IP address and will save the new IP address in the preferences.
   // defaultNotaryIP: '127.0.0.1',
-  defaultNotaryIP: '3.235.172.232',
+  defaultNotaryIP: '3.236.244.77',
   defaultNotaryPort: 10011,
   // backupUrl is the URL to query to get the IP address of another notary
   // server in case if defaultNotaryIP is unreachable
