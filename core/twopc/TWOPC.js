@@ -501,21 +501,26 @@ export class TWOPC {
   }
 
   // for those shares of powers which are not in powersOfH, we do not compute the shares of
-  // powers, but instead we compute the share of X*H
-  // e.g. if we need H^21*X and we have shares of H^19 and H^2, we compute it as follows:
-  // (H19_a + H19_b)(H2_a + H2_b)X == H19_aH2_aX + H19_aXH2_b + H19_bXH2_a + H19_bH2_bX
+  // powers, but instead we compute the share of X_n*H, where X_n is a ciphertext block
+
+  // e.g. if we need H^21*X_1 and we have shares of H^19 and H^2, we compute it as follows:
+  // (H19_a + H19_b)*(H2_a + H2_b)*X_1 == H19_a*H2_a*X_1 + H19_a*X_1*H2_b + H19_b*X_1*H2_a +
+  // H19_b*H2_b*X_1
   // only the 2 middle cross-terms need to be computed using OT
-  // A will send OT for H19_aX to B
-  // B will send OT for H19_bX to A
-  // all other powers where one of the factors is H^2 like eg H^25 == H^23*H^2
-  // can be collapsed into the terms above e.g. H23_aX2 can be collapsed into H19_aX
+  // A will receive OT for H19_a*X_1 from B
+  // B will receive OT for H19_b*X_1 from A
+  // All other powers where one of the factors is H^2 can be "collapsed" into (i.e xored with)
+  // the above two cross-terms, eg if parties have shares of H^23 and need to compute 
+  // H^25 == H^23*H^2, then H23_a*X_2 can be collapsed into H19_a*X_1 and 
+  // H23_b*X_2 can be collapsed into H19_b*X_1
+  // Thus we would not need any extra OT to compute shares of H^25
 
   async useIndirectHShares(ghashInputs){
     let res = int2ba(0, 16); // this is the xor of all my X*H shares 
     let sumForPowers = {};
     for (let i=4; i < this.powersOfH.length; i++){
       if (i > ghashInputs.length){
-        // we will have more powers than the input blocks
+        // we stop iterating shares of powers of H  
         break;
       }
       if (this.powersOfH[i] != undefined){
@@ -642,12 +647,13 @@ export class TWOPC {
     console.log('maxPowerNeeded is', maxPowerNeeded);
     assert(maxPowerNeeded <= 1026);
 
+    // perform free squaring of shares H^2 and H^3 which we have from the Client_Finished
+    this.freeSquare(this.powersOfH, maxPowerNeeded);
+
     if (this.maxOddPowerNeeded === 3){
+      await this.send('ghash_step1', int2ba(maxPowerNeeded, 2));
       return; // already have power 3
     }
-
-    // perform free squaring of shares H^2 and H^3 which we have from client finished
-    this.freeSquare(this.powersOfH, maxPowerNeeded);
     
     // strategies shows what existing powers we will be multiplying to obtain other odd powers
     // max sequential odd power that we can obtain on first round is 19
@@ -739,9 +745,10 @@ export class TWOPC {
     throw('sum not found');
   }
 
-  // Perform squaring of each share of odd power up to maxPower.
+  // Perform squaring of each share of odd power up to maxPower. It is "free" because we can 
+  // compute them locally without doing OT with the other party.
   // "powers" is an array where idx is the power (or undefined if not set) and item at that idx
-  // if client's share of H^power 
+  // is client's share of H^power 
   // modifies "powers" in-place
   // e.g if "powers" contains 1,2,3 and maxPower==19, then upon return "powers"
   // will contain 1,2,3,4,6,8,12,16   
