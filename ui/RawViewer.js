@@ -1,3 +1,5 @@
+/* global chrome*/
+
 import {decode_str} from './utils.js';
 
 class RawViewer{
@@ -7,7 +9,7 @@ class RawViewer{
     // isReady will be se to true after message listener is installed
     window.isReady = false;
   }
-  
+
   main(){
     chrome.runtime.onMessage.addListener(function(obj) {
       if (obj.destination !== 'rawviewer') return;

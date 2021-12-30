@@ -1,114 +1,63 @@
-/* eslint-disable no-bitwise */
-/* eslint-disable class-methods-use-this */
-/* eslint-disable max-len */
+/* global keepAliveAgent */
 
-import {ba2hex, sortKeys, assert, getRandom, bytesToBits, concatTA, int2ba,
-  str2ba, innerHash, xor, blockMult, eq, sha256, getXTable, ba2int, splitIntoChunks,
-  bitsToBytes, pubkeyPEM2raw, checkExpiration, wait}      from '../utils.js';
-import {Garbler}    from './Garbler.js';
-import {Evaluator}  from './Evaluator.js';
-import {OT}         from './OT.js';
+import {ba2hex, assert, getRandom, bytesToBits, concatTA, int2ba, str2ba,
+  innerHash, xor, eq, sha256, ba2int, splitIntoChunks, bitsToBytes,
+  pubkeyPEM2raw, checkExpiration, wait} from '../utils.js';
+import {Garbler}     from './Garbler.js';
+import {Evaluator}   from './Evaluator.js';
 import {Paillier2PC} from './Paillier2PC.js';
-import {GCWorker}   from './GCWorker.js';
-import {globals} from './../globals.js';
+import {GCWorker}    from './GCWorker.js';
+import {globals}     from './../globals.js';
+import {OTSender}    from './OTSender.js';
+import {OTReceiver}  from './OTReceiver.js';
+import {GHASH}       from './GHASH.js';
 
 
-// class C is initialized once and then it is a read-only struct
-// accessed by both garbler and evaluator
-class C{
-  constructor( notaryInputSize, notaryNonFixedInputSize,
-    clientInputSize, clientNonFixedInputSize, circuitOutputSize, circuit, masks, fixedInputs){
-
-    this.notaryInputSize = notaryInputSize;
-    this.clientInputSize = clientInputSize;
-    this.circuitOutputSize = circuitOutputSize;
-    // nonFixedInputs are inputs the value of which is not known in the offline phase
-    // as opposed to fixed inputs like masks which can be chosen in an offline phase
-    // the order of inputs is: non-fixed inputs first, then fixed inputs 
-    this.notaryNonFixedInputSize = notaryNonFixedInputSize;
-    this.clientNonFixedInputSize = clientNonFixedInputSize;
-    this.notaryFixedInputSize = this.notaryInputSize - this.notaryNonFixedInputSize;
-    this.clientFixedInputSize = this.clientInputSize - this.clientNonFixedInputSize;
-    // circuit is a serialized circuit with metadata
-    this.circuit = circuit;
-    // what each mask does for each circuit is explained in c*.casm files
-    this.masks = masks;
-    // fixedInputs is an array A of arrays B, where
-    // arrayA's length is equal to the amount of circuits
-    // arrayB consists of 0 and 1, item at idx==0 is the first input to the circuit
-    this.fixedInputs = fixedInputs;
-  }
-}
-
-
-
-// eslint-disable-next-line no-unused-vars
 export class TWOPC {
-  // notary is an object {'IP':<notary IP address>, 'pubkeyPEM':<notary pubkey in PEM format>}
-  notary;
-  // clientKey is a symmetric key used to encrypt messages to the notary
-  clientKey;
-  // notaryKey is a symmetric key used to decrypt messages from the notary
-  notaryKey;
   constructor(notary, plaintextLen, circuits, progressMonitor) {
+    // notary is an object {'IP':<notary IP address>, 'pubkeyPEM':<notary pubkey in PEM format>}
     this.notary = notary;
     // number of client request encr counter blocks to produce
     const noOfAESBlocks = Math.ceil(plaintextLen/16);
     // const noOfGctrBlocks = Math.ceil(noOfAESBlocks /8)
     const noOfGctrBlocks = 1;
+    // C5Count is the number of c5 circuit executions
     this.C5Count = noOfAESBlocks;
+    console.log('need to evaluate ', this.C5Count, ' c5 circuits');
     this.C6Count = noOfGctrBlocks;
-    this.cwkMaskedByNotary = null;
-    this.swkMaskedByNotary = null;
-    this.sivMaskedByNotary = null;
-    this.civMaskedByNotary = null;
+    // shares of TLS session keys
+    this.cwkShare = null;
+    this.swkShare = null;
+    this.sivShare = null;
+    this.civShare = null;
     this.innerState_MS = null; // HMAC inner sha256 state for MS
     this.g = new Garbler(this);
     this.e = new Evaluator(this);
-    this.ot = new OT();
     this.pm = progressMonitor;
     // uid is used for communication with the notary
     this.uid = Math.random().toString(36).slice(-10);
-
-    const [masks, fixedInputs] = this.initInputs();
-    this.cs = [];
-    this.cs[1] = new C(512, 256,  512, 256, 512, circuits[1], masks[1], fixedInputs[1]);
-    this.cs[2] = new C(512, 256,  640, 384, 512, circuits[2], masks[2], fixedInputs[2]);
-    this.cs[3] = new C(832, 256, 1568, 768, 800, circuits[3], masks[3], fixedInputs[3]);
-    this.cs[4] = new C(672, 416,  960, 480, 480, circuits[4], masks[4], fixedInputs[4]);
-    this.cs[5] = new C(160,   0,  308, 160, 128, circuits[5], masks[5], fixedInputs[5]);
-    this.cs[6] = new C(288,   0,  304, 160, 128, circuits[6], masks[6], fixedInputs[6]);
-
-    // fixedLabels contains a label for each fixed input bit
-    this.fixedLabels = Array(this.cs.length);
+    // cs is an array of circuits, where each circuit is an object with the fields:
+    // gatesBlob, gatesCount, wiresCount, notaryInputSize, clientInputSize,
+    // outputSize, andGateCount
+    this.cs = Object.keys(circuits).map(k => circuits[k]);
+    // start count of circuits with 1, push an empy element to index 0
+    this.cs.splice(0, 0, undefined);
     // output is the output of the circuit as array of bytes
     this.output = Array(this.cs.length);
     // Commits are used to ensure malicious security of garbled circuits
-    // if client's and notary's commits match, then both parties can be assured 
+    // if client's and notary's commits match, then both parties can be assured
     // that no malicious garbling took place.
-    // hisSaltedCommit is a salted hash of the circuit's output from the notary 
+    // hisSaltedCommit is a salted hash of the circuit's output from the notary
     this.hisSaltedCommit = Array(this.cs.length);
     // myCommit is a (unsalted) hash of the circuit's output
     this.myCommit = Array(this.cs.length);
     // workers are GCWorker class for each circuit
     this.workers = Array(this.cs.length);
-
-    console.log('need to evaluate ', this.C5Count, ' c5 circuits');
- 
     this.preComputed = false; // will set to true after preCompute() was run
-    // powersOfH is an array of client's shares of powers of H, starting with H^1 at index 1
-    this.powersOfH = []; 
-
-    // maxPowerNeeded is the maximum power of H that we'll need in order to compute the GHASH
-    // function. This doesn't mean that the parties will compute shares of this power. It just 
-    // shows the upper bound of H. 
-    this.maxPowerNeeded = Math.ceil(plaintextLen /16) + 2;
-    // maxOddPowerNeeded is the maximum odd power for which the parties must compute their shares
-    this.maxOddPowerNeeded = this.initMaxOddPower(this.maxPowerNeeded);
-    // ghashOTNeeded is how many bits the receiver of Oblivious Transfer will have
-    // in order to compute the GHASH function
-    this.ghashOTNeeded = this.initGhashOTNeeded(this.maxPowerNeeded, this.maxOddPowerNeeded);
-
+    // clientKey is a symmetric key used to encrypt messages to the notary
+    this.clientKey = null;
+    // notaryKey is a symmetric key used to decrypt messages from the notary
+    this.notaryKey = null;
     // ephemeralKey is an ephemeral key used by notary to sign this session
     this.ephemeralKey = null;
     // eValidFrom and eValidUntil are times from/until which the ephemeralKey is valid
@@ -123,11 +72,34 @@ export class TWOPC {
     this.client_random = null;
     // server_random is a 32-byte random value from Server Hellp
     this.server_random = null;
-    // allHandshakes is a concatenation of all handshake messages up to this point. 
+    // allHandshakes is a concatenation of all handshake messages up to this point.
     // This is only data visible at the handshake layer and does not include record layer headers
     this.allHandshakes = null;
     // hs_hash is a sha256 hash of allHandshakes
     this.hs_hash = null;
+    // ghash is used when computing an MAC (tag) on the request
+    // we need GHASH to first tell OTReceiver how many OTs will be needed,
+    // then we pass the OTReceiver to GHASH
+    this.ghash = new GHASH(noOfAESBlocks);
+    // otCountRecv is how many OTs the receiver needs. The client plays OT
+    // receiver for each bit of his inputs to the circuits + OTs for GHASH
+    this.otCountRecv = this.ghash.otCount;
+    // otCountSend is how many OTs the sender should expect. The client plays
+    // OT sender for each bit of notary's circuits' inputs
+    this.otCountSend = 0;
+    // exeCount is how many executions of each circuit we need. Circuit numbering
+    // starts from 1
+    const exeCount = [0, 1, 1, 1, 1, this.C5Count, this.C6Count];
+    for (let i=1; i < this.cs.length; i++){
+      this.otCountRecv += this.cs[i].clientInputSize * exeCount[i];
+      this.otCountSend += this.cs[i].notaryInputSize * exeCount[i];
+    }
+    console.log('otCountRecv/otCountSend', this.otCountRecv, this.otCountSend);
+    // otR is the receiver of Oblivious Transfer
+    this.otR = new OTReceiver(this.otCountRecv);
+    // otS is the sender of Oblivious Transfer
+    this.otS = new OTSender(this.otCountSend);
+    this.ghash.setOTReceiver(this.otR);
   }
 
   // destroy de-registers listeners, terminates workers
@@ -139,169 +111,6 @@ export class TWOPC {
         gcworker.workers[j].terminate();
       }
     }
-    for (const w of this.ot.worker.workers){
-      w.terminate();
-    }
-  }
-
-  // compute how many bits need OT for ghash-OT method
-  initGhashOTNeeded(maxPowerNeeded, maxOddPowerNeeded){
-    const strategies = {
-      5: [4,1],
-      7: [4,3],
-      9: [8,1],
-      11: [8,3],
-      13: [12,1],
-      15: [12,3],
-      17: [16,1],
-      19: [16,3],
-      21: [17,4],
-      23: [17,6],
-      25: [17,8],
-      27: [19,8],
-      29: [17,12],
-      31: [19,12],
-      33: [17,16],
-      35: [19,16]};
-
-    // add powers 1,2,3 which the client will already have
-    const allPowers = []; // all shares of powers which the client has
-    allPowers[1] = true;
-    allPowers[2] = true;
-    allPowers[3] = true;
-
-    // will contain unique powers for which we compute shares directly
-    // each power requires the client to prepare 256 OT bits
-    const uniquePowers = [];
-    for (const k of sortKeys(strategies)){
-      if (k <= maxOddPowerNeeded){
-        allPowers[k] = true;
-        const v = strategies[k];
-        if (! uniquePowers.includes(v[0])){
-          uniquePowers.push(v[0]);
-        }
-        if (! uniquePowers.includes(v[1])){
-          uniquePowers.push(v[1]);
-        }
-      }
-    }
-
-    // and perform "free squaring" on all powers    
-    for (let i=1; i < allPowers.length; i++){
-      if (allPowers[i] == undefined){
-        continue;
-      }
-      let power = i;
-      while (power <= maxPowerNeeded){
-        power = power * 2;
-        if (allPowers[power] != undefined){
-          continue;
-        }
-        allPowers[power] = true;
-      }
-    }
-
-    // how many auxillary powers will be needed for the block aggregation method
-    // each aux power requires 128 OT bits from client
-    const auxPowers = [];
-    for (let i=1; i <= maxPowerNeeded; i++){
-      if (allPowers[i] != undefined){
-        // for this power the client has a share of H, no need for the block aggregation method
-        continue;
-      }
-      // a is the smaller power
-      const [a,b] = this.findSum(allPowers, i);
-      if (! auxPowers.includes(a)){
-        auxPowers.push(a);
-      }
-    }
-
-    return uniquePowers.length * 256 + auxPowers.length*128;
-  }
-
-  initMaxOddPower(maxPowerNeeded){
-    assert(maxPowerNeeded <= 1026);
-
-    // maxHTable = {<key>:<value>}. <value> shows (when using the block aggregation method)
-    // how many powers of H can be obtained if we:
-    // A) have all the sequential powers starting with 1 up to <key> AND
-    // B) have performed OT with the notary on all those sequential powers.
-    // e.g. {5:29} means that if we have powers 1,2,3,4,5 then using the block aggregation method we can obtain
-    // up to and including H^29.
-    // max TLS record size of 16KB requires 1026 powers of H
-    const maxHTable = {0: 0, 3: 19, 5: 29, 7: 71, 9: 89, 11: 107, 13: 125, 15: 271, 17: 305, 19: 339, 21: 373,
-      23: 407, 25: 441, 27: 475, 29: 509, 31: 1023, 33: 1025, 35: 1027};
-
-    let maxOddPowerNeeded = null;
-    for (const key of sortKeys(maxHTable)){
-      const maxH = maxHTable[key];
-      if (maxH >= maxPowerNeeded){
-        maxOddPowerNeeded = key;
-        break;
-      }
-    }
-    return maxOddPowerNeeded;
-  }
-  
-  // set all masks and fixed inputs for each circuit
-  initInputs(){
-    const masks = [];
-    const fixedInputs = [];
-
-    masks[1] = [];
-    masks[1][1] = getRandom(32);
-    fixedInputs[1] = bytesToBits(masks[1][1]);
-    
-    masks[2] = [];
-    masks[2][1] = getRandom(32);
-    fixedInputs[2] = bytesToBits(masks[2][1]);
-    
-    masks[3] = [];
-    const maskSizes3 = [0,16,16,4,4,16,16,16,12];
-    for (let i=1; i < maskSizes3.length; i++){
-      masks[3][i] = getRandom(maskSizes3[i]);
-    }
-    fixedInputs[3] = bytesToBits(concatTA(...masks[3].slice(1).reverse()));
-
-    masks[4] = [];
-    const maskSizes4 = [0,16,16,16,12];
-    for (let i=1; i < maskSizes4.length; i++){
-      masks[4][i] = getRandom(maskSizes4[i]);
-    }
-    fixedInputs[4] = bytesToBits(concatTA(...masks[4].slice(1).reverse()));
-
-    masks[5] = [];
-    for (let i = 0; i < this.C5Count; i++) {
-      masks[5].push(getRandom(16));
-    }
-    const totalBits = [];
-    // we only send 1 TLS record with a fixed nonce 2
-    const nonce = 2; 
-    for (let i = 0; i < this.C5Count; i++) {
-      const counter = 2 + i;
-      const counterBits = bytesToBits(int2ba(counter, 2)).slice(0, 10);
-      const nonceBits = bytesToBits(int2ba(nonce, 2)).slice(0, 10);
-      const maskBits = bytesToBits(masks[5][i]);
-      totalBits.push([].concat(maskBits, nonceBits, counterBits));
-    }
-    fixedInputs[5] = [].concat(...totalBits);
-
-    masks[6] = [];
-    for (let i = 0; i < this.C6Count; i++) {
-      masks[6].push(getRandom(16));
-    }
-    // for gctr blocks
-    let totalParsed6 = [];
-    for (let i = 0; i < this.C6Count; i++) {
-      // nonce starts with 2
-      const nonce = 2 + i;
-      const parsedNonce = bytesToBits(int2ba(nonce, 2)).slice(0, 16);
-      const mask = bytesToBits(masks[6][i]);
-      totalParsed6.push([].concat(mask, parsedNonce));
-    }
-    fixedInputs[6] = [].concat(...totalParsed6);
-
-    return [masks, fixedInputs];
   }
 
   async getECDHShare(x, y){
@@ -309,9 +118,8 @@ export class TWOPC {
     return await paillier.run();
   }
 
-
   // pass client/server random, handshake (to derive verify_data), pms share
-  // returns encrypted Client Finished (CF), authentication tag for CF, verify_data for CF 
+  // returns encrypted Client Finished (CF), authentication tag for CF, verify_data for CF
   async run(cr, sr, allHandshakes, pmsShare) {
     this.clientPMSShare = pmsShare;
     this.client_random = cr;
@@ -324,13 +132,27 @@ export class TWOPC {
       console.log('pre-computation was not done before the session started');
       throw('pre-computation was not done before the session started');
     }
-  
-    const nonFixedBits = bytesToBits(this.clientPMSShare);
-    const c1Output = await this.runCircuit(nonFixedBits, 1);
 
-    const c2_output = await this.phase2(c1Output);
-    const c3_output = await this.phase3(c2_output);
-    const [encFinished, tag, verify_data] = await this.phase4(c3_output);
+    const c1Mask = getRandom(32);
+    const c1Out = await this.runCircuit([this.clientPMSShare, c1Mask], 1);
+    // unmask the output
+    const innerState1Masked = c1Out[0].slice(0, 32);
+    const innerState1 = xor(innerState1Masked, c1Mask);
+
+    const [c2_p2, c2_p1inner] = await this.phase2(innerState1);
+    const c2Mask = getRandom(32);
+    const input2 = [c2_p1inner, c2_p2.subarray(0, 16), c2Mask];
+    const c2Out = await this.runCircuit(input2, 2);
+    // unmask the output
+    const innerState2Masked = c2Out[0].slice(0, 32);
+    const innerState2 = xor(innerState2Masked, c2Mask);
+
+    const [c3_p1inner_vd, c3_p2inner, c3_p1inner] = await this.phase3(innerState2);
+    // for readability, mask indexing starts from 1
+    const masks3 = [0, 16, 16, 4, 4, 16, 16, 16, 12].map(x => getRandom(x));
+    const input3 = [c3_p1inner, c3_p2inner, c3_p1inner_vd, ...masks3.slice(1)];
+    const c3Out = await this.runCircuit(input3, 3);
+    const [encFinished, tag, verify_data] = await this.phase4(c3Out, masks3);
     return [encFinished, tag, verify_data];
   }
 
@@ -349,427 +171,128 @@ export class TWOPC {
     const a1 = await this.send('c4_pre1', a1inner);
     const p1inner = innerHash(this.innerState_MS, concatTA(a1, seed));
 
-    const nonFixedBits = bytesToBits(concatTA(
-      new Uint8Array(sf_nonce),
-      new Uint8Array(this.sivMaskedByNotary),
-      new Uint8Array(this.swkMaskedByNotary),
-      p1inner));
-
-    const outArray = await this.runCircuit(nonFixedBits, 4);
+    // for readability, mask indexing starts from 1
+    const masks4 = [0, 16, 16, 16, 12].map(x => getRandom(x));
+    const input4 = [p1inner, this.swkShare, this.sivShare, sf_nonce,
+      ...masks4.slice(1)];
+    const outArray = await this.runCircuit(input4, 4);
     const c4_output = outArray[0];
     console.log('c4Output.length', c4_output.length);
 
-    let o = 0; // offset 
+    let o = 0; // offset
     const verify_dataMasked = c4_output.slice(o, o+=12);
-    const verify_data = xor(verify_dataMasked, this.cs[4].masks[4]);
-    const sf = concatTA(new Uint8Array([0x14, 0x00, 0x00, 0x0c]), verify_data);
-
+    const verify_data = xor(verify_dataMasked, masks4[4]);
     const encCounterMasked = c4_output.slice(o, o+=16);
-    const encCounter = xor(encCounterMasked, this.cs[4].masks[3]);
-
+    const encCounter = xor(encCounterMasked, masks4[3]);
     const gctrSFMasked = c4_output.slice(o, o+=16);
-    const gctrShare = xor(gctrSFMasked, this.cs[4].masks[2]);
-
+    const gctrShare = xor(gctrSFMasked, masks4[2]);
     const H1MaskedTwice = c4_output.slice(o, o+=16);
-    const H1 = xor(H1MaskedTwice, this.cs[4].masks[1]);
-    const H2 = blockMult(H1, H1);
-    const H1H2 = blockMult(H1, H2);
-
-    // OT starts with the highest bit
-    const h1Bits = bytesToBits(H1).reverse();
-    const [idxArray1, otKeys1] = this.ot.getIndexesFromPool(h1Bits);
-    const h2Bits = bytesToBits(H2).reverse();
-    const [idxArray2, otKeys2] = this.ot.getIndexesFromPool(h2Bits);
-
+    // H1 xor-masked by notary is our share of H^1, the mask is notary's share of H^1
+    const H1share = xor(H1MaskedTwice, masks4[1]);
+    const sf = concatTA(new Uint8Array([0x14, 0x00, 0x00, 0x0c]), verify_data);
     const encSF = xor(sf, encCounter);
     assert(eq(sf_pure, encSF));
 
-    const step3resp = await this.send('c4_step3', concatTA(encSF, idxArray1, idxArray2));
-    assert(step3resp.length === 16 + 128*32 + 128*32);
+    const ghashSF = new GHASH(1);
+    ghashSF.setOTReceiver(this.otR);
+    const otReq = await ghashSF.buildFinRequest(H1share);
+    const step3resp = await this.send('c4_step3', concatTA(encSF, otReq));
+    assert(step3resp.length == 16 + 256*32);
     o = 0;
-    const Snotary = step3resp.slice(o, o+=16);
-    const encEntries1 = step3resp.slice(o, o+=(128*32));
-    const encEntries2 = step3resp.slice(o, o+=(128*32));
-
-    let H3share = H1H2;
-    for (let i = 0; i < h1Bits.length; i += 1) {
-      const bit = h1Bits[i];
-      const ct = encEntries2.slice(i * 32, (i+1) * 32);
-      const maskedEntry = this.ot.decryptWithKey(ct, bit, otKeys1[i]);
-      H3share = xor(H3share, maskedEntry);
-    }
-    for (let i = 0; i < h2Bits.length; i += 1) {
-      const bit = h2Bits[i];
-      const ct = encEntries1.slice(i * 32, (i+1) * 32);
-      const maskedEntry = this.ot.decryptWithKey(ct, bit, otKeys2[i]);
-      H3share = xor(H3share, maskedEntry);
-    }
+    const notaryTagShare = step3resp.slice(o, o+=16);
+    const otResp = step3resp.slice(o, o+=(256*32));
 
     const aad = new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, 22, 3, 3, 0, 16, 0, 0, 0]);
     // lenA (before padding) == 13*8 == 104, lenC == 16*8 == 128
     const lenAlenC = new Uint8Array([0, 0, 0, 0, 0, 0, 0, 104, 0, 0, 0, 0, 0, 0, 0, 128]);
-
-    const s1share = blockMult(aad, H3share);
-    const s2share = blockMult(encSF, H2);
-    const s3share = blockMult(lenAlenC, H1);
-    const Sclient = xor(xor(xor(s1share, s2share), s3share), gctrShare);
-
-    const tagFromPowersOfH = xor(Snotary, Sclient);
+    const tagShare = ghashSF.processFinResponse(otResp, [aad, encSF, lenAlenC]);
+    // notary's gctr share is already included in notaryTagShare
+    const tagFromPowersOfH = xor(xor(notaryTagShare, tagShare), gctrShare);
     assert (eq(sf_tag, tagFromPowersOfH));
   }
 
+  // runs circuit 5
   async getEncryptedCounters() {
-    const nonFixedBits = bytesToBits(concatTA(this.civMaskedByNotary, this.cwkMaskedByNotary));
-    const outArray = await this.runCircuit(nonFixedBits, 5);
-    const results = [];
-    for (let i=0; i < this.C5Count; i++){
-      const encCounter = xor(outArray[i], this.cs[5].masks[i]);
-      results.push(encCounter);   
+    const masks5 = [];
+    let input5 = [];
+    // we only send 1 TLS record with a fixed nonce 2
+    const fixedNonce = int2ba(2, 2);
+    for (let i = 0; i < this.C5Count; i++) {
+      const counter = int2ba(2 + i, 2);
+      masks5[i] = getRandom(16);
+      input5 = [].concat(input5, [this.cwkShare, this.civShare, masks5[i],
+        fixedNonce, 10, counter, 10]);
     }
-    return results;
+    const outArray = await this.runCircuit(input5, 5);
+    const encCounters = [];
+    for (let i=0; i < this.C5Count; i++){
+      encCounters.push(xor(outArray[i], masks5[i]));
+    }
+    return encCounters;
   }
 
   // note that getGctrBlocks does not actually output gctr function's output but only
   // client's gctr share. The notary's gctr share is already xored into the output
   // of getTagFromPowersOfH
   async getGctrBlocks(){
-    const nonFixedBits = bytesToBits(concatTA(this.civMaskedByNotary, this.cwkMaskedByNotary));
-    const outArray = await this.runCircuit(nonFixedBits, 6);
-
+    const masks6 = [];
+    let input6 = [];
+    for (let i = 0; i < this.C6Count; i++) {
+      const nonce = int2ba(2 + i, 2);
+      masks6.push(getRandom(16));
+      input6 = [].concat(input6, [this.cwkShare, this.civShare, masks6[i], nonce]);
+    }
+    const outArray = await this.runCircuit(input6, 6);
     const c6CommitSalt = await this.send('checkC6Commit', this.myCommit[6]);
     // the commit which notary computed on their side must be equal to our commit
     const saltedCommit = await sha256(concatTA(this.myCommit[6], c6CommitSalt));
     assert (eq(saltedCommit, this.hisSaltedCommit[6]));
-  
-    const results = [];
+
+    const gctrBlocks = [];
     for (let i=0; i < this.C6Count; i++){
-      const gctrBlock = xor(outArray[i], this.cs[6].masks[i]);
-      results.push(gctrBlock);   
+      gctrBlocks.push(xor(outArray[i], masks6[i]));
     }
-    return results;
+    return gctrBlocks;
   }
 
-  async getTagFromPowersOfH(encRequestBlocks){
+  // getTagFromPowersOfH receives an array of encrypted request blocks and computes
+  // an authentication tag over them
+  async getTagFromPowersOfH(erb){
     // prepare ghash inputs
     const ghashInputs = [];
-    // last block may not be 16 bytes
-    const recordLen = (encRequestBlocks.length-1)*16+encRequestBlocks[encRequestBlocks.length-1].length;
+    // last block may be less than 16 bytes
+    const recordLen = (erb.length-1)*16+erb[erb.length-1].length;
     const seqNum = int2ba(1, 8);
     const recordLenBytes = int2ba(recordLen, 2);
-    const aad = concatTA(seqNum, new Uint8Array([23,3,3]), recordLenBytes);
+    const aad = concatTA(seqNum, new Uint8Array([23, 3, 3]), recordLenBytes);
     // right-pad with zeroes if needed
     let aadPadding = [];
     if (aad.length % 16 > 0) {
       aadPadding = Array(16-(aad.length%16)).fill(0);
     }
     ghashInputs.push(concatTA(aad, new Uint8Array(aadPadding)));
-    ghashInputs.push(...encRequestBlocks.slice(0,-1));
-    let ctPadding = []; 
-    if (encRequestBlocks[encRequestBlocks.length-1].length%16 > 0) {
-      ctPadding = Array(16-(encRequestBlocks[encRequestBlocks.length-1].length%16)).fill(0);
+    ghashInputs.push(...erb.slice(0, -1));
+    let ctPadding = [];
+    if (erb[erb.length-1].length%16 > 0) {
+      ctPadding = Array(16-(erb[erb.length-1].length%16)).fill(0);
     }
-    ghashInputs.push(concatTA(encRequestBlocks[encRequestBlocks.length-1], new Uint8Array(ctPadding)));
+    ghashInputs.push(concatTA(erb[erb.length-1], new Uint8Array(ctPadding)));
     const lenA = int2ba(aad.length*8, 8);
     const lenC = int2ba(recordLen*8, 8);
     ghashInputs.push(concatTA(lenA, lenC));
 
-    // fill this.powersOfH with needed H shares
-    await this.getOddPowers(this.maxPowerNeeded);
-    const directSum = this.useDirectHShares(ghashInputs);
-    const indirectSum = await this.useIndirectHShares(ghashInputs);
-    return [[xor(directSum, indirectSum)], concatTA(...ghashInputs)];
-
+    const resp1 = await this.send('ghash_step1', await this.ghash.buildStep1());
+    this.ghash.processOTResponse(resp1);
+    if (this.ghash.isStep2Needed()){
+      const resp2 = await this.send('ghash_step2', await this.ghash.buildStep2());
+      this.ghash.processOTResponse(resp2);
+    }
+    const req3 = concatTA(...ghashInputs, await this.ghash.buildStep3(ghashInputs));
+    const resp3 = await this.send('ghash_step3', req3);
+    const tagShare = this.ghash.processStep3Response(resp3);
+    return [[tagShare], concatTA(...ghashInputs)];
   }
 
-  // multiply direct H shares with corresponding ciphertext blocks
-  useDirectHShares(ghashInputs){
-    let res = int2ba(0, 16);
-    // this.powersOfH is a sparse array, its .length is the max index
-    for (let i=1; i < this.powersOfH.length; i++){
-      if (i > ghashInputs.length){
-        // we will have more powers than the input blocks
-        break;
-      }
-      if (this.powersOfH[i] == undefined){
-        continue;
-      }
-      const h = this.powersOfH[i];
-      const x = ghashInputs[ghashInputs.length-i];
-      res = xor(res, blockMult(h,x));
-    }
-    return res;
-  }
-
-  // for those shares of powers which are not in powersOfH, we do not compute the shares of
-  // powers, but instead we compute the share of X_n*H, where X_n is a ciphertext block
-
-  // e.g. if we need H^21*X_1 and we have shares of H^19 and H^2, we compute it as follows:
-  // (H19_a + H19_b)*(H2_a + H2_b)*X_1 == H19_a*H2_a*X_1 + H19_a*X_1*H2_b + H19_b*X_1*H2_a +
-  // H19_b*H2_b*X_1
-  // only the 2 middle cross-terms need to be computed using OT
-  // A will receive OT for H19_a*X_1 from B
-  // B will receive OT for H19_b*X_1 from A
-  // All other powers where one of the factors is H^2 can be "collapsed" into (i.e xored with)
-  // the above two cross-terms, eg if parties have shares of H^23 and need to compute 
-  // H^25 == H^23*H^2, then H23_a*X_2 can be collapsed into H19_a*X_1 and 
-  // H23_b*X_2 can be collapsed into H19_b*X_1
-  // Thus we would not need any extra OT to compute shares of H^25
-
-  async useIndirectHShares(ghashInputs){
-    let res = int2ba(0, 16); // this is the xor of all my X*H shares 
-    let sumForPowers = {};
-    for (let i=4; i < this.powersOfH.length; i++){
-      if (i > ghashInputs.length){
-        // we stop iterating shares of powers of H  
-        break;
-      }
-      if (this.powersOfH[i] != undefined){
-        continue;
-      }
-      // found a hole in our sparse array, we need X*H for this missing power
-      // a is the smaller power
-      const [a,b] = this.findSum(this.powersOfH, i);
-      const x = ghashInputs[ghashInputs.length-i];
-      const h_small = this.powersOfH[a];
-      const h_big = this.powersOfH[b];
-      res = xor(res, blockMult(blockMult(h_small, h_big), x));
-      const hx = blockMult(h_big, x);
-      if (sumForPowers.hasOwnProperty(a)){
-        sumForPowers[a] = xor(sumForPowers[a], hx);
-      }
-      else {
-        sumForPowers[a] = hx;
-      }
-    }
-    
-    // send OT for all sums in sumForPowers in ascending order
-    const sortedKeys = sortKeys(sumForPowers);
-    let allBits = [];
-    for (const key of sortedKeys){
-      const bytes = sumForPowers[key];
-      // OT starts with the highest bit
-      const bits = bytesToBits(new Uint8Array(bytes)).reverse();
-      allBits = [].concat(allBits, bits);
-    }
-    const [idxArray, otKeys] = this.ot.getIndexesFromPool(allBits);
-    
-    const payload = concatTA(...ghashInputs, idxArray);
-    const step5resp = await this.send('ghash_step5', payload);
-    let o = 0;
-    const encEntries = step5resp.slice(o, o+idxArray.length/2 * 32);
-    o += idxArray.length/2 * 32;
-    const hisIndexes = step5resp.slice(o, o+idxArray.length);
-    o += idxArray.length;
-    assert(step5resp.length === o);
-
-    for (let i = 0; i < allBits.length; i += 1) {
-      const bit = allBits[i];
-      const ct = encEntries.slice(i * 32, (i+1) * 32);
-      const maskedEntry = this.ot.decryptWithKey(ct, bit, otKeys[i]);
-      res = xor(res, maskedEntry);
-    }
- 
-    // get his indexes and send his encrypted masked entries
-    let maskSum = int2ba(0, 16);
-    let totalOffset = 0;
-    const myEncEntries = [];
-    for (let i=0; i < sortedKeys.length; i++){
-      const xTable = getXTable(this.powersOfH[sortedKeys[i]]);
-      for (let i=0; i < 128; i++){
-        const idx = ba2int(hisIndexes.slice(totalOffset, totalOffset+2));
-        totalOffset += 2;
-        const mask = getRandom(16);
-        maskSum = xor(maskSum, mask);
-        const m0 = mask;
-        const m1 = xor(xTable[i], mask);
-        myEncEntries.push(this.ot.encryptWithKeyAtIndex(m0, m1, idx));
-      }
-
-    }
-    res = xor(res, maskSum);
-    const hisTagShare = await this.send('ghash_step6',  concatTA(...myEncEntries));
-    return xor(res, hisTagShare);
-  }
-
-
-  // draw from the OT pool and send to notary OT step1
-  getOTIndexArray(powersForOT, powersOfH){
-    // prepare OT data for each bit of each power
-    const idxArrays = [];
-    for (const power of sortKeys(powersForOT)){
-      const bits = bytesToBits(powersOfH[power]).reverse();
-      powersForOT[power]['bits'] =  bits;
-      const [idxArray, otKeys] = this.ot.getIndexesFromPool(bits);
-      powersForOT[power]['otKeys'] = otKeys; 
-      idxArrays.push(idxArray);
-    }
-    return idxArrays;
-  }
-
-
-  // decrypt OT from notary and compute shares of powers listed in strategies
-  // modifies PowersOfH in-place
-  getPowerShares(strategies, powersForOT, encEntriesBlob, powersOfH){
-    const stratKeys = sortKeys(strategies);
-    assert(encEntriesBlob.length === stratKeys.length*256*32);
-
-    for (let j=0; j < stratKeys.length; j++){
-      const oddPower = stratKeys[j];
-      let xorSum = int2ba(0, 16); // start with 0 sum
-      for (let round=0; round < 2; round++){
-        // first factor is always notary's, second factor is always client's
-        // on first round factor at strategies[key][0] is notary's
-        // on second round factor at strategies[key][1] is notary's
-        let f2 = round === 0 ? strategies[oddPower][1] : strategies[oddPower][0];
-        const encEntries = encEntriesBlob.slice((j*256+round*128)*32, (j*256+(round+1)*128)*32);
-        for (let i = 0; i < 128; i += 1) {
-          const bit = powersForOT[f2].bits[i];
-          const ct = encEntries.slice(i * 32, (i+1) * 32);
-          const maskedEntry = this.ot.decryptWithKey(ct, bit, powersForOT[f2].otKeys[i]);
-          xorSum = xor(xorSum, maskedEntry);
-        }
-      }
-      const Cx = powersOfH[strategies[oddPower][0]];
-      const Cy = powersOfH[strategies[oddPower][1]];
-      const CxCy = blockMult(Cx,Cy);
-      powersOfH[oddPower] = xor(xorSum, CxCy);
-    }
-  }
-
-
-  // Use oblivious transfer with the notary to compute the necessary amount of odd powers
-  // we will later call powersPlusOne with these odd powers to compute X*H.
-  // Note: when OT-extension is implemented, we're not gonna need all these optimizations. 
-  // We will be able to compute all powers directly with OT-extenion. But for now, since
-  // we use base-OT which is expensive, we resort to optimizations.
-
-  async getOddPowers(maxPowerNeeded){
-    console.log('maxPowerNeeded is', maxPowerNeeded);
-    assert(maxPowerNeeded <= 1026);
-
-    // perform free squaring of shares H^2 and H^3 which we have from the Client_Finished
-    this.freeSquare(this.powersOfH, maxPowerNeeded);
-
-    if (this.maxOddPowerNeeded === 3){
-      await this.send('ghash_step1', int2ba(maxPowerNeeded, 2));
-      return; // already have power 3
-    }
-    
-    // strategies shows what existing powers we will be multiplying to obtain other odd powers
-    // max sequential odd power that we can obtain on first round is 19
-    // Note that "sequential" is a keyword here. We can't obtain 21 but we indeed can obtain
-    // 25==24+1, 33==32+1 etc. However with 21 missing, we will not be able to obtain more powers
-    // with the X*H method, even if we have 25,33,etc.  
-    const strategies = {
-      5: [4,1],
-      7: [4,3],
-      9: [8,1],
-      11: [8,3],
-      13: [12,1],
-      15: [12,3],
-      17: [16,1],
-      19: [16,3]};
-    const powersForOT1 = {1: {},3: {},4: {},8: {},12: {},16: {}};
-
-    // TODO send only those powers which we actually need 
-    const idxArrays1 = this.getOTIndexArray(powersForOT1, this.powersOfH);
-
-    const encEntries1 = await this.send('ghash_step1', concatTA(...idxArrays1, int2ba(maxPowerNeeded, 2)));
-
-    this.getPowerShares(strategies, powersForOT1, encEntries1, this.powersOfH);
-    this.freeSquare(this.powersOfH, maxPowerNeeded);
-
-    // we need to perform OT on all powers [1, maxOddPowerNeeded] which we havent performed OT
-    // for yet
-    const powersLeft = [2,5,6,7,9,10,11,13,14,15,17,18,19];
-    const powersForOT2 = {};
-    for (const power of powersLeft){
-      if (power <= this.maxOddPowerNeeded){
-        powersForOT2[power] = {};
-      }
-    }
-    const idxArrays2 = this.getOTIndexArray(powersForOT2, this.powersOfH);
-    await this.send('ghash_step2', concatTA(...idxArrays2));
-
-    if (this.maxOddPowerNeeded <= 19){
-      return;
-    }
-    // else we need more odd powers. The max that we'll ever need is 35
-    // strategies2 should be canonical for both client and notary
-    // Eventually we will send OT for all powers from 1 to 35
-    const strategies2 = {
-      21: [17,4],
-      23: [17,6],
-      25: [17,8],
-      27: [19,8],
-      29: [17,12],
-      31: [19,12],
-      33: [17,16],
-      35: [19,16]};
-
-    const powersForOT3 = {17: {},19: {}};
-    const idxArrays3 = this.getOTIndexArray(powersForOT3, this.powersOfH);
-    const step3resp = await this.send('ghash_step3', concatTA(...idxArrays3));
-    this.getPowerShares(strategies2, powersForOT3, step3resp, this.powersOfH);
-    this.freeSquare(this.powersOfH, maxPowerNeeded);
-    // we need to perform OT on all powers [1, maxOddPowerNeeded] which we havent performed OT
-    // for yet
-    const powersLeft2 = [20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35];
-    const powersForOT4 = {};
-    for (let i=0; i < powersLeft2.length; i++){
-      if (powersLeft2[i] <= this.maxOddPowerNeeded){
-        powersForOT4[i] = {};
-      }
-    }
-    const idxArrays4 = this.getOTIndexArray(powersForOT4, this.powersOfH);
-    await this.send('ghash_step4', concatTA(...idxArrays4));
-  }
-
-  // those powers which were not set are undefined
-  findSum(powers, sumNeeded){
-    for (let i=1; i < powers.length; i++){
-      if (powers[i] == undefined){
-        continue;
-      }
-      for (let j=1; j < powers.length; j++){
-        if (powers[j] == undefined){
-          continue;
-        }
-        if (i+j === sumNeeded){
-          return [i,j];
-        }
-      }
-    }
-    // this should never happen because we always call 
-    // findSum() knowing that the sum can be found
-    throw('sum not found');
-  }
-
-  // Perform squaring of each share of odd power up to maxPower. It is "free" because we can 
-  // compute them locally without doing OT with the other party.
-  // "powers" is an array where idx is the power (or undefined if not set) and item at that idx
-  // is client's share of H^power 
-  // modifies "powers" in-place
-  // e.g if "powers" contains 1,2,3 and maxPower==19, then upon return "powers"
-  // will contain 1,2,3,4,6,8,12,16   
-  freeSquare(powers, maxPower){
-    for (let i=0; i < powers.length; i++){
-      if (powers[i] == undefined || i % 2 === 0){
-        continue;
-      }
-      if (i > maxPower){
-        return;
-      }
-      let power = i;
-      while (power <= maxPower){
-        power = power * 2;
-        if (powers.includes(power)){
-          continue;
-        }
-        powers[power] = blockMult(powers[power/2], powers[power/2]);
-      }
-    }
-  }
 
   // send data to the notary
   async send(cmd, data = new Uint8Array(0), returnPromise = false, willEncrypt = true){
@@ -780,7 +303,7 @@ export class TWOPC {
     else {
       to_be_sent = data;
     }
-   
+
     function timeout(ms, promise) {
       return new Promise(function(resolve, reject) {
         setTimeout(function() {
@@ -791,7 +314,7 @@ export class TWOPC {
     }
 
     const fetchPromise = fetch(
-      'http://'+this.notary.IP+':'+globals.defaultNotaryPort+'/'+cmd+'?'+this.uid, 
+      'http://'+this.notary.IP+':'+globals.defaultNotaryPort+'/'+cmd+'?'+this.uid,
       {
         method: 'POST',
         mode: 'cors',
@@ -801,7 +324,7 @@ export class TWOPC {
         body: to_be_sent.buffer
       });
     const that = this;
- 
+
     const promise = new Promise((resolve, reject) => {
       timeout(20000, fetchPromise).then(function(resp){
         resp.arrayBuffer().then(function(ab){
@@ -832,74 +355,34 @@ export class TWOPC {
     }
   }
 
-  async preComputeOT(){ 
-    
-    const allFixedInputs = [];
-    let allNonFixedInputsCount = 0;
-    let allFixedInputsCount = 0;
-    for (let i=1; i < this.cs.length; i++){
-      allFixedInputs.push(this.cs[i].fixedInputs);
-      allNonFixedInputsCount += this.cs[i].clientNonFixedInputSize;
-    }
-    allNonFixedInputsCount += (256 + 256); // for powers of H OT for ClFin and SerFin
-    allFixedInputsCount = [].concat(...allFixedInputs).length;
-
-    console.log('allFixedInputs.length', allFixedInputsCount);
-    console.log('precomputePool size', allNonFixedInputsCount + this.ghashOTNeeded);
-   
-    if (this.pm) this.pm.update('last_stage', {'current': 1, 'total': 10});
-    const receiverBs = await this.ot.saveDecryptionKeys([].concat(...allFixedInputs));
-    await this.ot.precomputePool(allNonFixedInputsCount + this.ghashOTNeeded);
-
-    const OTpayload = concatTA(...receiverBs, ...this.ot.getRandomizedPool());
-    console.log('sending payload of size', OTpayload.length);
-    const resp_ot_AllB = await this.send('ot_AllB', OTpayload);
-    console.log('returned from ot_AllB');
-    const fixedOTBlob = resp_ot_AllB.slice(0, allFixedInputsCount*32);
-    const OTFromNotaryEval = resp_ot_AllB.slice(allFixedInputsCount*32);
-    console.time('getAllB');
-    const encLabelsBlob = await this.g.getAllB(OTFromNotaryEval);
-    console.timeEnd('getAllB');
-    this.send('ot_encLabelsForEval', encLabelsBlob);
-
-    // get evaluator's fixed labels and keep them
-    let idx = 0;
-    for (let i=1; i < this.cs.length; i++){
-      this.fixedLabels[i] = [];
-      for (let j=0; j < this.cs[i].fixedInputs.length; j++){
-        const ct = fixedOTBlob.slice(idx*32, (idx+1)*32);
-        const bit = this.cs[i].fixedInputs[j];
-        const inputLabel = this.ot.decryptWithKeyFromIndex(ct, bit, idx);
-        idx += 1;
-        this.fixedLabels[i].push(inputLabel);
-      }
-    }
-    assert(fixedOTBlob.length === idx*32);
-    if (this.pm) this.pm.update('last_stage', {'current': 2, 'total': 10});
-  }
-
-  // preCompute() should be called before run() is called
+  // init() should be called before run() is called
   // it does all fetching/pre-computation that can be done in 2PC offline phase
-  async preCompute() {
+  async init() {
     if (this.preComputed) {
       return;
     }
 
-    const [pubBytes, privKey] = await this.generateECKeypair();
+    // asyncly garble while the rest of the setup is running
+    await this.setupWorkers();
+    const garbleAllPromise =  this.g.garbleAll();
 
-    const preInitBlob = await this.send('preInit', concatTA(
+    const [A, seedCommit] = await this.otR.setupStep1();
+    const [pubBytes, privKey] = await this.generateECKeypair();
+    const init1Blob = await this.send('init1', concatTA(
       pubBytes,
       int2ba(this.C5Count, 2),
       int2ba(this.C6Count, 2),
-      int2ba(this.ghashOTNeeded, 2),
-      this.ot.getSenderA()), false, false); 
+      int2ba(this.otCountRecv, 4),
+      int2ba(this.otCountSend, 4),
+      A,
+      seedCommit), false, false);
 
     let o = 0;
-    this.eValidFrom = preInitBlob.slice(o, o+=4);
-    this.eValidUntil = preInitBlob.slice(o, o+=4);
-    this.ephemeralKey = preInitBlob.slice(o, o+=65);
-    this.eSigByMasterKey = preInitBlob.slice(o, o+=64);
-    const encrypted = preInitBlob.slice(o);
+    this.eValidFrom = init1Blob.slice(o, o+=4);
+    this.eValidUntil = init1Blob.slice(o, o+=4);
+    this.ephemeralKey = init1Blob.slice(o, o+=65);
+    this.eSigByMasterKey = init1Blob.slice(o, o+=64);
+    const encrypted = init1Blob.slice(o);
 
     console.log(this.notary.pubkeyPEM);
     const notaryKey = pubkeyPEM2raw(this.notary.pubkeyPEM);
@@ -912,27 +395,49 @@ export class TWOPC {
       this.eSigByMasterKey.buffer,
       tbs.buffer);
     assert(result === true, 'Error verifying ephemeral keys from notary.');
-    assert(checkExpiration(this.eValidFrom, this.eValidUntil) === true, 
+    assert(checkExpiration(this.eValidFrom, this.eValidUntil) === true,
       'Error verifying ephemeral key validity.');
 
     // generate symmetric encryption keys for communication with the notary
     const [ck, nk] = await this.generateSymmetricKeys(privKey, this.ephemeralKey);
     this.clientKey = ck;
     this.notaryKey = nk;
-    const notaryA = await this.decryptFromNotary(nk, encrypted);
-    this.ot.setA(notaryA);
+    const init1Resp = await this.decryptFromNotary(nk, encrypted);
+    o = 0;
+    const hisReceiverA = init1Resp.slice(o, o+=32);
+    const hisReceiverCommit = init1Resp.slice(o, o+=32);
+    const hisSenderallBs = init1Resp.slice(o, o+=128*32);
+    const hisSenderSeedShare = init1Resp.slice(o, o+=16);
+    const totalBytes = ba2int(init1Resp.slice(o, o+=4));
+    assert(init1Resp.length == o);
 
+    // as soon as communication keys are established, start downloading
     const that = this;
     const getBlobPromise = new Promise((resolve) => {
-      this.getBlobFromNotary()
+      this.getBlobFromNotary(totalBytes)
         .then(function(hisBlob){
           that.blob = that.processBlob(hisBlob);
           resolve();
         });
     });
-    
-    await this.setupWorkers();
-    await this.g.garbleAll();
+
+    const [encryptedColumns, receiverSeedShare, x, t] =
+      await this.otR.setupStep2(hisSenderallBs, hisSenderSeedShare);
+    const [allBs, senderSeedShare] = this.otS.setupStep1(hisReceiverA, hisReceiverCommit);
+    const init2Resp = await this.send('init2', concatTA(
+      encryptedColumns, receiverSeedShare, x, t, allBs, senderSeedShare
+    ));
+
+    assert(init2Resp.length == 256*this.otS.totalOT/8 + 16 + 16 + 32);
+    o = 0;
+    const hisReceiverEncryptedColumns = init2Resp.slice(o, o+=256*this.otS.totalOT/8);
+    const hisReceiverSeedShare = init2Resp.slice(o, o+=16);
+    const hisReceiverX = init2Resp.slice(o, o+=16);
+    const hisReceiverT = init2Resp.slice(o, o+=32);
+    await this.otS.setupStep2(hisReceiverEncryptedColumns, hisReceiverSeedShare,
+      hisReceiverX, hisReceiverT);
+
+    await garbleAllPromise;
     let blobOut = [];
     for (let i=1; i < this.cs.length; i++){
       blobOut.push(this.g.garbledC[i].tt);
@@ -941,9 +446,7 @@ export class TWOPC {
 
     // start blob upload as soon as download finishes
     await getBlobPromise;
-    const sendBlobPromise = this.sendBlobToNotary(concatTA(...blobOut));
-    await this.preComputeOT();
-    await sendBlobPromise;
+    await this.sendBlobToNotary(concatTA(...blobOut));
     this.preComputed = true;
   }
 
@@ -969,9 +472,8 @@ export class TWOPC {
 
   // getNotaryBlob downloads a blob from notary in 1 MB chunks publishes the download progress
   // to the UI.
-  async getBlobFromNotary (){
+  async getBlobFromNotary (totalBytes){
     const allChunks = [];
-    const totalBytes = ba2int(await this.send('init'));
     console.log('totalBytes is', totalBytes);
 
     let soFarBytes = 0;
@@ -992,7 +494,7 @@ export class TWOPC {
 
   async decryptFromNotary (key, enc){
     try{
-      const IV = enc.slice(0,12);
+      const IV = enc.slice(0, 12);
       const ciphertext = enc.slice(12);
       return new Uint8Array(await crypto.subtle.decrypt(
         {name: 'AES-GCM', iv: IV.buffer},
@@ -1018,18 +520,14 @@ export class TWOPC {
 
   async setupWorkers(){
     const maxWorkerCount = 3; // only needed for c5
-    const workerCount = [0,1,1,1,1,maxWorkerCount,1];
+    const workerCount = [0, 1, 1, 1, 1, maxWorkerCount, 1];
     for (let i=1; i < this.cs.length; i++){
       this.workers[i] = new GCWorker(workerCount[i], this.pm);
-      this.workers[i].parse(this.cs[i].circuit);
+      this.workers[i].parse(this.cs[i]);
     }
   }
 
-  async phase2(outArray) {
-    console.log('reached phase2');
-    const c1Output = outArray[0];   
-    const innerStateMasked = c1Output.slice(0, 32);
-    const innerStateUint8 = xor(innerStateMasked, this.cs[1].masks[1]);
+  async phase2(innerStateUint8) {
 
     const innerState = new Int32Array(8);
     for (let i = 0; i < 8; i++) {
@@ -1055,19 +553,14 @@ export class TWOPC {
     const p2 = await this.send('c1_step5', p2inner);
     const p1inner = innerHash(innerState, concatTA(a1, seed));
 
-    const nonFixedBits = bytesToBits(concatTA(p2.subarray(0, 16), p1inner));
-    return await this.runCircuit(nonFixedBits, 2);
+    return [p2, p1inner];
   }
 
-  async phase3(outArray) {
-    const c2_output = outArray[0];
-    const innerStateMasked = c2_output.slice(0, 32);
-    const innerStateUint8 = xor(innerStateMasked, this.cs[2].masks[1]);
-
+  async phase3(innerState) {
     // hash state for MS
     this.innerState_MS = new Int32Array(8);
     for (var i = 0; i < 8; i++) {
-      var hex = ba2hex(innerStateUint8).slice(i * 8, (i + 1) * 8);
+      var hex = ba2hex(innerState).slice(i * 8, (i + 1) * 8);
       this.innerState_MS[i] = `0x${hex}`;
     }
 
@@ -1097,104 +590,70 @@ export class TWOPC {
 
     const p1inner = innerHash(this.innerState_MS, concatTA(a1, seed));
     const p2inner = innerHash(this.innerState_MS, concatTA(a2, seed));
-    const nonFixedBits = bytesToBits(concatTA(p1inner_vd, p2inner, p1inner));
-    return await this.runCircuit(nonFixedBits, 3);
+
+    return [p1inner_vd, p2inner, p1inner];
   }
 
-  async phase4(outArray) {
+  async phase4(outArray, masks3) {
     const c3_output = outArray[0];
-    let o = 0; // offset 
+    let o = 0; // offset
     const verify_dataMasked = c3_output.slice(o, o+=12);
-    const verify_data = xor(verify_dataMasked, this.cs[3].masks[8]);
-    const clientFinished = concatTA(new Uint8Array([0x14, 0x00, 0x00, 0x0c]), verify_data);
-
+    const verify_data = xor(verify_dataMasked, masks3[8]);
     const encCounterMasked = c3_output.slice(o, o+=16);
-    const encCounter = xor(encCounterMasked, this.cs[3].masks[7]);
-
+    const encCounter = xor(encCounterMasked, masks3[7]);
     const gctrMaskedTwice = c3_output.slice(o, o+=16);
-    const myGctrShare = xor(gctrMaskedTwice, this.cs[3].masks[6]);
- 
+    const myGctrShare = xor(gctrMaskedTwice, masks3[6]);
     const H1MaskedTwice = c3_output.slice(o, o+=16);
-
-    const H1 = xor(H1MaskedTwice, this.cs[3].masks[5]);
-    this.powersOfH[1] = H1;
-    const H2 = blockMult(H1, H1);
-    this.powersOfH[2] = H2;
-    const H1H2 = blockMult(H1, H2);
-
-    // OT starts with the highest bit
-    const h1Bits = bytesToBits(H1).reverse();
-    const [idxArray1, otKeys1] = this.ot.getIndexesFromPool(h1Bits);
-    const h2Bits = bytesToBits(H2).reverse();
-    const [idxArray2, otKeys2] = this.ot.getIndexesFromPool(h2Bits);
-
     const civMaskedTwice = c3_output.slice(o, o+=4);
-    this.civMaskedByNotary = xor(civMaskedTwice, this.cs[3].masks[4]);
+    this.civShare = xor(civMaskedTwice, masks3[4]);
     const sivMaskedTwice = c3_output.slice(o, o+=4);
-    this.sivMaskedByNotary = xor(sivMaskedTwice, this.cs[3].masks[3]);
-
+    this.sivShare = xor(sivMaskedTwice, masks3[3]);
     const cwkMaskedTwice = c3_output.slice(o, o+=16);
     const swkMaskedTwice = c3_output.slice(o, o+=16);
-    this.cwkMaskedByNotary = xor(cwkMaskedTwice, this.cs[3].masks[2]);
-    this.swkMaskedByNotary = xor(swkMaskedTwice, this.cs[3].masks[1]);
+    this.cwkShare = xor(cwkMaskedTwice, masks3[2]);
+    this.swkShare = xor(swkMaskedTwice, masks3[1]);
 
+    // H1 xor-masked by notary is our (i.e. the client's) share of H^1,
+    // notary's mask is his share of H^1.
+    const H1share = xor(H1MaskedTwice, masks3[5]);
+    const clientFinished = concatTA(new Uint8Array([0x14, 0x00, 0x00, 0x0c]), verify_data);
     const encCF = xor(clientFinished, encCounter);
-    const step3resp = await this.send('c3_step3', concatTA(encCF, idxArray1, idxArray2));
-    assert(step3resp.length === 16 + 128*32 + 128*32);
-
+    const otReq = await this.ghash.buildFinRequest(H1share);
+    const step3resp = await this.send('c3_step3', concatTA(encCF, otReq));
+    assert(step3resp.length === 16 + 256*32);
     o = 0;
-    const Snotary = step3resp.slice(o, o+=16);
-    const encEntries1 = step3resp.slice(o, o+=(128*32));
-    const encEntries2 = step3resp.slice(o, o+=(128*32));
+    const notaryTagShare = step3resp.slice(o, o+=16);
+    const otResp = step3resp.slice(o, o+=(256*32));
 
-    let H3share = H1H2;
-    for (let i = 0; i < h1Bits.length; i += 1) {
-      const bit = h1Bits[i];
-      const ct = encEntries2.slice(i * 32, (i+1) * 32);
-      const maskedEntry = this.ot.decryptWithKey(ct, bit, otKeys1[i]);
-      H3share = xor(H3share, maskedEntry);
-    }
-    for (let i = 0; i < h2Bits.length; i += 1) {
-      const bit = h2Bits[i];
-      const ct = encEntries1.slice(i * 32, (i+1) * 32);
-      const maskedEntry = this.ot.decryptWithKey(ct, bit, otKeys2[i]);
-      H3share = xor(H3share, maskedEntry);
-    }
-    this.powersOfH[3] = H3share;
-       
     const aad = new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, 22, 3, 3, 0, 16, 0, 0, 0]);
-    // lenA (before padding) == 13*8 == 104, lenC == 16*8 == 128
+    // lenA (before padding) == 13*8 == 104, lenC (before padding)  == 16*8 == 128
     const lenAlenC = new Uint8Array([0, 0, 0, 0, 0, 0, 0, 104, 0, 0, 0, 0, 0, 0, 0, 128]);
-
-    const s1share = blockMult(aad, H3share);
-    const s2share = blockMult(encCF, H2);
-    const s3share = blockMult(lenAlenC, H1);
-    const Sclient = xor(xor(xor(s1share, s2share), s3share), myGctrShare);
-    const tagFromPowersOfH = xor(Sclient, Snotary);
-
+    const tagShare = this.ghash.processFinResponse(otResp, [aad, encCF, lenAlenC]);
+    // notary's gctr share is already included in notaryTagShare
+    const tagFromPowersOfH = xor(xor(notaryTagShare, tagShare), myGctrShare);
     return [encCF, tagFromPowersOfH, verify_data];
   }
 
   // getClientFinishedResumed runs a circuit to obtain data needed to construct the
-  // Client Finished messages for cases when we need TLS session resumption 
+  // Client Finished messages for cases when we need TLS session resumption
+  // TODO: this is wip, not yet fully implemented
   async getClientFinishedResumed(hs_hash){
     const seed = concatTA(str2ba('client finished'), hs_hash);
     const a1inner = innerHash(this.innerState_MS, seed);
     const a1 = await this.send('c7_step1', a1inner);
     const p1inner = innerHash(this.innerState_MS, a1);
     // p1inner is the client's input to c7
-    const mask1 = getRandom(16)
-    const mask2 = getRandom(12)
+    const mask1 = getRandom(16);
+    const mask2 = getRandom(12);
     const nonFixedBits = bytesToBits(concatTA(
-    mask2, mask2, this.civMaskedByNotary, this.cwkMaskedByNotary, p1inner));
-
+      mask2, mask2, this.civShare, this.cwkShare, p1inner));
   }
 
   // getServerKeyShare returns client's xor share of server_write_key
-  // and server_write_iv  
+  // and server_write_iv
   getKeyShares(){
-    return [this.cwkMaskedByNotary, this.civMaskedByNotary,
-      this.swkMaskedByNotary, this.sivMaskedByNotary];
+    return [this.cwkShare, this.civShare,
+      this.swkShare, this.sivShare];
   }
 
   getEphemeralKey(){
@@ -1203,91 +662,78 @@ export class TWOPC {
 
   // eslint-disable-next-line class-methods-use-this
   // optionally send extra data
-  async runCircuit(nonFixedBits, cNo, extraData) {
+  async runCircuit(inputs, cNo, extraData = new Uint8Array(0)) {
     console.log('in runCircuit', cNo);
-    if (extraData == undefined){
-      extraData = new Uint8Array();
+    // inputs is an array of inputs in the order in which the inputs appear in the c*.casm files.
+    // The circuit expects the least bit of the input to be the first bit
+    let inputBits = [];
+    for (let i=0; i < inputs.length; i++){
+      let bits = bytesToBits(inputs[i]);
+      if (typeof(inputs[i+1]) == 'number'){
+        // sometimes we need an amount of bits which is not a multiple of 8
+        // in such cases the input we be followed by a number of bits to slice
+        bits = bits.slice(0, inputs[i+1]);
+        i += 1;
+      }
+      inputBits = [].concat(inputBits, bits);
     }
     const c = this.cs[cNo];
-    const circuit = c.circuit;
     // how many times to repeat evaluation (> 1 only for circuits 5&7 )
-    const repeatCount = [0,1,1,1,1,this.C5Count,1,this.C6Count][cNo];
-    const [idxArray, otKeys] = this.ot.getIndexesFromPool(nonFixedBits);
+    const repeatCount = [0, 1, 1, 1, 1, this.C5Count, 1, this.C6Count][cNo];
 
     // for circuit 1, there was no previous commit
-    const prevCommit = cNo > 1 ? this.myCommit[cNo-1] : new Uint8Array();
+    const prevCommit = cNo > 1 ? this.myCommit[cNo-1] : new Uint8Array(0);
+    const otReq = this.otR.createRequest(inputBits);
+    const blob1 = await this.send(`c${cNo}_step1`, concatTA(prevCommit, otReq, extraData));
 
-    const blob1 = await this.send(`c${cNo}_step1`, concatTA(prevCommit, idxArray, extraData));
-
-    let offset = 0;
+    let o = 0;
     if (cNo > 1){
-      const prevCommitSalt = blob1.slice(offset, offset + 32);
-      offset += 32;
+      const prevCommitSalt = blob1.slice(o, o += 32);
       // the hash to which the notary committed must be equal to our commit
       const saltedCommit = await sha256(concatTA(this.myCommit[cNo-1], prevCommitSalt));
       assert (eq(saltedCommit, this.hisSaltedCommit[cNo-1]));
     }
-    let notaryInputsCount = circuit.notaryInputSize;
-    if (cNo === 6){
-      notaryInputsCount = 160 + 128 * this.C6Count;
-    }
-    const notaryInputsBlob = blob1.slice(offset, offset + notaryInputsCount*16);
-    offset += notaryInputsCount*16;
-    const encLabels = blob1.slice(offset, offset+nonFixedBits.length*32);
-    offset += nonFixedBits.length*32;
-    const nonFixedIndexes = blob1.slice(offset, offset+c.notaryNonFixedInputSize*2);
-    offset += c.notaryNonFixedInputSize*2;
-    assert(blob1.length === offset);
 
-    const nonFixedEncLabels = this.g.getNonFixedEncLabels(nonFixedIndexes, cNo);
-    const clientLabels = this.g.getClientLabels(nonFixedBits, cNo);
-    const sendPromise = this.send(`c${cNo}_step2`, concatTA(nonFixedEncLabels, clientLabels), true);
-    const nonFixedLabels = this.e.getNonFixedLabels(encLabels, otKeys, nonFixedBits);
-    const allNotaryLabels = splitIntoChunks(notaryInputsBlob, 16);
-  
+    // all notary's labels
+    const allNotaryLabels = blob1.slice(o, o += c.notaryInputSize*16*repeatCount);
+    const hisOtResp = blob1.slice(o, o += inputBits.length*32);
+    // we may need to drop some bits if their amount is not a multiple of 8
+    const hisOtReq = blob1.slice(o, o += 1+ c.notaryInputSize/8*repeatCount);
+    assert(blob1.length == o);
+
+    const allClientLabels = this.otR.parseResponse(inputBits, hisOtResp);
+    const senderMsg = this.g.getNotaryLabels(cNo);
+    const otResp = this.otS.processRequest(hisOtReq, senderMsg);
+    const clientLabels = this.g.getClientLabels(inputBits, cNo);
+    const sendPromise = this.send(`c${cNo}_step2`, concatTA(otResp, clientLabels), true);
+
     // collect batch of evaluation
     const batch = [];
+    const clBatch = splitIntoChunks(allClientLabels, c.clientInputSize*16);
+    const nlBatch = splitIntoChunks(allNotaryLabels, c.notaryInputSize*16);
+    const ttBatch = splitIntoChunks(this.blob[`c${cNo}_tt`], c.andGateCount * 48);
     for (let r=0; r < repeatCount; r++){
-      let fixedLabels = this.fixedLabels[cNo];
-      let notaryLabels = allNotaryLabels;
-      if (cNo === 5){
-        fixedLabels = this.fixedLabels[cNo].slice(r*148, r*148+148);
-      }
-      else if (cNo === 6){
-        assert(this.fixedLabels[cNo].length === 144*repeatCount);
-        fixedLabels = this.fixedLabels[cNo].slice(r*144, r*144+144);
-        const commonNotary = allNotaryLabels.slice(0,160);
-        const uniqueNotary = allNotaryLabels.slice(160+r*128, 160+r*128+128);
-        notaryLabels = [].concat(commonNotary, uniqueNotary);
-      }
-      const garbledAssignment = concatTA(...notaryLabels, ...nonFixedLabels, ...fixedLabels);
-      const ttSize = circuit.andGateCount * 64;
-      const tt = this.blob[`c${cNo}_tt`].slice(r*ttSize, r*ttSize+ttSize);
-      batch.push([garbledAssignment, tt]);
+      batch.push([concatTA(nlBatch[r], clBatch[r]), ttBatch[r]]);
     }
 
     // perform evaluation
     console.time('evaluateBatch');
-    const batchOutputLabels = await this.e.evaluateBatch(batch, cNo);
+    const evalOutputLabelsBatch = await this.e.evaluateBatch(batch, cNo);
     console.timeEnd('evaluateBatch');
-    const output = [];
 
     // process evaluation outputs
+    const output = [];
+    // garbOutputLabelsBatch is output labels which the garbler sent to us
+    assert(this.blob[`c${cNo}_ol`].length === c.outputSize*32*repeatCount);
+    const garbOutputLabelsBatch = splitIntoChunks(this.blob[`c${cNo}_ol`], c.outputSize*32);
     for (let r=0; r < repeatCount; r++){
-      const outputLabelsBlob = batchOutputLabels[r];
-      const outputLabels = splitIntoChunks(outputLabelsBlob, 16);
-
-      const outputSize = circuit.outputSize * 32;
-      const allOutputLabelsBlob = this.blob[`c${cNo}_ol`].slice(r*outputSize, (r+1)*outputSize);
-      assert(allOutputLabelsBlob.length === circuit.outputSize*32);
-      const allOutputLabels = splitIntoChunks(allOutputLabelsBlob, 16);
-
+      const evalOL = splitIntoChunks(evalOutputLabelsBatch[r], 16);
+      const garbOL = splitIntoChunks(garbOutputLabelsBatch[r], 16);
       const bits = [];
-      for (let i = 0; i < circuit.outputSize; i++) {
-        const out = outputLabels[i];
-        if (eq(out, allOutputLabels[i*2])) {
+      for (let i = 0; i < c.outputSize; i++) {
+        if (eq(evalOL[i], garbOL[i*2])) {
           bits.push(0);
-        } else if (eq(out, allOutputLabels[i*2+1])) {
+        } else if (eq(evalOL[i], garbOL[i*2+1])) {
           bits.push(1);
         } else {
           console.log('evaluator output does not match the garbled outputs');
@@ -1297,24 +743,25 @@ export class TWOPC {
       this.output[cNo] = out;
       output.push(out);
     }
+    console.log('output is', output);
     this.myCommit[cNo] = await sha256(concatTA(...output));
 
     const cStep2Out = await sendPromise;
-    this.hisSaltedCommit[cNo] = cStep2Out.subarray(0,32);
+    this.hisSaltedCommit[cNo] = cStep2Out.subarray(0, 32);
     const extraDataOut = cStep2Out.subarray(32);
     output.push(extraDataOut);
     return output;
   }
 
-  
+
   // eslint-disable-next-line class-methods-use-this
   processBlob(blob) {
     // split up blob into [truth table + output labels] for each circuit
     const obj = {};
     let offset = 0;
     for (let i=1; i < this.cs.length; i++){
-      let truthTableSize = this.cs[i].circuit.andGateCount *64;
-      let outputLabelsSize = this.cs[i].circuit.outputSize *32;
+      let truthTableSize = this.cs[i].andGateCount *48;
+      let outputLabelsSize = this.cs[i].outputSize *32;
       if (i === 5){
         truthTableSize = this.C5Count * truthTableSize;
         outputLabelsSize = this.C5Count * outputLabelsSize;
@@ -1353,12 +800,12 @@ export class TWOPC {
 
     const clientKey = await crypto.subtle.importKey(
       'raw',
-      Secret.slice(0,16),
+      Secret.slice(0, 16),
       'AES-GCM', true, ['encrypt']);
 
     const notaryKey = await crypto.subtle.importKey(
       'raw',
-      Secret.slice(16,32),
+      Secret.slice(16, 32),
       'AES-GCM', true, ['decrypt']);
 
     return [clientKey, notaryKey];

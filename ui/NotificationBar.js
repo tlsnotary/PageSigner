@@ -1,9 +1,11 @@
+/* global chrome*/
+
 export class NotificationBar{
   constructor(){}
 
   show(sessionId, serverName, hideButton) {
     hideButton = hideButton || false;
-  
+
     const table = document.createElement('table');
     table.style.position = 'fixed';
     table.style.top = '0px';

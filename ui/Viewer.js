@@ -1,3 +1,5 @@
+/* global chrome*/
+
 import {NotificationBar} from './NotificationBar.js';
 import {FileChooser} from './FileChooser.js';
 import {decode_str, str2ba } from './utils.js';
@@ -7,7 +9,7 @@ class Viewer{
     window.tabid = null; // allow the extension to put the id of the tab which opened this page
     window.isViewer = true;
     // isFileChooser will be toggled to true if extension calls Main.openFileChooser()
-    window.isFileChooser = false; 
+    window.isFileChooser = false;
     // isReady will be se to true after message listener is installed
     window.isReady = false;
   }
@@ -32,7 +34,7 @@ class Viewer{
         throw 'unexpected message';
       }
       console.log('got data in viewer');
-      var hideButton = false; 
+      var hideButton = false;
       var text = msg.data.response;
       console.log('text size is', text.length);
       // remove the HTTP headers
@@ -43,8 +45,8 @@ class Viewer{
       // add CSP to prevent loading any resources from the page
         const csp = '<meta http-equiv=\'Content-Security-Policy\' content="default-src \'none\'; img-src data:"></meta>\r\n';
         document.write(csp + decode_str(http_body));
-      } 
-      else { 
+      }
+      else {
       // a file which cannot be shown but has to be downloaded like e.g. PDF
         document.getElementById('type').textContent = type;
         document.getElementById('view file button').onclick = function() {
@@ -68,10 +70,10 @@ class Viewer{
       if (line.search(/content-type:\s*/i) < 0) continue;
       if (line.match('application/pdf')){
         return 'pdf';
-      } 
+      }
       else if (line.match('image/jpeg')){
         return 'jpg';
-      } 
+      }
       return 'html';
     }
   }

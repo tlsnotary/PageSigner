@@ -1,26 +1,26 @@
 // gcworker.js is a WebWorker which performs garbling and evaluation
-// of garbled circuits
+// of garbled circuits.
+// This is a fixed-key-cipher garbling method from BHKR13 https://eprint.iacr.org/2013/426.pdf
 
 // eslint-disable-next-line no-undef
 var parentPort_;
 let circuit = null;
 let truthTable = null;
-let timeEvaluating = 0;
 
-// sha0 is used by randomOracle
-const sha0 = new Uint8Array( hex2ba('da5698be17b9b46962335799779fbeca8ce5d491c0d26243bafef9ea1837a9d8'));
-// byteArray is used by randomOracle
-const byteArray = new Uint8Array(24);
+// fixedKey is used by randomOracle(). We need a 32-byte key because we use Salsa20. The last 4
+// bytes will be filled with the index of the circuit's wire.
+const fixedKey = new Uint8Array([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,
+  25,26,27,28,0,0,0,0]);
+// sigma is Salsa's constant "expand 32-byte k"  
+const sigma = new Uint8Array([101, 120, 112, 97, 110, 100, 32, 51, 50, 45, 98, 121, 116, 101, 32, 107]);
 // randomPool will be filled with data from getRandom
 let randomPool; 
 // randomPoolOffset will be moved after data was read from randomPool
 let randomPoolOffset = 0; 
 let garbledAssigment;
 var crypto_;
-var nacl;
 
 if (typeof(importScripts) !== 'undefined') {
-  importScripts('./../../third-party/nacl-fast.js');
   crypto_ = self.crypto;
   self.onmessage = function(event) {
     processMessage(event.data);
@@ -34,7 +34,6 @@ if (typeof(importScripts) !== 'undefined') {
     const filePath = 'file://' + process.argv[1];
     // this workaround allows to require() from ES6 modules, which is not allowed by default 
     const require = module.createRequire(filePath)
-    nacl = require('tweetnacl')
     const { parentPort } = require('worker_threads');
     parentPort_ = parentPort
     const { Crypto } = require("@peculiar/webcrypto");
@@ -56,7 +55,7 @@ function processMessage(obj){
     // no need to respond to this message
   }
   else if (msg === 'setTruthTable'){
-    assert(data.byteLength == circuit.andGateCount*64);
+    assert(data.byteLength == circuit.andGateCount*48);
     truthTable = new Uint8Array(data);
   }
   else if (msg === 'garble'){
@@ -70,7 +69,7 @@ function processMessage(obj){
     const reuseR = (data == undefined) ? undefined : data.reuseR;
 
     const [truthTable, inputLabels, outputLabels, R] = garble(circuit, garbledAssigment, reuseLabels, reuseIndexes, reuseR);
-    assert (truthTable.length === circuit.andGateCount*64);
+    assert (truthTable.length === circuit.andGateCount*48);
     assert (inputLabels.length === circuit.clientInputSize*32 + circuit.notaryInputSize*32);
     assert (outputLabels.length === circuit.outputSize*32);
     const obj = {'tt': truthTable.buffer, 'il': inputLabels.buffer, 'ol': outputLabels.buffer, 'R': R};
@@ -106,6 +105,8 @@ function postMsg(value, transferList){
 
 function newR(){
   const R = getRandom(16);
+  // set the last bit of R to 1 for point-and-permute
+  // this guarantees that 2 labels of the same wire will have the opposite last bits
   R[15] = R[15] | 0x01;
   return R;
 }
@@ -145,7 +146,8 @@ function garble(circuit, ga, reuseLabels = new Uint8Array(0) , reuseIndexes = []
     }
   }
  
-  const truthTable = new Uint8Array(circuit.andGateCount*64);
+  const truthTable = new Uint8Array(circuit.andGateCount*48);
+
   let andGateIdx = 0;
   // garble gates
   for (let i = 0; i < circuit.gatesCount; i++) {
@@ -167,41 +169,64 @@ function garble(circuit, ga, reuseLabels = new Uint8Array(0) , reuseIndexes = []
      
 }
 
+
 const garbleAnd = function (gateBlob, R, ga, tt, andGateIdx, id) {
+  // get wire numbers
   const in1 = threeBytesToInt(gateBlob.subarray(1,4));
   const in2 = threeBytesToInt(gateBlob.subarray(4,7));
   const out = threeBytesToInt(gateBlob.subarray(7,10));
-  
-  const randomLabel = getRandom(16);
 
-  gaSetIndexG(ga, out, 0, randomLabel);
-  gaSetIndexG(ga, out, 1, xor(randomLabel, R, true));
-
+  // get labels of each wire
   const in1_0 = gaGetIndexG(ga, in1, 0);
   const in1_1 = gaGetIndexG(ga, in1, 1);
   const in2_0 = gaGetIndexG(ga, in2, 0);
   const in2_1 = gaGetIndexG(ga, in2, 1);
-  const out_0 = gaGetIndexG(ga, out, 0);
-  const out_1 = gaGetIndexG(ga, out, 1);
+ 
+  // rows is a truthtable if wire labels in a canonical order, the third 
+  // item shows an index of output label
+  const rows = [
+    [in1_0, in2_0, 0],
+    [in1_0, in2_1, 0],
+    [in1_1, in2_0, 0],
+    [in1_1, in2_1, 1]
+  ]
 
-  const values = [
-    encrypt(in1_0, in2_0, id, out_0),
-    encrypt(in1_0, in2_1, id, out_0),
-    encrypt(in1_1, in2_0, id, out_0),
-    encrypt(in1_1, in2_1, id, out_1)
-  ];
-  
-  const points = [
-    2 * getPoint(in1_0) + getPoint(in2_0),
-    2 * getPoint(in1_0) + getPoint(in2_1),
-    2 * getPoint(in1_1) + getPoint(in2_0),
-    2 * getPoint(in1_1) + getPoint(in2_1)
-  ];
+  // GRR3: garbled row reduction
+  // We want to reduce a row where both labels' points are set to 1.
+  // We first need to encrypt those labels with a dummy all-zero output label. The 
+  // result X will be the actual value of the output label that we need to set.
+  // After we set the output label to X and encrypt again, the result will be 0 (but
+  // we don't actually need to encrypt it again, we just know that the result will be 0)
 
-  tt.set(values[0], andGateIdx*64+16*points[0]);
-  tt.set(values[1], andGateIdx*64+16*points[1]);
-  tt.set(values[2], andGateIdx*64+16*points[2]);
-  tt.set(values[3], andGateIdx*64+16*points[3]);
+  let outLabels
+  // idxToReduce is the index of the row that will be reduced
+  let idxToReduce = -1;
+  for (let i=0; i < rows.length; i++){
+    if (getPoint(rows[i][0]) == 1 && getPoint(rows[i][1]) == 1){
+      const outWire = encrypt(rows[i][0], rows[i][1], id, new Uint8Array(16).fill(0));
+      if (i==3){
+        outLabels = [xor(outWire, R), outWire]
+      } else {
+        outLabels = [outWire, xor(outWire, R)]
+      }
+      idxToReduce = i;
+      break;
+    }
+  }
+  gaSetIndexG(ga, out, 0, outLabels[0]);
+  gaSetIndexG(ga, out, 1, outLabels[1]);
+  assert(idxToReduce != -1)
+
+  for (let i=0; i < rows.length; i++){
+    if (i == idxToReduce){
+      // not encrypting this row because we already know that its encryption is 0
+      // and the sum of its points is 3
+      continue; 
+    }
+    const value = encrypt(rows[i][0], rows[i][1], id, outLabels[rows[i][2]]);
+    const point = 2 * getPoint(rows[i][0]) + getPoint(rows[i][1])
+    tt.set(value, andGateIdx*48+16*point);
+  }
 };
 
 
@@ -255,7 +280,6 @@ function evaluate (circuit, ga, tt, inputLabels) {
   }
   console.timeEnd('worker_evaluate');
   const t1 = performance.now();
-  timeEvaluating += (t1 - t0);
 
   return ga.slice((circuit.wiresCount-circuit.outputSize)*16, circuit.wiresCount*16);
 }
@@ -268,12 +292,19 @@ const evaluateAnd = function (ga, tt, andGateIdx, gateBlob, id) {
   const label1 = gaGetIndexE(ga, in1); // ga[in1];
   const label2 = gaGetIndexE(ga, in2); // ga[in2];
   
+  let cipher
   const point = 2 * getPoint(label1) + getPoint(label2);
-  const offset = andGateIdx*64+16*point;
-  const cipher = tt.subarray(offset, offset+16);
-  
+  if (point == 3){
+    // GRR3: all rows with point sum of 3 have been reduced
+		// their encryption is an all-zero bytestring
+    cipher = new Uint8Array(16).fill(0);
+  } else {
+    const offset = andGateIdx*48+16*point;
+    cipher = tt.subarray(offset, offset+16);
+  }
   gaSetIndexE(ga, out, decrypt(label1, label2, id, cipher));
 };
+
 
 const evaluateXor = function (ga, gateBlob) {
   const in1 = threeBytesToInt(gateBlob.subarray(1,4));
@@ -315,10 +346,7 @@ function gaSetIndexG(ga, idx, pos, value){
 
 
 function xor(a, b, reuse) {
-  if (a.length !== b.length){
-    console.log('a.length !== b.length');
-    throw('a.length !== b.length');
-  }
+  assert(a.length == b.length, 'a.length !== b.length')
   let bytes;
   if (reuse === true){
     // in some cases the calling function will have no more use of "a"
@@ -341,16 +369,18 @@ function getPoint(arr) {
 
 const decrypt = encrypt;
 
-let a2;
-let b4;
+// Based on the the A4 method from Fig.1 and the D4 method in Fig6 of the BHKR13 paper
+// (https://eprint.iacr.org/2013/426.pdf)
+// Note that the paper doesn't prescribe a specific method to break the symmetry between A and B,
+// so we choose a circular byte shift instead of a circular bitshift as in Fig6. 
 function encrypt(a, b, t, m) {
   // double a 
-  a2 = a.slice();
+  const a2 = a.slice();
   const leastbyte = a2[0];
   a2.copyWithin(0,1,15);  // Logical left shift by 1 byte
   a2[14] = leastbyte;  // Restore old least byte as new greatest (non-pointer) byte
   // quadruple b
-  b4 = b.slice();
+  const b4 = b.slice();
   const leastbytes = [b4[0], b4[1]];
   b4.copyWithin(0,2,15);  // Logical left shift by 2 byte
   [b4[13], b4[14]] = leastbytes;  // Restore old least two bytes as new greatest bytes
@@ -361,39 +391,21 @@ function encrypt(a, b, t, m) {
   return xor(ro, mXorK, true);
 }
 
+
 function randomOracle(m, t) {
-  return nacl.secretbox(
-    m,
-    longToByteArray(t),
-    sha0,
-  ).subarray(0,16);
+  // convert the integer t to a 4-byte big-endian array and append
+  // it to fixedKey in-place
+  for (let index = 0; index < 4; index++) {
+    const byte = t & 0xff;
+    fixedKey[31-index] = byte;
+    t = (t - byte) / 256;
+  }
+  return Salsa20(fixedKey, m);
 }
 
-function longToByteArray(long) {
-  // we want to represent the input as a 24-bytes array
-  for (let index = 0; index < byteArray.length; index++) {
-    const byte = long & 0xff;
-    byteArray[index] = byte;
-    long = (long - byte) / 256;
-  }
-  return byteArray;
-}
 
 function threeBytesToInt(b){
   return b[2] + b[1]*256 + b[0]*65536;
-}
-
-// convert a hex string into byte array
-function hex2ba(str) {
-  var ba = [];
-  // pad with a leading 0 if necessary
-  if (str.length % 2) {
-    str = '0' + str;
-  }
-  for (var i = 0; i < str.length; i += 2) {
-    ba.push(parseInt('0x' + str.substr(i, 2)));
-  }
-  return ba;
 }
 
 
@@ -438,4 +450,148 @@ function concatTA (...arr){
     offset += item.length;
   }
   return newArray;
+}
+
+// use Salsa20 as a random permutator. Instead of the nonce, we feed the data that needs
+// to be permuted.
+function Salsa20(key, data){
+  const out = new Uint8Array(16);
+  core_salsa20(out, data, key, sigma)
+  return out;
+}
+
+// copied from https://github.com/dchest/tweetnacl-js/blob/master/nacl-fast.js
+// and modified to output only 16 bytes
+function core_salsa20(o, p, k, c) {
+  var j0  = c[ 0] & 0xff | (c[ 1] & 0xff)<<8 | (c[ 2] & 0xff)<<16 | (c[ 3] & 0xff)<<24,
+      j1  = k[ 0] & 0xff | (k[ 1] & 0xff)<<8 | (k[ 2] & 0xff)<<16 | (k[ 3] & 0xff)<<24,
+      j2  = k[ 4] & 0xff | (k[ 5] & 0xff)<<8 | (k[ 6] & 0xff)<<16 | (k[ 7] & 0xff)<<24,
+      j3  = k[ 8] & 0xff | (k[ 9] & 0xff)<<8 | (k[10] & 0xff)<<16 | (k[11] & 0xff)<<24,
+      j4  = k[12] & 0xff | (k[13] & 0xff)<<8 | (k[14] & 0xff)<<16 | (k[15] & 0xff)<<24,
+      j5  = c[ 4] & 0xff | (c[ 5] & 0xff)<<8 | (c[ 6] & 0xff)<<16 | (c[ 7] & 0xff)<<24,
+      j6  = p[ 0] & 0xff | (p[ 1] & 0xff)<<8 | (p[ 2] & 0xff)<<16 | (p[ 3] & 0xff)<<24,
+      j7  = p[ 4] & 0xff | (p[ 5] & 0xff)<<8 | (p[ 6] & 0xff)<<16 | (p[ 7] & 0xff)<<24,
+      j8  = p[ 8] & 0xff | (p[ 9] & 0xff)<<8 | (p[10] & 0xff)<<16 | (p[11] & 0xff)<<24,
+      j9  = p[12] & 0xff | (p[13] & 0xff)<<8 | (p[14] & 0xff)<<16 | (p[15] & 0xff)<<24,
+      j10 = c[ 8] & 0xff | (c[ 9] & 0xff)<<8 | (c[10] & 0xff)<<16 | (c[11] & 0xff)<<24,
+      j11 = k[16] & 0xff | (k[17] & 0xff)<<8 | (k[18] & 0xff)<<16 | (k[19] & 0xff)<<24,
+      j12 = k[20] & 0xff | (k[21] & 0xff)<<8 | (k[22] & 0xff)<<16 | (k[23] & 0xff)<<24,
+      j13 = k[24] & 0xff | (k[25] & 0xff)<<8 | (k[26] & 0xff)<<16 | (k[27] & 0xff)<<24,
+      j14 = k[28] & 0xff | (k[29] & 0xff)<<8 | (k[30] & 0xff)<<16 | (k[31] & 0xff)<<24,
+      j15 = c[12] & 0xff | (c[13] & 0xff)<<8 | (c[14] & 0xff)<<16 | (c[15] & 0xff)<<24;
+
+  var x0 = j0, x1 = j1, x2 = j2, x3 = j3, x4 = j4, x5 = j5, x6 = j6, x7 = j7,
+      x8 = j8, x9 = j9, x10 = j10, x11 = j11, x12 = j12, x13 = j13, x14 = j14,
+      x15 = j15, u;
+
+  for (var i = 0; i < 20; i += 2) {
+    u = x0 + x12 | 0;
+    x4 ^= u<<7 | u>>>(32-7);
+    u = x4 + x0 | 0;
+    x8 ^= u<<9 | u>>>(32-9);
+    u = x8 + x4 | 0;
+    x12 ^= u<<13 | u>>>(32-13);
+    u = x12 + x8 | 0;
+    x0 ^= u<<18 | u>>>(32-18);
+
+    u = x5 + x1 | 0;
+    x9 ^= u<<7 | u>>>(32-7);
+    u = x9 + x5 | 0;
+    x13 ^= u<<9 | u>>>(32-9);
+    u = x13 + x9 | 0;
+    x1 ^= u<<13 | u>>>(32-13);
+    u = x1 + x13 | 0;
+    x5 ^= u<<18 | u>>>(32-18);
+
+    u = x10 + x6 | 0;
+    x14 ^= u<<7 | u>>>(32-7);
+    u = x14 + x10 | 0;
+    x2 ^= u<<9 | u>>>(32-9);
+    u = x2 + x14 | 0;
+    x6 ^= u<<13 | u>>>(32-13);
+    u = x6 + x2 | 0;
+    x10 ^= u<<18 | u>>>(32-18);
+
+    u = x15 + x11 | 0;
+    x3 ^= u<<7 | u>>>(32-7);
+    u = x3 + x15 | 0;
+    x7 ^= u<<9 | u>>>(32-9);
+    u = x7 + x3 | 0;
+    x11 ^= u<<13 | u>>>(32-13);
+    u = x11 + x7 | 0;
+    x15 ^= u<<18 | u>>>(32-18);
+
+    u = x0 + x3 | 0;
+    x1 ^= u<<7 | u>>>(32-7);
+    u = x1 + x0 | 0;
+    x2 ^= u<<9 | u>>>(32-9);
+    u = x2 + x1 | 0;
+    x3 ^= u<<13 | u>>>(32-13);
+    u = x3 + x2 | 0;
+    x0 ^= u<<18 | u>>>(32-18);
+
+    u = x5 + x4 | 0;
+    x6 ^= u<<7 | u>>>(32-7);
+    u = x6 + x5 | 0;
+    x7 ^= u<<9 | u>>>(32-9);
+    u = x7 + x6 | 0;
+    x4 ^= u<<13 | u>>>(32-13);
+    u = x4 + x7 | 0;
+    x5 ^= u<<18 | u>>>(32-18);
+
+    u = x10 + x9 | 0;
+    x11 ^= u<<7 | u>>>(32-7);
+    u = x11 + x10 | 0;
+    x8 ^= u<<9 | u>>>(32-9);
+    u = x8 + x11 | 0;
+    x9 ^= u<<13 | u>>>(32-13);
+    u = x9 + x8 | 0;
+    x10 ^= u<<18 | u>>>(32-18);
+
+    u = x15 + x14 | 0;
+    x12 ^= u<<7 | u>>>(32-7);
+    u = x12 + x15 | 0;
+    x13 ^= u<<9 | u>>>(32-9);
+    u = x13 + x12 | 0;
+    x14 ^= u<<13 | u>>>(32-13);
+    u = x14 + x13 | 0;
+    x15 ^= u<<18 | u>>>(32-18);
+  }
+   x0 =  x0 +  j0 | 0;
+   x1 =  x1 +  j1 | 0;
+   x2 =  x2 +  j2 | 0;
+   x3 =  x3 +  j3 | 0;
+   x4 =  x4 +  j4 | 0;
+   x5 =  x5 +  j5 | 0;
+   x6 =  x6 +  j6 | 0;
+   x7 =  x7 +  j7 | 0;
+   x8 =  x8 +  j8 | 0;
+   x9 =  x9 +  j9 | 0;
+  x10 = x10 + j10 | 0;
+  x11 = x11 + j11 | 0;
+  x12 = x12 + j12 | 0;
+  x13 = x13 + j13 | 0;
+  x14 = x14 + j14 | 0;
+  x15 = x15 + j15 | 0;
+
+  o[ 0] = x0 >>>  0 & 0xff;
+  o[ 1] = x0 >>>  8 & 0xff;
+  o[ 2] = x0 >>> 16 & 0xff;
+  o[ 3] = x0 >>> 24 & 0xff;
+
+  o[ 4] = x1 >>>  0 & 0xff;
+  o[ 5] = x1 >>>  8 & 0xff;
+  o[ 6] = x1 >>> 16 & 0xff;
+  o[ 7] = x1 >>> 24 & 0xff;
+
+  o[ 8] = x2 >>>  0 & 0xff;
+  o[ 9] = x2 >>>  8 & 0xff;
+  o[10] = x2 >>> 16 & 0xff;
+  o[11] = x2 >>> 24 & 0xff;
+
+  o[12] = x3 >>>  0 & 0xff;
+  o[13] = x3 >>>  8 & 0xff;
+  o[14] = x3 >>> 16 & 0xff;
+  o[15] = x3 >>> 24 & 0xff;
+  // we only need 16 bytes of the output
 }

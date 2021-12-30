@@ -1,6 +1,7 @@
-// FileChooser create a "choose file" button and sends the chosen file
-// to the extension
+/* global chrome*/
 
+// class FileChooser create a "choose file" button and sends the chosen file
+// to the extension
 export class FileChooser{
   // show is called by extension's Main.openFileChooser()
   show(){

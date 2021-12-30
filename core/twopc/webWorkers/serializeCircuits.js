@@ -7,14 +7,14 @@ if (typeof(importScripts) === 'undefined'){
     // parses this if clause and will error out if "import" is found
     // using process.argv instead of import.meta.url to get the name of this script
     const filePath = 'file://' + process.argv[1];
-    // this workaround allows to require() from ES6 modules, which is not allowed by default 
-    const require = module.createRequire(filePath)
+    // this workaround allows to require() from ES6 modules, which is not allowed by default
+    const require = module.createRequire(filePath);
     const { parentPort } = require('worker_threads');
     parentPort.on('message', msg => {
       const text = msg.text;
       const [obj, blob] = serializeCircuit(text);
       parentPort.postMessage({data: {'obj': obj, blob: blob.buffer}});
-    })
+    });
   });
 }
 else {
@@ -37,7 +37,7 @@ function serializeCircuit(text){
   obj['notaryInputSize'] = Number(rows[1].split(' ')[1]);
   obj['clientInputSize'] = Number(rows[1].split(' ')[2]);
   obj['outputSize'] = Number(rows[2].split(' ')[1]);
-  
+
   // each gate is serialized as
   // 1 byte: gate type XOR==0 AND==1 INV==2
   // 3 bytes: 1st input wire number
@@ -75,7 +75,7 @@ function serializeCircuit(text){
       const out = intToThreeBytes(tokens[tokens.length-2]);
       blob.set(in1, blobOffset);
       blobOffset+=3;
-      blob.set([0,0,0], blobOffset);
+      blob.set([0, 0, 0], blobOffset);
       blobOffset+=3;
       blob.set(out, blobOffset);
       blobOffset+=3;

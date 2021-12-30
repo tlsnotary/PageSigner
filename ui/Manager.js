@@ -1,3 +1,5 @@
+/* global chrome, swal*/
+
 import {str2ba} from './utils.js';
 
 document.addEventListener('load', onload);
@@ -21,7 +23,7 @@ class Manager{
         that.processData(data.payload);
       }
       else if (data.command == 'export'){
-        // .payload contains {pgsg: json, name: session_name}       
+        // .payload contains {pgsg: json, name: session_name}
         const exportedBlobUrl = URL.createObjectURL(new Blob([str2ba(data.payload.pgsg)]), {
           type: 'application/octet-stream'
         });
@@ -38,7 +40,7 @@ class Manager{
       'message': 'refresh'
     });
   }
-  
+
   processData(rows) {
     const tb = document.getElementsByTagName('tbody')[0];
     const initial_row_length = tb.rows.length;
@@ -49,7 +51,7 @@ class Manager{
     rows.sort(function(a, b) {
       return Date.parse(a.creationTime) < Date.parse(b.creationTime) ? 1 : -1;
     });
-  
+
     for (const r of rows) {
       this.addRow({
         'sessionName': r.sessionName,
@@ -61,14 +63,14 @@ class Manager{
       });
     }
   }
-  
-  
+
+
   addRow(args) {
     const that = this;
     const session = args.creationTime;
     const tb = document.getElementById('tableBody');
     const row = tb.insertRow(tb.rows.length);
-  
+
     const td_session = document.createElement('td');
     if (args.isImported){
       const importedIcon = document.createElement('img');
@@ -91,9 +93,9 @@ class Manager{
       td_session.appendChild(editedIcon);
     }
     td_session.appendChild(document.createTextNode(args.sessionName));
-  
+
     const iconDiv = document.createElement('div');
-  
+
     const imgExp = document.createElement('img');
     imgExp.classList.add('icon');
     imgExp.src = '../img/export.svg';
@@ -120,7 +122,7 @@ class Manager{
     };
     imgExp.value = 'Export';
     iconDiv.appendChild(imgExp);
-  
+
     const imgRen = document.createElement('img');
     imgRen.classList.add('icon');
     imgRen.src = '../img/rename.svg';
@@ -132,7 +134,7 @@ class Manager{
       that.doRename(event.target, session);
     };
     iconDiv.appendChild(imgRen);
-  
+
     const imgDel = document.createElement('img');
     imgDel.classList.add('icon');
     imgDel.src = '../img/delete.svg';
@@ -158,22 +160,22 @@ class Manager{
     };
     imgDel.value = 'Delete';
     iconDiv.appendChild(imgDel);
-  
+
     iconDiv.style.position = 'absolute';
     iconDiv.style.top = 2;
     iconDiv.style.right = 4;
-    
+
     td_session.style.position = 'relative';
     td_session.appendChild(iconDiv);
     row.appendChild(td_session);
-  
+
     const td_time = document.createElement('td');
     td_time.style.textAlign = 'center';
     td_time.textContent = args.creationTime;
     row.appendChild(td_time);
-  
+
     const buttonDiv = document.createElement('div');
-  
+
     const input1 = document.createElement('input');
     input1.type = 'button';
     input1.className = 'btn';
@@ -188,7 +190,7 @@ class Manager{
     };
     input1.value = 'HTML';
     buttonDiv.appendChild(input1);
-  
+
     const input2 = document.createElement('input');
     input2.type = 'button';
     input2.className = 'btn';
@@ -203,7 +205,7 @@ class Manager{
     };
     input2.value = 'Details';
     buttonDiv.appendChild(input2);
-  
+
     const input3 = document.createElement('input');
     input3.type = 'button';
     input3.className = 'btn';
@@ -218,7 +220,7 @@ class Manager{
     };
     input3.value = 'Edit';
     // Edit button will be used in fututre versions
-    input3.style.visibility = "hidden";
+    input3.style.visibility = 'hidden';
     if (args.isImported || args.isEdited || (args.version < 5)){
       input3.style.opacity = '0.3';
       input3.onclick = null;
@@ -228,7 +230,7 @@ class Manager{
       }
     }
     buttonDiv.appendChild(input3);
-    
+
     const td3 = document.createElement('td');
     td3.style.textAlign = 'center';
     td3.appendChild(buttonDiv);

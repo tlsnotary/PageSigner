@@ -1,4 +1,4 @@
-import {ba2str, b64decode, assert, ba2int, verifyAttestationDoc, ba2hex, eq, 
+import {ba2str, b64decode, assert, ba2int, verifyAttestationDoc, ba2hex, eq,
   sha256} from './utils.js';
 
 // rootsOfTrust contains an array of trusted EBS snapshots
@@ -45,8 +45,8 @@ function checkDescribeInstances(xmlDoc, instanceId, imageId, volumeId) {
     assert(parent.getElementsByTagName('instanceId')[0].textContent === instanceId);
     assert(parent.getElementsByTagName('imageId')[0].textContent === imageId);
     assert(parent.getElementsByTagName('instanceState')[0].getElementsByTagName('name')[0].textContent === 'running');
-    // other instance types may use non-nvme disks and thus would bypass the check that 
-    // only one nvme* disk is allowed 
+    // other instance types may use non-nvme disks and thus would bypass the check that
+    // only one nvme* disk is allowed
     assert (parent.getElementsByTagName('instanceType')[0].textContent.startsWith('t3'));
     var launchTime = parent.getElementsByTagName('launchTime')[0].textContent;
     assert(parent.getElementsByTagName('rootDeviceType')[0].textContent === 'ebs');
@@ -112,8 +112,8 @@ function checkGetConsoleOutput(xmlDoc, instanceId) {
     // a redundant check, because the patched ramdisk must halt the boot process if
     // it detects more than one disk device.
     const allowedSet = ['nvme', 'nvme0', 'nvme0n1', 'nvme0n1p1'];
-    // match all substrings starting with nvme, folowed by a count of from 0 to 7 symbols from 
-    // the ranges 0-9 and a-z  
+    // match all substrings starting with nvme, folowed by a count of from 0 to 7 symbols from
+    // the ranges 0-9 and a-z
     for (const match of [...logstr.matchAll(/nvme[0-9a-z]{0,7}/g)]){
       assert(match.length == 1);
       assert(allowedSet.includes(match[0]), 'disallowed nvme* string present in log');
@@ -192,7 +192,7 @@ function checkGetUser(xmlDoc, ownerId) {
 
 
 function checkDescribeImages(xmlDoc, imageId, snapshotIds){
-  try {  
+  try {
     assert(xmlDoc.getElementsByTagName('DescribeImagesResponse').length == 1);
     const images = xmlDoc.getElementsByTagName('imagesSet')[0].children;
     assert(images.length == 1);
@@ -224,7 +224,7 @@ async function fetch_and_parse(obj){
 }
 
 export async function getURLFetcherDoc(IP, port = 10011){
-  // get URLFetcher document containing attestation for AWS HTTP API URLs needed to 
+  // get URLFetcher document containing attestation for AWS HTTP API URLs needed to
   // verify that the oracle was correctly set up.
   // https://github.com/tlsnotary/URLFetcher
   const resp = await fetch('http://' + IP + ':' + port + '/getURLFetcherDoc', {
@@ -237,8 +237,8 @@ export async function getURLFetcherDoc(IP, port = 10011){
 
 export async function verifyNotary(URLFetcherDoc) {
   // URLFetcherDoc is a concatenation of 4-byte transcript length | transcript | attestation doc
-  const transcriptLen = ba2int(URLFetcherDoc.slice(0,4));
-  const transcript = URLFetcherDoc.slice(4,4+transcriptLen);
+  const transcriptLen = ba2int(URLFetcherDoc.slice(0, 4));
+  const transcript = URLFetcherDoc.slice(4, 4+transcriptLen);
   const attestation = URLFetcherDoc.slice(4+transcriptLen);
 
   // transcript is a JSON array for each request[ {"request":<URL>, "response":<text>} , {...}]
@@ -266,7 +266,7 @@ export async function verifyNotary(URLFetcherDoc) {
 
 
   // check that the URLs are formatted in a canonical way
-  // Note that AWS expects URL params to be sorted alphabetically. If we put them in 
+  // Note that AWS expects URL params to be sorted alphabetically. If we put them in
   // arbitrary order, the query will be rejected
 
   // "AWSAccessKeyId" should be the same in all URLs to prove that the queries are made
@@ -316,7 +316,7 @@ export async function verifyNotary(URLFetcherDoc) {
 
   const xmlDocGCO = await fetch_and_parse(o.GCO);
   const pubkeyPEM = checkGetConsoleOutput(xmlDocGCO, instanceId);
-  
+
   const xmlDocDIAud = await fetch_and_parse(o.DIAud);
   checkDescribeInstanceAttributeUserdata(xmlDocDIAud, instanceId);
 
@@ -338,12 +338,4 @@ export async function verifyNotary(URLFetcherDoc) {
 
   console.log('oracle verification successfully finished');
   return pubkeyPEM;
-}
-
-
-if (typeof module !== 'undefined'){ // we are in node.js environment
-  module.exports={
-    check_oracle: verify_oracle,
-    oracle,
-  };
 }
