@@ -1,3 +1,5 @@
+/* global chrome*/
+
 // The only way to determine if the server is done sending data is to check that out receiving
 // buffer has nothing but complete TLS records i.e. that there is no incomplete TLS records
 // However it was observed that in cases when getting e.g. zip files, some servers first send HTTP header as one
@@ -21,12 +23,12 @@ export class Socket {
     // connect will throw if we couldnt establish a connection to the server for this long
     this.connectTimeout = 5 * 1000;
     // recv() will reject if no data was seen for this long
-    this.noDataTimeout = 5 * 1000; 
+    this.noDataTimeout = 5 * 1000;
     // close the socket after this time, even if it is in the middle of receiving data
-    this.lifeTime = 40 * 1000; 
+    this.lifeTime = 40 * 1000;
     // delay after which we make a final check of the receicing buffer and if there was no data,
     // from the server, the we consider the data transmission finished
-    this.delayBeforeFinalIteration = 500;  
+    this.delayBeforeFinalIteration = 500;
     this.wasClosed = false;
     this.backendPort = 20022;
   }
@@ -41,7 +43,7 @@ export class Socket {
         return;
       }, that.connectTimeout);
 
-      const msg = {'command': 'connect','args': {'name': that.name,'port': that.port},'uid': that.uid};
+      const msg = {'command': 'connect', 'args': {'name': that.name, 'port': that.port}, 'uid': that.uid};
       if (globals.usePythonBackend){
         const url = 'http://127.0.0.1:' + that.backendPort;
         const payload = JSON.stringify(msg);
@@ -66,7 +68,7 @@ export class Socket {
       });
 
     // we need to access runtime.lastError to prevent Chrome from complaining
-    // about unchecked error 
+    // about unchecked error
     chrome.runtime.lastError;
     clearTimeout(timer);
     if (response == undefined){
@@ -82,7 +84,7 @@ export class Socket {
     }, that.lifeTime);
     // endless data fetching loop for the lifetime of this Socket
     that.fetchLoop();
-    return 'ready'; 
+    return 'ready';
   }
 
   async send(data_in) {
@@ -127,7 +129,7 @@ export class Socket {
       that.fetchLoop();
     }, 100);
   }
- 
+
   // fetchLoop has built up the recv buffer
   // check if there are complete records in the buffer,return them if yes or wait some more if no
   recv (is_handshake = false) {
@@ -180,7 +182,7 @@ export class Socket {
           buf = rv.incomprecs;
           setTimeout(function() {check();}, 100);
           return;
-        } 
+        }
         else {
           console.log('got complete records', that.uid);
           if (is_handshake) {
@@ -205,7 +207,7 @@ export class Socket {
 
   async close() {
     this.wasClosed = true;
-    var msg = {'command': 'close','uid': this.uid};
+    var msg = {'command': 'close', 'uid': this.uid};
     console.log('closing socket', this.uid);
     if (globals.usePythonBackend){
       await fetch('http://127.0.0.1:20022', {method:'POST', body: JSON.stringify(msg),
@@ -250,10 +252,4 @@ export class Socket {
       }
     }
   }
-}
-
-
-if (typeof module !== 'undefined'){ // we are in node.js environment
-  module.exports={
-  };
 }

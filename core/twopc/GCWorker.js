@@ -1,7 +1,9 @@
+/* global chrome */
+
 import WorkerPool from './WorkerPool.js';
 
 export class GCWorker extends WorkerPool{
-  // class CGWorker provides convenience functions to speak to the web worker 
+  // class CGWorker provides convenience functions to speak to the web worker
   constructor(numWorkers, processMonitor){
     super(numWorkers, chrome.extension.getURL('core/twopc/webWorkers/gcworker.js'));
     // pm is an instance of ProcessMonitor

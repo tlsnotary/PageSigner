@@ -1,10 +1,13 @@
-/* eslint-disable no-import-assign */
-/* eslint-disable no-case-declarations */
-import {parse_certs, verifyChain, getCommonName, getAltNames} from './verifychain.js';
-import {ba2str, b64decode, concatTA, int2ba, sha256, b64encode, verifySig, assert,
-  ba2int, xor, eq, wait, AESECBencrypt, wildcardTest, pubkeyPEM2raw, import_resource} from './utils.js';
-import {getPref, getSessionBlob, getSession, getAllSessions, saveNewSession, init_db,
-  addNewPreference, setPref, renameSession, deleteSession} from './indexeddb.js';
+/* global chrome, browser */
+
+import {parse_certs, verifyChain, getCommonName, getAltNames} from
+  './verifychain.js';
+import {ba2str, b64decode, concatTA, int2ba, sha256, b64encode, verifySig,
+  assert, ba2int, xor, eq, wait, AESECBencrypt, wildcardTest, pubkeyPEM2raw,
+  import_resource} from './utils.js';
+import {getPref, getSessionBlob, getSession, getAllSessions, saveNewSession,
+  init_db, addNewPreference, setPref, renameSession, deleteSession}
+  from './indexeddb.js';
 import {globals} from './globals.js';
 import {Socket} from './Socket.js';
 import {TLS, getExpandedKeys, decrypt_tls_responseV6} from './TLS.js';
@@ -18,15 +21,15 @@ export class Main{
     this.messageListener;
     this.notarization_in_progress = false;
     this.isFirstTimeSetupNeeded = false;
-    this.waiting_for_click = false; 
+    this.waiting_for_click = false;
     // popupError will be  set to non-null when there is some error message that must be shown
     // via the popup
     this.popupError = null;
     // tabid set to 0 is a sign that this is the main window when querying with .getViews()
-    this.tabid = 0; 
+    this.tabid = 0;
     // pendingAction is Firefox only: the action which must be taken as soon as the user allows
     // access to the website (either notarize or notarizeAfter)
-    this.pendingAction = null; 
+    this.pendingAction = null;
     // trustedOracle is an object {'IP':<IP address>, 'pubkeyPEM':<pubkey in PEM format>}
     // describing the oracle server which was verified and can be used for notarization.
     this.trustedOracle = null;
@@ -44,13 +47,13 @@ export class Main{
     this.trustedOracleReady = false;
   }
 
-  async main() {   
-    // perform browser-specific init first   
+  async main() {
+    // perform browser-specific init first
     if (this.is_edge || this.is_firefox || this.is_opera){
       globals.usePythonBackend = true;
     }
     if (this.is_firefox){
-    // Firefox asks user for permission to access the current website. 
+    // Firefox asks user for permission to access the current website.
     // Listen when the permission was given and run the pending action.
     // This way user doesnt have to click notarize->allow->notarize
       const listener = function(permissions){
@@ -67,7 +70,7 @@ export class Main{
       };
       browser.permissions.onAdded.addListener(listener);
     }
-  
+
     // browser-agnostic init
     const that = this;
     this.messageListener = chrome.runtime.onMessage.addListener(function(data) {
@@ -145,6 +148,7 @@ export class Main{
       mode: 'no-cors'
     });
     const out = await Promise.race([fProm, wait(5000)])
+      // eslint-disable-next-line no-unused-vars
       .catch(err => {
         // fetch got 404; do nothing, just prevent exception from propagating
       });
@@ -156,7 +160,7 @@ export class Main{
   }
 
   // tryBackupNotary tries to use a backup notary. It checks that the backup notary
-  // is not the same as failedNotaryIP 
+  // is not the same as failedNotaryIP
   async tryBackupNotary(failedNotaryIP){
     const resp = await fetch(globals.backupUrl);
     const backupIP = await resp.text();
@@ -181,7 +185,7 @@ export class Main{
     this.trustedOracleReady = true;
   }
 
-  
+
   openChromeExtensions(){
     chrome.tabs.query({url: 'chrome://extensions/*'},
       function(tabs) {
@@ -192,9 +196,9 @@ export class Main{
         chrome.tabs.update(tabs[0].id, {active: true});
       });
   }
-  
-  
-  // Pagesigner's popup has been clicked 
+
+
+  // Pagesigner's popup has been clicked
   async popupProcess(){
     if (this.notarization_in_progress) {
       chrome.runtime.sendMessage({
@@ -242,13 +246,14 @@ export class Main{
       });
     }
   }
-  
+
   // checkIfTabOpened checks if a "tab" containing window[property] has signalled that it has
   // been loaded and its message listeners are ready
   // openTabs is an optional array of tab ids to skip when checking because they were already
   // opened BEFORE we initiated the opening of "tab"
   // we abort if tab doesn't open after 5 secs.
   checkIfTabOpened(tab, property, openTabs){
+    // eslint-disable-next-line no-unused-vars
     openTabs = openTabs || [];
     let isTimeoutTriggered = false;
     setTimeout(function(){
@@ -260,7 +265,7 @@ export class Main{
       function tryAgain(){
         console.log('checking if '+property+' is ready...');
         const views = chrome.extension.getViews();
-        // sometimes the View for the newly opened tab may not yet be available 
+        // sometimes the View for the newly opened tab may not yet be available
         // so we must wait a little longer
         for (const win of views){
           if (win[property] == undefined) continue;
@@ -283,7 +288,7 @@ export class Main{
       }
     });
   }
-  
+
   openFileChooser(){
     const myTabs = [];
     const views = chrome.extension.getViews();
@@ -300,19 +305,19 @@ export class Main{
     // create a separate filechooser.html because as soon as a file is chosen, the
     // same tab will be reused as a viewer.
     // Otherwise we would have to close filechooser tab and instantly open a
-    // viewer tab with an unpleasant flicker. 
+    // viewer tab with an unpleasant flicker.
     const url = chrome.extension.getURL('ui/html/viewer.html#filechooser');
     chrome.tabs.create({url: url}, async function(t){
       const win = await that.checkIfTabOpened(t, 'isViewer', myTabs);
       win.viewer.showFileChooser();
     });
   }
-  
-  
+
+
   openManager() {
     const url = chrome.extension.getURL('ui/html/manager.html');
     for (const win of chrome.extension.getViews()){
-      if (win.isManager){ 
+      if (win.isManager){
         // re-focus tab if manager already open
         console.log('will refocus manger tab', win.tabid);
         chrome.tabs.update(win.tabid, {active: true});
@@ -324,8 +329,8 @@ export class Main{
       that.checkIfTabOpened(t, 'is_manager');
     });
   }
-  
-  
+
+
   async prepareNotarization(after_click) {
     if (!this.trustedOracleReady) {
       this.sendAlert({
@@ -334,16 +339,16 @@ export class Main{
       });
       return;
     }
-  
+
     let clickTimeout = null;
     const that = this;
-  
+
     const active_tab = await new Promise(function(resolve) {
       chrome.tabs.query({active: true}, function(t) {
         resolve(t[0]);
       });
     });
-  
+
     if (! active_tab.url.startsWith('https://')) {
       this.sendAlert({
         'title': 'PageSigner error.',
@@ -351,7 +356,7 @@ export class Main{
       });
       return;
     }
-  
+
     if (after_click){
       const url = chrome.extension.getURL('ui/img/arrow24.png');
       chrome.browserAction.setIcon({path: url});
@@ -365,8 +370,8 @@ export class Main{
         });
       }, 30 * 1000);
     }
-  
-    let oBR_details; 
+
+    let oBR_details;
     const oBR_handler = function(details){
       console.log('in onBeforeRequest', details);
       chrome.webRequest.onBeforeRequest.removeListener(oBR_handler);
@@ -377,15 +382,15 @@ export class Main{
         urls: ['<all_urls>'],
         tabId: active_tab.id,
         types: ['main_frame', 'xmlhttprequest']
-        // types: ["main_frame", "sub_frame", "stylesheet", "script", 
+        // types: ["main_frame", "sub_frame", "stylesheet", "script",
         // "image", "font", "object", "xmlhttprequest", "ping", "csp_report", "media", "websocket", "other"]
       }, ['requestBody']);
-  
+
     let oBSH_details;
     const oBSH_handler = function(details){
       console.log('in onBeforeSendHeaders', details);
       chrome.webRequest.onBeforeSendHeaders.removeListener(oBSH_handler);
-      oBSH_details = details; 
+      oBSH_details = details;
       console.log(oBR_details, oBSH_details);
     };
     const extraInfoSpec = ['requestHeaders'];
@@ -396,10 +401,10 @@ export class Main{
         tabId: active_tab.id,
         types: ['main_frame', 'xmlhttprequest']
       }, extraInfoSpec);
-  
-  
+
+
     // wait for the request to pass oBR and oBHS and reach onSendHeaders
-    await new Promise(function(resolve) { 
+    await new Promise(function(resolve) {
       const oSH_handler = function(details){
         console.log('in onSendHeaders');
         chrome.webRequest.onSendHeaders.removeListener(oSH_handler);
@@ -411,18 +416,18 @@ export class Main{
           tabId: active_tab.id,
           types: ['main_frame', 'xmlhttprequest']
         });
-  
+
       // if not Notarize After Click mode,
       // reload current tab in order to trigger the HTTP request
       if (!that.waiting_for_click) chrome.tabs.reload(active_tab.id);
       // otherwise just wait for the user to click smth and trigger onBeforeRequest
     });
-  
+
     if (this.waiting_for_click) {
       clearTimeout(clickTimeout);
       this.waiting_for_click = false;
     }
-  
+
     if (oBR_details.url !== oBSH_details.url) return;
     if (oBR_details.requestId !== oBSH_details.requestId) return;
     if (oBR_details.method == 'POST') {
@@ -451,15 +456,15 @@ export class Main{
         this.loadDefaultIcon();
       });
   }
-  
-  
+
+
   getHeaders(obj) {
     console.log('headers are', obj);
     const x = obj.url.split('/');
     const host = x[2].split(':')[0];
     x.splice(0, 3);
     const resource_url = x.join('/');
-    
+
     const http_version = globals.useHTTP11 ? ' HTTP/1.1':' HTTP/1.0';
     let headers = obj.method + ' /' + resource_url + http_version + '\r\n';
     // Chrome doesnt add Host header. Firefox does
@@ -476,7 +481,7 @@ export class Main{
     }
     if (obj.method == 'GET') {
       headers += '\r\n';
-    } 
+    }
     else if (obj.method == 'POST') {
       let content;
       if (obj.requestBody.raw != undefined) {
@@ -489,7 +494,7 @@ export class Main{
           content += key + '=' + obj.requestBody.formData[key] + '&';
         }
         // get rid of the last &
-        content = content.slice(0,-1);
+        content = content.slice(0, -1);
         // Chrome doesn't expose Content-Length which chokes nginx
         headers += 'Content-Length: ' + parseInt(content.length) + '\r\n\r\n';
         headers += content;
@@ -506,16 +511,16 @@ export class Main{
       'port': port
     };
   }
-  
-  
+
+
   async getPGSG(sid){
     const blob = await getSessionBlob(sid);
     return blob.pgsg;
   }
-  
-  
-  
-  
+
+
+
+
   // processMessages is the main entrypoint for all extension's logic
   async processMessages(data) {
     if (data.destination !== 'extension') return;
@@ -534,9 +539,8 @@ export class Main{
       this.importPgsgAndShow(new Uint8Array(data.args.data));
       break;
     case 'export':
-      const pgsg = await this.getPGSG(data.args.dir);
-      const value = await getSession(data.args.dir);
-      this.sendToManager({'pgsg': JSON.stringify(pgsg), 'name': value.sessionName}, 'export');
+      this.sendToManager({'pgsg': JSON.stringify(await this.getPGSG(data.args.dir)),
+        'name': await getSession(data.args.dir).sessionName}, 'export');
       break;
     case 'notarize':
       this.prepareNotarization(false);
@@ -585,9 +589,9 @@ export class Main{
       break;
     case 'removeNotary':
       await setPref('trustedOracle', {});
-    }   
-  }  
-  
+    }
+  }
+
   async startNotarization(headers, server, port) {
     this.notarization_in_progress = true;
     this.pm.init();
@@ -624,23 +628,23 @@ export class Main{
     const url = chrome.extension.getURL('ui/img/icon.png');
     chrome.browserAction.setIcon({path: url});
   }
-  
+
   // opens a tab showing the session. sid is a unique session id
   // creation time is sid.
   async showSession (sid){
     await this.openViewer(sid);
     this.sendSessions( await getAllSessions()); // refresh manager
   }
-  
-  
+
+
   openPythonScript(){
     const url = chrome.extension.getURL('pagesigner.py');
     chrome.tabs.create({url: url}, function(t){
       chrome.tabs.executeScript(t.id, {file: ('ui/python_script_header.js')});
     });
   }
-  
-  
+
+
   async verifyPgsg(json){
     if (json['version'] == 6){
       return await this.verifyPgsgV6(json);
@@ -649,8 +653,8 @@ export class Main{
       throw ('Unrecognized version of the imported pgsg file.');
     }
   }
-  
-  
+
+
   // Serialize fields of json object
   serializePgsg(json){
     // b64encode every field
@@ -698,7 +702,7 @@ export class Main{
     }
     return newjson;
   }
-  
+
   // verifyPgsgV6 verifies a decoded pgsg
   // obj is pgsg with values b64decoded and certificates deserialized into Certificate class
   async verifyPgsgV6(obj) {
@@ -707,7 +711,7 @@ export class Main{
 
     // Step 1. Verify URLFetcher attestation doc and get notary's pubkey
     if (! globals.useNotaryNoSandbox){
-      // by default we verify that the notary is indeed a properly sandboxed machine 
+      // by default we verify that the notary is indeed a properly sandboxed machine
       var URLFetcherDoc = obj['URLFetcher attestation'];
       var notaryPubkey = await verifyNotary(URLFetcherDoc);
     }
@@ -726,7 +730,7 @@ export class Main{
     const certPath = vcRV.certificatePath;
     const commonName = getCommonName(certPath[0]);
     const altNames = getAltNames(certPath[0]);
-  
+
     // Step 3. Verify that RSA signature over ephemeral EC key corresponds to the public key
     // from the leaf certificate
     const serverEcPubkey = obj['server pubkey for ECDHE'];
@@ -735,13 +739,13 @@ export class Main{
     const sr = obj['server random'];
     const vepsRV = await TLS.verifyECParamsSig(certPath[0], serverEcPubkey, rsaSig, cr, sr);
     assert (vepsRV === true);
-  
+
     // Step 4. Combine PMS shares and derive expanded keys.
     const P256prime = 2n**256n - 2n**224n + 2n**192n + 2n**96n - 1n;
     // we may need to reduce mod prime if the sum overflows the prime
     const pms = int2ba((ba2int(obj['notary PMS share']) + ba2int(obj['client PMS share'])) % P256prime, 32);
     const [cwk, swk, civ, siv] = await getExpandedKeys(pms, cr, sr);
-  
+
     // Step 5. Check that expanded keys match key shares
     const clientCwkShare = obj['client client_write_key share'];
     const clientCivShare = obj['client client_write_iv share'];
@@ -755,7 +759,7 @@ export class Main{
     assert(eq( xor(notaryCivShare, clientCivShare), civ));
     assert(eq( xor(notarySwkShare, clientSwkShare), swk));
     assert(eq( xor(notarySivShare, clientSivShare), siv));
-  
+
     // Step 6. Check session signature
     const commitHash = await TLSNotarySession.computeCommitHash(obj['server response records']);
     const keyShareHash = await sha256(concatTA(clientCwkShare, clientCivShare,
@@ -775,29 +779,29 @@ export class Main{
       obj['notarization time']);
 
     assert(await verifySig(
-      obj['ephemeral pubkey'], 
-      obj['session signature'], 
+      obj['ephemeral pubkey'],
+      obj['session signature'],
       tbs1) === true,
     'Session signature verification failed.');
 
     // Step 7. Verify ephemeral key
     const tbs2 = concatTA(
-      obj['ephemeral valid from'], 
-      obj['ephemeral valid until'], 
+      obj['ephemeral valid from'],
+      obj['ephemeral valid until'],
       obj['ephemeral pubkey']);
     assert(await verifySig(
       pubkeyPEM2raw(notaryPubkey),
-      obj['ephemeral signed by master key'], 
+      obj['ephemeral signed by master key'],
       tbs2) === true,
     'Master key signature verification failed.');
     // notarization time must be within the time of ephemeral key validity
     assert(
-      ba2int(obj['ephemeral valid from']) < 
-      ba2int(obj['notarization time']) < 
+      ba2int(obj['ephemeral valid from']) <
+      ba2int(obj['notarization time']) <
       ba2int(obj['ephemeral valid until']));
 
 
-    // Step 8. Decrypt client request and make sure that "Host" HTTP header corresponds to 
+    // Step 8. Decrypt client request and make sure that "Host" HTTP header corresponds to
     // Common Name from the leaf certificate.
     const ghashInputs = [];
     const blockCount = obj['client request ciphertext'].length/16;
@@ -807,10 +811,10 @@ export class Main{
     // aad is additional authenticated data
     const aad = ghashInputs[0];
     // TLS record seq number must be 1
-    assert(eq(aad.slice(0,8), int2ba(1, 8)));
+    assert(eq(aad.slice(0, 8), int2ba(1, 8)));
     // TLS record type must be "application data"
-    assert(eq(aad.slice(8,11), new Uint8Array([23,3,3])));
-    const recordLen = ba2int(aad.slice(11,13));
+    assert(eq(aad.slice(8, 11), new Uint8Array([23, 3, 3])));
+    const recordLen = ba2int(aad.slice(11, 13));
     const plaintextBlocks = [];
     const ciphertext = ghashInputs.slice(1, ghashInputs.length-1);
     for (let i=0; i < ciphertext.length; i++){
@@ -841,14 +845,14 @@ export class Main{
       }
     }
     assert(isFound, 'Host not found in certificate');
-    
+
     // Step 9. Check authentication tags of server response and decrypt it.
     const responseRecords = await decrypt_tls_responseV6(
       obj['server response records'], swk, siv);
     const response = ba2str(concatTA(...responseRecords));
-    return [host, request, response, date.toGMTString()];    
+    return [host, request, response, date.toGMTString()];
   }
-  
+
   async importPgsgAndShow(importedData) {
     console.log('importedData', importedData);
     try {
@@ -879,8 +883,8 @@ export class Main{
     await saveNewSession (date, host, request, response, serializedPgsg, 'imported');
     this.showSession(date);
   }
-  
-  
+
+
   async openViewer(sid) {
     const data = await getSession(sid);
     const blob = await getSessionBlob(sid);
@@ -889,10 +893,10 @@ export class Main{
     const request = blob.request;
     const response = blob.response;
     let tabId = null;// the id of the tab that we will be sending to
-  
+
     const url = chrome.extension.getURL('ui/html/viewer.html');
     await chrome.webRequest.handlerBehaviorChanged(); // flush the in-memory cache
-  
+
     // reuse a tab if viewer was already open because we were importing file
     // this tab must be still active
     const active_tab = await new Promise(function(resolve) {
@@ -911,7 +915,7 @@ export class Main{
       }
     }
     tabId = active_tab.id;
-  
+
     if (!isImportTab){
       const myTabs = [];
       for (const win of views ){
@@ -925,9 +929,9 @@ export class Main{
           console.log('checkIfTabOpened resolved');
           resolve();
         });
-      });     
+      });
     }
-  
+
     console.log('send to viewer');
     // the tab is either an already opened import tab or a fully-loaded new viewer tab
     // We already checked that the new viewer's tab DOM was loaded. Proceed to send the data
@@ -943,13 +947,13 @@ export class Main{
       }
     });
   }
-  
+
   async openDetails(sid, isEditor) {
     const data = await getSession(sid);
     const blob = await getSessionBlob(sid);
     const url = chrome.extension.getURL('ui/html/rawviewer.html');
     let tabId = null; // id of the tab to which we will send the data
-  
+
     const myTabs = [];
     const myViews = chrome.extension.getViews();
     for (const win of myViews ){
@@ -963,8 +967,8 @@ export class Main{
         await that.checkIfTabOpened(t, 'isRawViewer', myTabs);
         resolve();
       });
-    });     
-      
+    });
+
     chrome.runtime.sendMessage({
       destination: 'rawviewer',
       message: isEditor ? 'edit' : 'show',
@@ -975,10 +979,10 @@ export class Main{
         sessionId: sid,
         serverName: data.serverName
       }
-    });  
+    });
   }
-  
-  
+
+
   sendSessions(sessions) {
     const rows = [];
     for (const session of sessions){
@@ -993,7 +997,7 @@ export class Main{
     }
     this.sendToManager(rows);
   }
-  
+
   sendToManager(data, command) {
     console.log('sending sendToManager ', data);
     if (!command) command = 'payload'; // commands can be: payload, export
@@ -1004,7 +1008,7 @@ export class Main{
       payload: data
     });
   }
-  
+
   // for some pages we cant inject js/css, use the ugly alert
   uglyAlert(alertData) {
     const url = chrome.extension.getURL('ui/img/icon_error.png');
@@ -1013,7 +1017,7 @@ export class Main{
     });
     this.popupError = alertData;
   }
-  
+
   sendAlert(alertData) {
     const that = this;
     chrome.tabs.query({active: true},

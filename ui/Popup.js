@@ -1,4 +1,4 @@
-// import {ProgressBar} from './progressbar.min.js';
+/* global chrome, browser*/
 
 class Popup{
   constructor(){
@@ -14,7 +14,7 @@ class Popup{
     // to pass it to the click event listener so that it could run synchronously.
     // document.getElementById("notarize").addEventListener("mouseover",
     // function() {
-    //   chrome.tabs.query({active: true}, async function(t) {       
+    //   chrome.tabs.query({active: true}, async function(t) {
     //     currentUrl = t[0].url
     //     hasPermission = await browser.permissions.contains({origins: [currentUrl]})
     //   })
@@ -56,7 +56,7 @@ class Popup{
       });
       window.close();
     });
-      
+
     chrome.runtime.onMessage.addListener(function(data) {
       that.processMessages(data);
     });
@@ -70,7 +70,7 @@ class Popup{
   // notarizeClicked is triggered when Notarize of Notariza after click was pressed
   notarizeClicked(isAfterClick){
     isAfterClick = isAfterClick || false;
-    const msg = isAfterClick ? 'notarizeAfter' : 'notarize'; 
+    const msg = isAfterClick ? 'notarizeAfter' : 'notarize';
     if (this.is_firefox && ! this.hasPermission && this.currentUrl.startsWith('https://')){
       // in Firefox we give a temporary permission just for the current tab's URL
       // also no async/await/callback here, otherwise Firefox will complain
@@ -142,13 +142,13 @@ class Popup{
       console.log('popup received unexpected message ' + data.message);
     }
   }
-  
+
   // showInProgressDiv show the <div> with progress info and listens for
   // progress updates
   showInProgressDiv(isFirstTimeSetup){
     document.getElementById('menu').setAttribute('hidden', '');
     document.getElementById('in_progress').removeAttribute('hidden');
-  
+
     const progressBars = {};
     const types = ['download', 'upload', 'garbling', 'last_stage'];
     if (isFirstTimeSetup){
@@ -186,12 +186,12 @@ class Popup{
 
 
   moveBar(bar, goalWidth) {
-    const curWidth = Number(bar.style.width.slice(0,-1));
+    const curWidth = Number(bar.style.width.slice(0, -1));
     if (curWidth === goalWidth){
       return; // no update needed
     }
     bar.style.width = String(goalWidth) + '%';
-    bar.innerHTML = String(goalWidth) + '%';   
+    bar.innerHTML = String(goalWidth) + '%';
   }
 }
 

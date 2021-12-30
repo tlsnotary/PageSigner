@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 let db;
 let db_blobs;
 
@@ -6,7 +7,7 @@ export async function init_db() {
 
     const dbReq = indexedDB.open('PageSigner', 1);
     dbReq.onupgradeneeded = function (event) {
-      // Set the db variable to our database so we can use it!  
+      // Set the db variable to our database so we can use it!
       db = event.target.result;
 
       if (!db.objectStoreNames.contains('sessions')) {
@@ -36,7 +37,7 @@ export async function init_db() {
     // i/o operations a very slow when there's blobs in a db
     const dbReq2 = indexedDB.open('PageSigner_blobs', 1);
     dbReq2.onupgradeneeded = function (event) {
-      // Set the db variable to our database so we can use it!  
+      // Set the db variable to our database so we can use it!
       db_blobs = event.target.result;
       if (!db_blobs.objectStoreNames.contains('sessions')) {
         db_blobs.createObjectStore('sessions', { keyPath: 'creationTime', autoIncrement: true });
@@ -71,7 +72,7 @@ export async function addNewPreference(key, value){
       reject('error in cursor request ' + event.target.errorCode);
     };
   });
-  
+
   for (let pref of allPreferences){
     if (pref['name'] == key){
       return;
@@ -83,7 +84,7 @@ export async function addNewPreference(key, value){
     const tx = db.transaction(['preferences'], 'readwrite');
     const store = tx.objectStore('preferences');
     store.add({name:key, value:value});
-    tx.oncomplete = function() { 
+    tx.oncomplete = function() {
       resolve();
     };
     tx.onerror = function(event) {
@@ -134,7 +135,7 @@ export async function getAllSessions() {
   });
 }
 
-  
+
 
 export async function saveNewSession(date, host, request, response, pgsg, options){
   await new Promise(function(resolve, reject) {
@@ -143,7 +144,7 @@ export async function saveNewSession(date, host, request, response, pgsg, option
     let isImported = false;
     let isEdited = false;
     if (options != undefined){
-      if (options.indexOf('imported') > -1) isImported = true; 
+      if (options.indexOf('imported') > -1) isImported = true;
       if (options.indexOf('edited') > -1) isEdited = true;
     }
     // sessionName can be changed by the user in the manager window
@@ -154,7 +155,7 @@ export async function saveNewSession(date, host, request, response, pgsg, option
       isImported: isImported,
       isEdited: isEdited,
       version: 6});
-    tx.oncomplete = function() { 
+    tx.oncomplete = function() {
       resolve();
     };
     tx.onerror = function(event) {
@@ -164,14 +165,14 @@ export async function saveNewSession(date, host, request, response, pgsg, option
   });
   await new Promise(function(resolve, reject) {
     const tx2 = db_blobs.transaction(['sessions'], 'readwrite');
-    const store2 = tx2.objectStore('sessions');  
+    const store2 = tx2.objectStore('sessions');
     store2.add({
       creationTime: date,
-      serverName:host, 
+      serverName:host,
       request:request,
       response:response,
-      pgsg:pgsg}); 
-    tx2.oncomplete = function() { 
+      pgsg:pgsg});
+    tx2.oncomplete = function() {
       resolve();
     };
     tx2.onerror = function(event) {
@@ -181,15 +182,15 @@ export async function saveNewSession(date, host, request, response, pgsg, option
   });
 }
 
-  
+
 export async function getSession(idx){
   return await new Promise(function(resolve, reject) {
 
     const tx = db.transaction(['sessions'], 'readonly');
-    const store = tx.objectStore('sessions'); 
+    const store = tx.objectStore('sessions');
     const req = store.get(idx);
     req.onsuccess = function(event) {
-      const entry = event.target.result; 
+      const entry = event.target.result;
       if (entry) {
         console.log(entry);
         resolve(entry);
@@ -205,7 +206,7 @@ export async function getSession(idx){
 
   });
 }
-  
+
 
 
 
@@ -215,10 +216,10 @@ export async function getSessionBlob(idx){
   return await new Promise(function(resolve, reject) {
 
     const tx = db_blobs.transaction(['sessions'], 'readonly');
-    const store = tx.objectStore('sessions'); 
+    const store = tx.objectStore('sessions');
     const req = store.get(idx);
     req.onsuccess = function(event) {
-      const entry = event.target.result; 
+      const entry = event.target.result;
       if (entry) {
         resolve(entry);
       } else {
@@ -239,10 +240,10 @@ export async function getPref(pref){
   return await new Promise(function(resolve, reject) {
 
     let tx = db.transaction(['preferences'], 'readonly');
-    let store = tx.objectStore('preferences'); 
+    let store = tx.objectStore('preferences');
     let req = store.get(pref);
     req.onsuccess = function(event) {
-      let entry = event.target.result; 
+      let entry = event.target.result;
       if (entry) {
         console.log(entry);
         resolve(entry.value);
@@ -261,18 +262,18 @@ export async function getPref(pref){
 
 export async function setPref(pref, newvalue) {
   await new Promise(function(resolve, reject) {
-  
+
     const tx = db.transaction(['preferences'], 'readwrite');
     const store = tx.objectStore('preferences');
     const request = store.get(pref);
-  
+
     request.onsuccess = function(event) {
       // Get the old value that we want to update
       const data = event.target.result;
-      
+
       // update the value(s) in the object that you want to change
       data.value = newvalue;
-    
+
       // Put this updated object back into the database.
       const requestUpdate = store.put(data);
       requestUpdate.onerror = function(event) {
@@ -296,14 +297,14 @@ export async function renameSession(id, newname) {
     const tx = db.transaction(['sessions'], 'readwrite');
     const sessions = tx.objectStore('sessions');
     const request = sessions.get(id);
-  
+
     request.onsuccess = function(event) {
       // Get the old value that we want to update
       const data = event.target.result;
-      
+
       // update the value(s) in the object that you want to change
       data.sessionName = newname;
-    
+
       // Put this updated object back into the database.
       const requestUpdate = sessions.put(data);
       requestUpdate.onerror = function(event) {
@@ -316,4 +317,4 @@ export async function renameSession(id, newname) {
       };
     };
   });
-} 
+}

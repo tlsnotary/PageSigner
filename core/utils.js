@@ -1,14 +1,18 @@
+/* eslint-disable no-unused-vars */
+/* eslint-disable no-undef */
+/* global chrome, CBOR, COSE, Buffer, fastsha256 */
+
 import {verifyChain} from './verifychain.js';
 import * as asn1js from './third-party/pkijs/asn1.js';
 import Certificate from './third-party/pkijs/Certificate.js';
 
 // returns an array of obj's keys converted to numbers sorted ascendingly
 export function sortKeys(obj){
-  const numArray = Object.keys(obj).map(function(x){return Number(x);}); 
+  const numArray = Object.keys(obj).map(function(x){return Number(x);});
   return numArray.sort(function(a, b){return a-b;});
 }
 
-// convert a byte array into a hex string
+// convert a Uint8Array into a hex string
 export function ba2hex(ba) {
   assert(ba instanceof Uint8Array);
   let hexstring = '';
@@ -22,7 +26,7 @@ export function ba2hex(ba) {
   return hexstring;
 }
 
-// convert a hex string into byte array
+// convert a hex string into a Uint8Array
 export function hex2ba(str) {
   const ba = [];
   // pad with a leading 0 if necessary
@@ -78,7 +82,7 @@ export function ba2int(ba){
 export function int2ba(int, size){
   assert(typeof(int) == 'bigint' || typeof(int) == 'number', 'Only can convert Number or BigInt');
   let hexstr = int.toString(16);
-  if (hexstr.length % 2) { 
+  if (hexstr.length % 2) {
     hexstr = '0' + hexstr; }
   const ba = [];
   for (let i=0; i < hexstr.length/2; i++){
@@ -116,9 +120,9 @@ export function ba2str(ba) {
 }
 
 // xor 2 byte arrays of equal length
-export function xor (a,b){
+export function xor (a, b){
   assert(a instanceof Uint8Array && b instanceof Uint8Array);
-  assert(a.length === b.length);
+  assert(a.length == b.length);
   var c = new Uint8Array(a.length);
   for (var i=0; i< a.length; i++){
     c[i] = a[i]^b[i];
@@ -173,12 +177,12 @@ export async function verifyAttestationDoc(doc){
   const doc_obj = CBOR.decode(payload.buffer);
   const leafCertDer = doc_obj.certificate.slice();
   const cert_asn1 = asn1js.fromBER(leafCertDer.buffer);
-  const leafCert = new Certificate({ schema: cert_asn1.result });  
+  const leafCert = new Certificate({ schema: cert_asn1.result });
   const x = new Uint8Array(leafCert.subjectPublicKeyInfo.parsedKey.x);
   const y = new Uint8Array(leafCert.subjectPublicKeyInfo.parsedKey.y);
   // verify the signature
   COSE.verify(x, y, doc.buffer);
-  
+
   // verify certificate chain
 
   // this is a sha256 hash of root cert from https://aws-nitro-enclaves.amazonaws.com/AWS_NitroEnclaves_Root-G1.zip
@@ -237,7 +241,7 @@ export function b64decode(str) {
   return new Uint8Array(dec);
 }
 
-// conform to base64url format replace +/= with -_ 
+// conform to base64url format replace +/= with -_
 export function b64urlencode (ba){
   assert(ba instanceof Uint8Array);
   let str = b64encode(ba);
@@ -250,7 +254,7 @@ export function buildChunkMetadata(plaintextArr){
   for (const pt of plaintextArr){
     http_data += ba2str(pt);
   }
-  
+
   const chunkMetadata = [];
   // '''Dechunk only if http_data is chunked otherwise return http_data unmodified'''
   const http_header = http_data.slice(0, http_data.search('\r\n\r\n') + '\r\n\r\n'.length);
@@ -307,7 +311,7 @@ export function dechunk_http(decrRecords) {
 
   var chunkMetadata = buildChunkMetadata(decrRecords);
   var dechunkedPlaintexts = [];
-  var totalOffset = -1; // an offset at which the last byte is found of plaintexts processed so far 
+  var totalOffset = -1; // an offset at which the last byte is found of plaintexts processed so far
   var shrinkNextRecordBy = 0; // used when chunking metadata spans 2 TLS records
   var shrinkThisRecordBy = 0;
   for (var i=0; i < decrRecords.length; i++){
@@ -320,7 +324,7 @@ export function dechunk_http(decrRecords) {
         var s = true;
       }
     }
-    var metadataInThisRecord = []; 
+    var metadataInThisRecord = [];
     var tmpArray = [...chunkMetadata];
     // every even index contains the start of metadata
     for (var j=0; j < tmpArray.length; j+=2){
@@ -389,15 +393,15 @@ export function gunzip_http(dechunkedRecords) {
     return dechunkedRecords; // #nothing to gunzip
   }
   throw ('gzip enabled');
-  var http_body = http_data.slice(http_header.length);
-  var ungzipped = http_header;
-  if (!http_body) {
-    // HTTP 304 Not Modified has no body
-    return [ungzipped];
-  }
-  var inflated = pako.inflate(http_body);
-  ungzipped += ba2str(inflated);
-  return [ungzipped];
+  // var http_body = http_data.slice(http_header.length);
+  // var ungzipped = http_header;
+  // if (!http_body) {
+  //   // HTTP 304 Not Modified has no body
+  //   return [ungzipped];
+  // }
+  // var inflated = pako.inflate(http_body);
+  // ungzipped += ba2str(inflated);
+  // return [ungzipped];
 }
 
 export function getTime() {
@@ -406,7 +410,7 @@ export function getTime() {
     ('00' + (today.getMonth() + 1)).slice(-2) + '-' +
     ('00' + today.getDate()).slice(-2) + '-' +
     ('00' + today.getHours()).slice(-2) + '-' +
-    ('00' + today.getMinutes()).slice(-2) + '-' + 
+    ('00' + today.getMinutes()).slice(-2) + '-' +
     ('00' + today.getSeconds()).slice(-2);
   return time;
 }
@@ -424,11 +428,11 @@ export function pem2ba(pem) {
       encoded += line.trim();
     }
   }
-  return b64decode(encoded);  
+  return b64decode(encoded);
 }
 
 
-// compare bytes in 2 arrays. a or b can be either Array or Uint8Array 
+// compares two Uint8Arrays or Arrays
 export function eq(a, b) {
   assert(Array.isArray(a) || a instanceof Uint8Array);
   assert(Array.isArray(b) || b instanceof Uint8Array);
@@ -436,7 +440,7 @@ export function eq(a, b) {
     a.every((val, index) => val === b[index]);
 }
 
-  
+
 // expand the range [min:max) into array of ints 1,2,3,4... up to but not including max
 export function expandRange(min, max){
   const arr = [];
@@ -457,31 +461,6 @@ export function splitIntoChunks(ba, chunkSize) {
     newArray.push(ba.slice(i*chunkSize, (i+1)*chunkSize));
   }
   return newArray;
-}
-
-// perform GCM Galois Field block multiplication
-// x,y are byte arrays
-export function blockMult(x_,y_){
-  // casting to BigInt just in case if ba2int returns a Number
-  let x = BigInt(ba2int(x_));
-  const y = BigInt(ba2int(y_));
-  let res = 0n;
-  for (let i=127n; i >= 0n; i--){
-    res ^= x * ((y >> i) & 1n);
-    x = (x >> 1n) ^ ((x & 1n) * BigInt(0xE1000000000000000000000000000000));
-  }
-  return int2ba(res, 16);
-}
-
-// x is Uint8Array
-export function getXTable(x_){
-  let x = ba2int(x_);
-  const table = [];
-  for (let i=0; i < 128; i++){
-    table[i] = int2ba(x, 16);
-    x = (x >> 1n) ^ ((x & 1n) * BigInt(0xE1000000000000000000000000000000));
-  }
-  return table;
 }
 
 
@@ -517,29 +496,29 @@ export function bitsToBytes(arr){
 // convert OpenSSL's signature format (asn1 DER) into WebCrypto's IEEE P1363 format
 export function sigDER2p1363(sigDER){
   var o = 0;
-  assert(eq(sigDER.slice(o,o+=1), [0x30]));
-  var total_len = ba2int(sigDER.slice(o,o+=1));
+  assert(eq(sigDER.slice(o, o+=1), [0x30]));
+  var total_len = ba2int(sigDER.slice(o, o+=1));
   assert(sigDER.length == total_len+2);
-  assert(eq(sigDER.slice(o,o+=1), [0x02]));
-  var r_len = ba2int(sigDER.slice(o,o+=1));
+  assert(eq(sigDER.slice(o, o+=1), [0x02]));
+  var r_len = ba2int(sigDER.slice(o, o+=1));
   assert(r_len === 32 || r_len === 33);
-  var r = sigDER.slice(o,o+=r_len);
-  assert(eq(sigDER.slice(o,o+=1), [0x02]));
-  var s_len = ba2int(sigDER.slice(o,o+=1));
+  var r = sigDER.slice(o, o+=r_len);
+  assert(eq(sigDER.slice(o, o+=1), [0x02]));
+  var s_len = ba2int(sigDER.slice(o, o+=1));
   assert(s_len >= 31 && s_len <= 33);
-  var s = sigDER.slice(o,o+=s_len);
+  var s = sigDER.slice(o, o+=s_len);
   if (s.length === 31){
     s = concatTA(new Uint8Array([0x00]), s);
   }
   if (r_len === 33){
-    assert(eq(r.slice(0,1), [0x00]));
+    assert(eq(r.slice(0, 1), [0x00]));
     r = r.slice(1);
   }
   if (s_len == 33){
-    assert(eq(s.slice(0,1), [0x00]));
+    assert(eq(s.slice(0, 1), [0x00]));
     s = s.slice(1);
   }
-  var sig_p1363 = concatTA(r,s); 
+  var sig_p1363 = concatTA(r, s);
   return sig_p1363;
 }
 
@@ -555,7 +534,7 @@ export async function import_resource(filename) {
 // take PEM EC pubkey and output a "raw" pubkey with all asn1 data stripped
 export function pubkeyPEM2raw(pkPEM){
   // prepended asn1 data for ECpubkey prime256v1
-  const preasn1 = [0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01, 0x06,0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00];
+  const preasn1 = [0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01, 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00];
   const pk = pem2ba(pkPEM);
   assert(eq(pk.slice(0, preasn1.length), preasn1));
   return pk.slice(preasn1.length);
@@ -610,29 +589,21 @@ export function encrypt_generic(plaintext, key, nonce) {
   return xor(tmp, ro);
 }
 
-const byteArray = new Uint8Array(24);
-const sha0 = hex2ba('da5698be17b9b46962335799779fbeca8ce5d491c0d26243bafef9ea1837a9d8');
 
-// class PRF is initialized once and then it is a read-only
+function randomOracle(m, t) {
+  // fixedKey is used by randomOracle(). We need a 32-byte key because we use Salsa20. The last 4
+  // bytes will be filled with the index of the circuit's wire.
+  const fixedKey = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+    25, 26, 27, 28, 0, 0, 0, 0]);
 
-export function longToByteArray(long) {
-  // we want to represent the input as a 24-bytes array
-  for (let index = 0; index < byteArray.length; index++) {
-    const byte = long & 0xff;
-    byteArray[index] = byte;
-    long = (long - byte) / 256;
+  // convert the integer t to a 4-byte big-endian array and append
+  // it to fixedKey in-place
+  for (let index = 0; index < 4; index++) {
+    const byte = t & 0xff;
+    fixedKey[31-index] = byte;
+    t = (t - byte) / 256;
   }
-  return byteArray;
-}
-
-
-export function randomOracle(m, t) {
-  const nonce = longToByteArray(t);
-  return nacl.secretbox(
-    m,
-    nonce, // Nonce 24 bytes because this sodium uses 192 bit blocks.
-    sha0,
-  ).slice(0,16);  
+  return Salsa20(fixedKey, m);
 }
 
 export const decrypt_generic = encrypt_generic;
@@ -671,17 +642,17 @@ export function concatTA(...arr){
 
 async function gcmEncrypt(key, plaintext, IV, aad){
   const cryptoKey = await crypto.subtle.importKey(
-    'raw', 
-    key.buffer, 
-    'AES-GCM', 
-    true, 
+    'raw',
+    key.buffer,
+    'AES-GCM',
+    true,
     ['encrypt', 'decrypt']);
 
   const ciphertext = await crypto.subtle.encrypt({
-    name: 'AES-GCM', 
+    name: 'AES-GCM',
     iv: IV.buffer,
-    additionalData: aad.buffer}, 
-  cryptoKey, 
+    additionalData: aad.buffer},
+  cryptoKey,
   plaintext.buffer,
   );
 
@@ -709,7 +680,7 @@ async function gcmEncrypt(key, plaintext, IV, aad){
   const H2a = times_auth_key(H1a, H1a);
   const H2b = times_auth_key(H1b, H1b);
 
-  const X1 = ba2int(aad); 
+  const X1 = ba2int(aad);
   const X2 = ba2int(ct);
   const X3 = ba2int(lenAlenC);
 
@@ -724,25 +695,212 @@ async function gcmEncrypt(key, plaintext, IV, aad){
 }
 
 // WebCrypto doesn't provide AES-ECB encryption. We achieve it by using
-// the CTR mode and setting CTR's counter to what we want to AES-encrypt and setting CTR's
-// data to encrypt to zero, because in CTR ciphertext = AES(counter) XOR plaintext  
-// 
-export async function AESECBencrypt(key, data){
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw', 
-    key.buffer, 
-    'AES-CTR', 
-    true, 
-    ['encrypt', 'decrypt']);
+// the CBC mode with a zero IV. This workaraound only works for encrypting
+// 16 bytes at a time.
 
-  const zeroes = int2ba(0, 16);
+export async function AESECBencrypt(key, data){
+  assert(data.length == 16, 'can only AES-ECB encrypt 16 bytes at a time');
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw', key.buffer, 'AES-CBC', false, ['encrypt']);
+
+  // Even if data is a multiple of 16, WebCrypto adds 16 bytes of
+  // padding. We drop it.
   return new Uint8Array (await crypto.subtle.encrypt({
-    name: 'AES-CTR',
-    counter: data.buffer, length: 16},
+    name: 'AES-CBC',
+    iv: new Uint8Array(16).fill(0).buffer},
   cryptoKey,
-  zeroes.buffer));
+  data.buffer)).slice(0, 16);
 }
 
+
+// AEC-CTR encrypt data, setting initial counter to 0
+export async function AESCTRencrypt(key, data){
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw', key.buffer, 'AES-CTR', false, ['encrypt']);
+
+  return new Uint8Array (await crypto.subtle.encrypt({
+    name: 'AES-CTR',
+    counter: new Uint8Array(16).fill(0).buffer,
+    length:64},
+  cryptoKey,
+  data.buffer));
+}
+
+
+// AEC-CTR decrypt ciphertext, setting initial counter to 0
+export async function AESCTRdecrypt(key, ciphertext){
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw', key.buffer, 'AES-CTR', false, ['decrypt']);
+
+  return new Uint8Array (await crypto.subtle.decrypt({
+    name: 'AES-CTR',
+    counter: new Uint8Array(16).fill(0).buffer,
+    length:64},
+  cryptoKey,
+  ciphertext.buffer));
+}
+
+
+// use Salsa20 as a random permutator. Instead of the nonce, we feed the data that needs
+// to be permuted.
+export function Salsa20(key, data){
+  // sigma is Salsa's constant "expand 32-byte k"
+  const sigma = new Uint8Array([101, 120, 112, 97, 110, 100, 32, 51, 50, 45, 98, 121, 116, 101, 32, 107]);
+  const out = new Uint8Array(16);
+  core_salsa20(out, data, key, sigma);
+  return out;
+}
+
+// copied from https://github.com/dchest/tweetnacl-js/blob/master/nacl-fast.js
+// and modified to output only 16 bytes
+function core_salsa20(o, p, k, c) {
+  var j0  = c[ 0] & 0xff | (c[ 1] & 0xff)<<8 | (c[ 2] & 0xff)<<16 | (c[ 3] & 0xff)<<24,
+    j1  = k[ 0] & 0xff | (k[ 1] & 0xff)<<8 | (k[ 2] & 0xff)<<16 | (k[ 3] & 0xff)<<24,
+    j2  = k[ 4] & 0xff | (k[ 5] & 0xff)<<8 | (k[ 6] & 0xff)<<16 | (k[ 7] & 0xff)<<24,
+    j3  = k[ 8] & 0xff | (k[ 9] & 0xff)<<8 | (k[10] & 0xff)<<16 | (k[11] & 0xff)<<24,
+    j4  = k[12] & 0xff | (k[13] & 0xff)<<8 | (k[14] & 0xff)<<16 | (k[15] & 0xff)<<24,
+    j5  = c[ 4] & 0xff | (c[ 5] & 0xff)<<8 | (c[ 6] & 0xff)<<16 | (c[ 7] & 0xff)<<24,
+    j6  = p[ 0] & 0xff | (p[ 1] & 0xff)<<8 | (p[ 2] & 0xff)<<16 | (p[ 3] & 0xff)<<24,
+    j7  = p[ 4] & 0xff | (p[ 5] & 0xff)<<8 | (p[ 6] & 0xff)<<16 | (p[ 7] & 0xff)<<24,
+    j8  = p[ 8] & 0xff | (p[ 9] & 0xff)<<8 | (p[10] & 0xff)<<16 | (p[11] & 0xff)<<24,
+    j9  = p[12] & 0xff | (p[13] & 0xff)<<8 | (p[14] & 0xff)<<16 | (p[15] & 0xff)<<24,
+    j10 = c[ 8] & 0xff | (c[ 9] & 0xff)<<8 | (c[10] & 0xff)<<16 | (c[11] & 0xff)<<24,
+    j11 = k[16] & 0xff | (k[17] & 0xff)<<8 | (k[18] & 0xff)<<16 | (k[19] & 0xff)<<24,
+    j12 = k[20] & 0xff | (k[21] & 0xff)<<8 | (k[22] & 0xff)<<16 | (k[23] & 0xff)<<24,
+    j13 = k[24] & 0xff | (k[25] & 0xff)<<8 | (k[26] & 0xff)<<16 | (k[27] & 0xff)<<24,
+    j14 = k[28] & 0xff | (k[29] & 0xff)<<8 | (k[30] & 0xff)<<16 | (k[31] & 0xff)<<24,
+    j15 = c[12] & 0xff | (c[13] & 0xff)<<8 | (c[14] & 0xff)<<16 | (c[15] & 0xff)<<24;
+
+  var x0 = j0, x1 = j1, x2 = j2, x3 = j3, x4 = j4, x5 = j5, x6 = j6, x7 = j7,
+    x8 = j8, x9 = j9, x10 = j10, x11 = j11, x12 = j12, x13 = j13, x14 = j14,
+    x15 = j15, u;
+
+  for (var i = 0; i < 20; i += 2) {
+    u = x0 + x12 | 0;
+    x4 ^= u<<7 | u>>>(32-7);
+    u = x4 + x0 | 0;
+    x8 ^= u<<9 | u>>>(32-9);
+    u = x8 + x4 | 0;
+    x12 ^= u<<13 | u>>>(32-13);
+    u = x12 + x8 | 0;
+    x0 ^= u<<18 | u>>>(32-18);
+
+    u = x5 + x1 | 0;
+    x9 ^= u<<7 | u>>>(32-7);
+    u = x9 + x5 | 0;
+    x13 ^= u<<9 | u>>>(32-9);
+    u = x13 + x9 | 0;
+    x1 ^= u<<13 | u>>>(32-13);
+    u = x1 + x13 | 0;
+    x5 ^= u<<18 | u>>>(32-18);
+
+    u = x10 + x6 | 0;
+    x14 ^= u<<7 | u>>>(32-7);
+    u = x14 + x10 | 0;
+    x2 ^= u<<9 | u>>>(32-9);
+    u = x2 + x14 | 0;
+    x6 ^= u<<13 | u>>>(32-13);
+    u = x6 + x2 | 0;
+    x10 ^= u<<18 | u>>>(32-18);
+
+    u = x15 + x11 | 0;
+    x3 ^= u<<7 | u>>>(32-7);
+    u = x3 + x15 | 0;
+    x7 ^= u<<9 | u>>>(32-9);
+    u = x7 + x3 | 0;
+    x11 ^= u<<13 | u>>>(32-13);
+    u = x11 + x7 | 0;
+    x15 ^= u<<18 | u>>>(32-18);
+
+    u = x0 + x3 | 0;
+    x1 ^= u<<7 | u>>>(32-7);
+    u = x1 + x0 | 0;
+    x2 ^= u<<9 | u>>>(32-9);
+    u = x2 + x1 | 0;
+    x3 ^= u<<13 | u>>>(32-13);
+    u = x3 + x2 | 0;
+    x0 ^= u<<18 | u>>>(32-18);
+
+    u = x5 + x4 | 0;
+    x6 ^= u<<7 | u>>>(32-7);
+    u = x6 + x5 | 0;
+    x7 ^= u<<9 | u>>>(32-9);
+    u = x7 + x6 | 0;
+    x4 ^= u<<13 | u>>>(32-13);
+    u = x4 + x7 | 0;
+    x5 ^= u<<18 | u>>>(32-18);
+
+    u = x10 + x9 | 0;
+    x11 ^= u<<7 | u>>>(32-7);
+    u = x11 + x10 | 0;
+    x8 ^= u<<9 | u>>>(32-9);
+    u = x8 + x11 | 0;
+    x9 ^= u<<13 | u>>>(32-13);
+    u = x9 + x8 | 0;
+    x10 ^= u<<18 | u>>>(32-18);
+
+    u = x15 + x14 | 0;
+    x12 ^= u<<7 | u>>>(32-7);
+    u = x12 + x15 | 0;
+    x13 ^= u<<9 | u>>>(32-9);
+    u = x13 + x12 | 0;
+    x14 ^= u<<13 | u>>>(32-13);
+    u = x14 + x13 | 0;
+    x15 ^= u<<18 | u>>>(32-18);
+  }
+  x0 =  x0 +  j0 | 0;
+  x1 =  x1 +  j1 | 0;
+  x2 =  x2 +  j2 | 0;
+  x3 =  x3 +  j3 | 0;
+  x4 =  x4 +  j4 | 0;
+  x5 =  x5 +  j5 | 0;
+  x6 =  x6 +  j6 | 0;
+  x7 =  x7 +  j7 | 0;
+  x8 =  x8 +  j8 | 0;
+  x9 =  x9 +  j9 | 0;
+  x10 = x10 + j10 | 0;
+  x11 = x11 + j11 | 0;
+  x12 = x12 + j12 | 0;
+  x13 = x13 + j13 | 0;
+  x14 = x14 + j14 | 0;
+  x15 = x15 + j15 | 0;
+
+  o[ 0] = x0 >>>  0 & 0xff;
+  o[ 1] = x0 >>>  8 & 0xff;
+  o[ 2] = x0 >>> 16 & 0xff;
+  o[ 3] = x0 >>> 24 & 0xff;
+
+  o[ 4] = x1 >>>  0 & 0xff;
+  o[ 5] = x1 >>>  8 & 0xff;
+  o[ 6] = x1 >>> 16 & 0xff;
+  o[ 7] = x1 >>> 24 & 0xff;
+
+  o[ 8] = x2 >>>  0 & 0xff;
+  o[ 9] = x2 >>>  8 & 0xff;
+  o[10] = x2 >>> 16 & 0xff;
+  o[11] = x2 >>> 24 & 0xff;
+
+  o[12] = x3 >>>  0 & 0xff;
+  o[13] = x3 >>>  8 & 0xff;
+  o[14] = x3 >>> 16 & 0xff;
+  o[15] = x3 >>> 24 & 0xff;
+  // we only need 16 bytes of the output
+}
+
+
+// ephemeral key usage time must be within the time of ephemeral key validity
+export function checkExpiration(validFrom, validUntil, time){
+  time = time || Math.floor(new Date().getTime() / 1000);
+  if (ba2int(validFrom) > time || time > ba2int(validUntil)){
+    return false;
+  }
+  return true;
+}
+
+
+
+
+// -----------OBSOLETE functions below this line
 function bestPathNew(num){
   const mainPowers = [];
   const auxPowers = []; // aux powers
@@ -750,7 +908,7 @@ function bestPathNew(num){
   for (let i=0; i<10; i++){
     mainPowers.push(2**i);
   }
-  mainPowers.sort(function(a, b){return a-b;}); 
+  mainPowers.sort(function(a, b){return a-b;});
   const primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503];
   let paths = [];
   paths.push([mainPowers, auxPowers, auxIncrements]);
@@ -759,7 +917,7 @@ function bestPathNew(num){
     const emptyIndexes = [];
     for (let pathIdx=0; pathIdx < paths.length; pathIdx++ ){
       const mainPowers = paths[pathIdx][0];
-      const auxPowers = paths[pathIdx][1]; 
+      const auxPowers = paths[pathIdx][1];
       if (! isSumFound(mainPowers, auxPowers, i)){
         emptyIndexes.push(pathIdx);
       }
@@ -769,7 +927,7 @@ function bestPathNew(num){
       // TODO: do we want to discard, or maybe to add primes?
       for (let i=0; i < emptyIndexes.length; i++){
         // console.log('discarding path with index ', i)
-        paths.splice(i,1);
+        paths.splice(i, 1);
       }
     }
     else { // sum was not found in any path
@@ -778,7 +936,7 @@ function bestPathNew(num){
       for (let pathIdx=0; pathIdx < paths.length; pathIdx++ ){
         const mainPowers = paths[pathIdx][0];
         const auxPowers = paths[pathIdx][1];
-        const auxIncrements = paths[pathIdx][2]; 
+        const auxIncrements = paths[pathIdx][2];
 
         for (let p=0; p < primes.length; p++){
           const prime = primes[p];
@@ -800,7 +958,7 @@ function bestPathNew(num){
         }
 
         // add new numbers to auxPowers
-        // this can be any number - prime or non-prime that is already 
+        // this can be any number - prime or non-prime that is already
         // available in mainPowers
         for (let p=0; p < mainPowers.length; p++){
           const num =  mainPowers[p];
@@ -867,11 +1025,11 @@ function bestPathNewer(num){
     // if (paths.length > sampleSize){
     //   for (let i=0; i < paths.length-sampleSize; i++){
     //     const randIdx = Math.ceil(Math.random()*paths.length)
-    //     paths.splice(randIdx, 1)    
+    //     paths.splice(randIdx, 1)
     //   }
     // }
 
-    // take each path and see if sum is found. 
+    // take each path and see if sum is found.
     // if found at least in one path, advance to the next number
     let foundAtLeastOnce = false;
     for (let pathIdx=0; pathIdx < paths.length; pathIdx++ ){
@@ -900,7 +1058,7 @@ function bestPathNewer(num){
     // add the next num to main powers and check if sum is found
     for (let pathIdx=0; pathIdx < paths.length; pathIdx++ ){
       const mainPowers = paths[pathIdx][0];
-      const auxIncrements = paths[pathIdx][2]; 
+      const auxIncrements = paths[pathIdx][2];
 
       for (let p=0; p <= i; p++){
         if (p%2 === 0 || mainPowers.includes(p)){
@@ -938,9 +1096,9 @@ function bestPathNewer(num){
     }
     paths = newPaths;
   }
-  
+
   const numFreq = {};
-  let minLen = paths[0][0].length; 
+  let minLen = paths[0][0].length;
   for (let i=0; i < paths.length; i++){
     if (paths[i][3] !== true){
       continue;
@@ -966,7 +1124,7 @@ function bestPathNewer(num){
       }
     }
     console.log(nums.sort(function(a, b){return a-b;}));
-  } 
+  }
   console.log(numFreq);
 }
 
@@ -1108,7 +1266,7 @@ function bestPath(num){
     mainPowers.push(2**i);
     auxPowers.push(2**i);
   }
-  mainPowers.sort(function(a, b){return a-b;}); 
+  mainPowers.sort(function(a, b){return a-b;});
   auxPowers.sort(function(a, b){return a-b;});
   const primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503];
   let paths = [];
@@ -1118,7 +1276,7 @@ function bestPath(num){
     const emptyIndexes = [];
     for (let pathIdx=0; pathIdx < paths.length; pathIdx++ ){
       const mainPowers = paths[pathIdx][0];
-      const auxPowers = paths[pathIdx][1]; 
+      const auxPowers = paths[pathIdx][1];
       if (! isSumFound(mainPowers, auxPowers, i)){
         emptyIndexes.push(pathIdx);
       }
@@ -1128,7 +1286,7 @@ function bestPath(num){
       // TODO: do we want to discard, or maybe to add primes?
       for (let i=0; i < emptyIndexes.length; i++){
         // console.log('discarding path with index ', i)
-        paths.splice(i,1);
+        paths.splice(i, 1);
       }
     }
     else { // sum was not found in any path
@@ -1136,8 +1294,8 @@ function bestPath(num){
       // add the next prime to main powers and check if sum is found
       for (let pathIdx=0; pathIdx < paths.length; pathIdx++ ){
         const mainPowers = paths[pathIdx][0];
-        const auxPowers = paths[pathIdx][1]; 
-      
+        const auxPowers = paths[pathIdx][1];
+
         for (let p=0; p < primes.length; p++){
           const prime = primes[p];
           if (mainPowers.includes(prime)){
@@ -1226,7 +1384,7 @@ function isSumFound(a, b, sum){
       if (b[j] + a[i] == sum){
         // sums.push([i, j])
         return true;
-      } 
+      }
     }
   }
   return false;
@@ -1242,14 +1400,6 @@ function allPrimeMultiples(num){
   return arr;
 }
 
-// ephemeral key usage time must be within the time of ephemeral key validity
-export function checkExpiration(validFrom, validUntil, time){
-  time = time || Math.floor(new Date().getTime() / 1000);
-  if (ba2int(validFrom) > time || time > ba2int(validUntil)){
-    return false;
-  }
-  return true;
-}
 
 // computes AES GCM authentication tag
 // all 4 inputs arrays of bytes
@@ -1307,31 +1457,6 @@ function getAuthTag(aad, ct, encZero, encIV, precompute){
     }
     return res;
   }
-} 
-
-
-if (typeof module !== 'undefined'){ // we are in node.js environment
-  module.exports={
-    assert,
-    ba2ab,
-    ba2bigint,
-    ba2str,
-    bi2ba,
-    ab2ba,
-    ba2int,
-    buildChunkMetadata,
-    b64encode,
-    b64decode,
-    b64urlencode,
-    dechunk_http,
-    gunzip_http,
-    eq,
-    getTime,
-    pem2ba,
-    pubkeyPEM2raw,
-    sha256,
-    sigDER2p1363,
-    str2ba,
-    xor
-  };
 }
+
+

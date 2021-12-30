@@ -1,3 +1,5 @@
+/* global chrome */
+
 // class ProgressMonitor receives progress information about client's garbling,
 // evaluation, blob upload, blob download. It dispatches progress status messages
 // periodically or when queried.
@@ -48,7 +50,7 @@ export class ProgressMonitor{
   // destroy de-registers listeners
   // doesn't do anything because of what seems like a Chrome bug.
   destroy(){
-    // TODO it seems like Chrome does not remove onMessage listener 
+    // TODO it seems like Chrome does not remove onMessage listener
     chrome.runtime.onMessage.removeListener(this.listener);
   }
 }

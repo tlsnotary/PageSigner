@@ -1,11 +1,10 @@
-import {pem2ba, eq, import_resource} from './utils.js';
+import {pem2ba, eq} from './utils.js';
 import * as asn1js from './third-party/pkijs/asn1.js';
 import Certificate from './third-party/pkijs/Certificate.js';
-import CertificateChainValidationEngine from './third-party/pkijs/CertificateChainValidationEngine.js';
-
+import CertificateChainValidationEngine from
+  './third-party/pkijs/CertificateChainValidationEngine.js';
 
 var trustedCertificates = [];
-
 
 // extract PEMs from Mozilla's CA store and convert into asn1js's Certificate object
 export async function parse_certs(text){
@@ -22,15 +21,10 @@ export async function parse_certs(text){
   const lines = text.split('"\n"').slice(1); // discard the first line - headers
   for (const line of lines){
     const fields = line.split('","');
-    const pem = fields[32].slice(1,-1);
+    const pem = fields[32].slice(1, -1);
     const asn1cert = asn1js.fromBER(pem2ba(pem).buffer);
     trustedCertificates.push(new Certificate({ schema: asn1cert.result }));
-  } 
-}
-
-
-function getPubkey(c){
-  return new Uint8Array(c.subjectPublicKeyInfo.subjectPublicKey.valueBlock.valueHex);
+  }
 }
 
 
@@ -57,7 +51,7 @@ export function checkCertSubjName(cert, serverName){
   }
 
   for (let nameInCert of allNames){
-    if (wildTest(nameInCert, serverName) == true) 
+    if (wildTest(nameInCert, serverName) == true)
       return true;
   }
   throw 'Server name is not the same as the certificate\'s subject name(s)';
@@ -89,10 +83,10 @@ export function getAltNames(cert) {
 
 
 
-// verifyChain verifies a certificate chain "chain_der" against the time "date". If "date" is not 
+// verifyChain verifies a certificate chain "chain_der" against the time "date". If "date" is not
 // given, verifies againt the current time.
 // Returns true on success or throws if verification failed.
-// Sometimes servers do not put intermediate certs into the chain. In such case we 
+// Sometimes servers do not put intermediate certs into the chain. In such case we
 // fetch the missing cert from a URL embedded in the leaf cert. We return the fetched cert.
 export async function verifyChain(chain_der, date, trustedCerts) {
   if (trustedCerts == undefined){
@@ -109,17 +103,17 @@ export async function verifyChain(chain_der, date, trustedCerts) {
     const cert = new Certificate({ schema: cert_asn1.result });
     chain.push(cert);
   }
-  
+
 
   async function do_verify(chain, date, trustedCerts){
-    // CertificateChainValidationEngine will fail the verification if the root cert is 
-    // included in the chain. To prevent this, we remove the root CA from the chain. 
+    // CertificateChainValidationEngine will fail the verification if the root cert is
+    // included in the chain. To prevent this, we remove the root CA from the chain.
     // Check by pubkey if the last cert is a root CA known to us.
 
     var pubkeyToFind = new Uint8Array(chain.slice(-1)[0].subjectPublicKeyInfo.subjectPublicKey.valueBlock.valueHex);
     for (let cert of trustedCerts){
       if (eq(new Uint8Array(cert.subjectPublicKeyInfo.subjectPublicKey.valueBlock.valueHex), pubkeyToFind)){
-        chain = chain.slice(0,-1);
+        chain = chain.slice(0, -1);
         break;
       }
     }
@@ -127,8 +121,8 @@ export async function verifyChain(chain_der, date, trustedCerts) {
     // pkijs requires that the leaf cert is last in the array
     // if not, the verification will still succeed, but the returned certificatePath
     // will be incomplete
-    var leafCert = chain.splice(0,1)[0];
-    chain.push(leafCert); 
+    var leafCert = chain.splice(0, 1)[0];
+    chain.push(leafCert);
     const ccve = new CertificateChainValidationEngine({
       trustedCerts: trustedCerts,
       certs: chain,
@@ -163,15 +157,4 @@ export async function verifyChain(chain_der, date, trustedCerts) {
     throw ('Could not notarize because the website presented an untrusted certificate');
   }
   return rv;
-}
-
-
-if (typeof module !== 'undefined'){ // we are in node.js environment
-  module.exports={
-    checkCertSubjName,
-    getCommonName,
-    getModulus,
-    parse_certs,
-    verifyChain
-  };
 }
