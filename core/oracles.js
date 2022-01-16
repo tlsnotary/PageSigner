@@ -4,7 +4,10 @@ import {ba2str, b64decode, assert, ba2int, verifyAttestationDoc, ba2hex, eq,
 // rootsOfTrust contains an array of trusted EBS snapshots
 // essentially the whole oracle verification procedure boils down to proving that an EC2 instance was
 // launched from an AMI which was created from one of the "rootsOfTrust" snapshot ids.
-const rootsOfTrust = ['snap-0ccb00d0e0fb4d4da', 'snap-07eda3ed4836f82fb'];
+const rootsOfTrust = [
+  'snap-0ccb00d0e0fb4d4da',
+  'snap-07eda3ed4836f82fb',
+  'snap-023d50ee97873a1f0'];
 // URLFetcher trusted enclave measurements, see
 // https://github.com/tlsnotary/URLFetcher
 const URLFetcherPCR0 = 'f70217239e8a1cb0f3c010b842a279e2b8d30d3700d7e4722fef22291763479a13783dc76d5219fabbd7e5aa92a7b255';

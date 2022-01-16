@@ -1,3 +1,5 @@
+/* global process, global */
+
 // gcworker.js is a WebWorker which performs garbling and evaluation
 // of garbled circuits.
 // This is a fixed-key-cipher garbling method from BHKR13 https://eprint.iacr.org/2013/426.pdf
@@ -9,14 +11,15 @@ let truthTable = null;
 
 // fixedKey is used by randomOracle(). We need a 32-byte key because we use Salsa20. The last 4
 // bytes will be filled with the index of the circuit's wire.
-const fixedKey = new Uint8Array([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,
-  25,26,27,28,0,0,0,0]);
-// sigma is Salsa's constant "expand 32-byte k"  
-const sigma = new Uint8Array([101, 120, 112, 97, 110, 100, 32, 51, 50, 45, 98, 121, 116, 101, 32, 107]);
+const fixedKey = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+  15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 0, 0, 0, 0]);
+// sigma is Salsa's constant "expand 32-byte k"
+const sigma = new Uint8Array([101, 120, 112, 97, 110, 100, 32, 51, 50, 45, 98,
+  121, 116, 101, 32, 107]);
 // randomPool will be filled with data from getRandom
-let randomPool; 
+let randomPool;
 // randomPoolOffset will be moved after data was read from randomPool
-let randomPoolOffset = 0; 
+let randomPoolOffset = 0;
 let garbledAssigment;
 var crypto_;
 
@@ -32,19 +35,19 @@ if (typeof(importScripts) !== 'undefined') {
     // parses this if clause and will error out if "import" is found
     // using process.argv instead of import.meta.url to get the name of this script
     const filePath = 'file://' + process.argv[1];
-    // this workaround allows to require() from ES6 modules, which is not allowed by default 
-    const require = module.createRequire(filePath)
+    // this workaround allows to require() from ES6 modules, which is not allowed by default
+    const require = module.createRequire(filePath);
     const { parentPort } = require('worker_threads');
-    parentPort_ = parentPort
-    const { Crypto } = require("@peculiar/webcrypto");
+    parentPort_ = parentPort;
+    const { Crypto } = require('@peculiar/webcrypto');
     crypto_ = new Crypto();
-    const perf = {'now':function(){return 0;}}
+    const perf = {'now':function(){return 0;}};
     global.performance = perf;
     parentPort.on('message', msg => {
       processMessage(msg);
-    })
-  })
-} 
+    });
+  });
+}
 
 function processMessage(obj){
   const msg = obj.msg;
@@ -96,7 +99,7 @@ function processMessage(obj){
 
 function postMsg(value, transferList){
   if (typeof importScripts !== 'function'){
-    parentPort_.postMessage({data:value}, transferList)
+    parentPort_.postMessage({data:value}, transferList);
   } else {
     postMessage(value, transferList);
   }
@@ -122,12 +125,12 @@ function generateInputLabels(count, R){
   return newLabels;
 }
 
-function garble(circuit, ga, reuseLabels = new Uint8Array(0) , reuseIndexes = [], R){
-  
+function garble(circuit, ga, reuseLabels = new Uint8Array(0), reuseIndexes = [], R){
+
   const inputCount = circuit.notaryInputSize + circuit.clientInputSize;
   fillRandom((inputCount+1+circuit.andGateCount)*16);
   R = R || newR();
-  
+
   // generate new labels
   const newLabels = generateInputLabels(inputCount - reuseIndexes.length, R);
 
@@ -145,7 +148,7 @@ function garble(circuit, ga, reuseLabels = new Uint8Array(0) , reuseIndexes = []
       newInputsCount += 1;
     }
   }
- 
+
   const truthTable = new Uint8Array(circuit.andGateCount*48);
 
   let andGateIdx = 0;
@@ -164,50 +167,50 @@ function garble(circuit, ga, reuseLabels = new Uint8Array(0) , reuseIndexes = []
       throw new Error('Unrecognized gate: ' + op);
     }
   }
-  
+
   return [truthTable, ga.slice(0, inputCount*32), ga.slice(-circuit.outputSize*32), R];
-     
+
 }
 
 
 const garbleAnd = function (gateBlob, R, ga, tt, andGateIdx, id) {
   // get wire numbers
-  const in1 = threeBytesToInt(gateBlob.subarray(1,4));
-  const in2 = threeBytesToInt(gateBlob.subarray(4,7));
-  const out = threeBytesToInt(gateBlob.subarray(7,10));
+  const in1 = threeBytesToInt(gateBlob.subarray(1, 4));
+  const in2 = threeBytesToInt(gateBlob.subarray(4, 7));
+  const out = threeBytesToInt(gateBlob.subarray(7, 10));
 
   // get labels of each wire
   const in1_0 = gaGetIndexG(ga, in1, 0);
   const in1_1 = gaGetIndexG(ga, in1, 1);
   const in2_0 = gaGetIndexG(ga, in2, 0);
   const in2_1 = gaGetIndexG(ga, in2, 1);
- 
-  // rows is a truthtable if wire labels in a canonical order, the third 
+
+  // rows is a truthtable if wire labels in a canonical order, the third
   // item shows an index of output label
   const rows = [
     [in1_0, in2_0, 0],
     [in1_0, in2_1, 0],
     [in1_1, in2_0, 0],
     [in1_1, in2_1, 1]
-  ]
+  ];
 
   // GRR3: garbled row reduction
   // We want to reduce a row where both labels' points are set to 1.
-  // We first need to encrypt those labels with a dummy all-zero output label. The 
+  // We first need to encrypt those labels with a dummy all-zero output label. The
   // result X will be the actual value of the output label that we need to set.
   // After we set the output label to X and encrypt again, the result will be 0 (but
   // we don't actually need to encrypt it again, we just know that the result will be 0)
 
-  let outLabels
+  let outLabels;
   // idxToReduce is the index of the row that will be reduced
   let idxToReduce = -1;
   for (let i=0; i < rows.length; i++){
     if (getPoint(rows[i][0]) == 1 && getPoint(rows[i][1]) == 1){
       const outWire = encrypt(rows[i][0], rows[i][1], id, new Uint8Array(16).fill(0));
       if (i==3){
-        outLabels = [xor(outWire, R), outWire]
+        outLabels = [xor(outWire, R), outWire];
       } else {
-        outLabels = [outWire, xor(outWire, R)]
+        outLabels = [outWire, xor(outWire, R)];
       }
       idxToReduce = i;
       break;
@@ -215,25 +218,25 @@ const garbleAnd = function (gateBlob, R, ga, tt, andGateIdx, id) {
   }
   gaSetIndexG(ga, out, 0, outLabels[0]);
   gaSetIndexG(ga, out, 1, outLabels[1]);
-  assert(idxToReduce != -1)
+  assert(idxToReduce != -1);
 
   for (let i=0; i < rows.length; i++){
     if (i == idxToReduce){
       // not encrypting this row because we already know that its encryption is 0
       // and the sum of its points is 3
-      continue; 
+      continue;
     }
     const value = encrypt(rows[i][0], rows[i][1], id, outLabels[rows[i][2]]);
-    const point = 2 * getPoint(rows[i][0]) + getPoint(rows[i][1])
+    const point = 2 * getPoint(rows[i][0]) + getPoint(rows[i][1]);
     tt.set(value, andGateIdx*48+16*point);
   }
 };
 
 
 const garbleXor = function (gateBlob, R, ga) {
-  const in1 = threeBytesToInt(gateBlob.subarray(1,4));
-  const in2 = threeBytesToInt(gateBlob.subarray(4,7));
-  const out = threeBytesToInt(gateBlob.subarray(7,10));
+  const in1 = threeBytesToInt(gateBlob.subarray(1, 4));
+  const in2 = threeBytesToInt(gateBlob.subarray(4, 7));
+  const out = threeBytesToInt(gateBlob.subarray(7, 10));
 
   const in1_0 = gaGetIndexG(ga, in1, 0);
   const in1_1 = gaGetIndexG(ga, in1, 1);
@@ -243,11 +246,11 @@ const garbleXor = function (gateBlob, R, ga) {
   gaSetIndexG(ga, out, 0, xor(in1_0, in2_0));
   gaSetIndexG(ga, out, 1, xor(xor(in1_1, in2_1), R, true));
 };
-  
+
 
 const garbleNot = function (gateBlob, ga) {
-  const in1 = threeBytesToInt(gateBlob.subarray(1,4));
-  const out = threeBytesToInt(gateBlob.subarray(7,10));
+  const in1 = threeBytesToInt(gateBlob.subarray(1, 4));
+  const out = threeBytesToInt(gateBlob.subarray(7, 10));
 
   const in1_0 = gaGetIndexG(ga, in1, 0);
   const in1_1 = gaGetIndexG(ga, in1, 1);
@@ -262,7 +265,6 @@ function evaluate (circuit, ga, tt, inputLabels) {
 
   // evaluate one gate at a time
   let numberOfANDGates = 0;
-  const t0 = performance.now();
   console.time('worker_evaluate');
   for (let i = 0; i < circuit.gatesCount; i++) {
     const gateBlob = circuit.gatesBlob.subarray(i*10, i*10+10);
@@ -279,24 +281,23 @@ function evaluate (circuit, ga, tt, inputLabels) {
     }
   }
   console.timeEnd('worker_evaluate');
-  const t1 = performance.now();
 
   return ga.slice((circuit.wiresCount-circuit.outputSize)*16, circuit.wiresCount*16);
 }
 
 const evaluateAnd = function (ga, tt, andGateIdx, gateBlob, id) {
-  const in1 = threeBytesToInt(gateBlob.subarray(1,4));
-  const in2 = threeBytesToInt(gateBlob.subarray(4,7));
-  const out = threeBytesToInt(gateBlob.subarray(7,10));
-  
+  const in1 = threeBytesToInt(gateBlob.subarray(1, 4));
+  const in2 = threeBytesToInt(gateBlob.subarray(4, 7));
+  const out = threeBytesToInt(gateBlob.subarray(7, 10));
+
   const label1 = gaGetIndexE(ga, in1); // ga[in1];
   const label2 = gaGetIndexE(ga, in2); // ga[in2];
-  
-  let cipher
+
+  let cipher;
   const point = 2 * getPoint(label1) + getPoint(label2);
   if (point == 3){
     // GRR3: all rows with point sum of 3 have been reduced
-		// their encryption is an all-zero bytestring
+    // their encryption is an all-zero bytestring
     cipher = new Uint8Array(16).fill(0);
   } else {
     const offset = andGateIdx*48+16*point;
@@ -307,18 +308,18 @@ const evaluateAnd = function (ga, tt, andGateIdx, gateBlob, id) {
 
 
 const evaluateXor = function (ga, gateBlob) {
-  const in1 = threeBytesToInt(gateBlob.subarray(1,4));
-  const in2 = threeBytesToInt(gateBlob.subarray(4,7));
-  const out = threeBytesToInt(gateBlob.subarray(7,10));
-    
+  const in1 = threeBytesToInt(gateBlob.subarray(1, 4));
+  const in2 = threeBytesToInt(gateBlob.subarray(4, 7));
+  const out = threeBytesToInt(gateBlob.subarray(7, 10));
+
   const v1 = gaGetIndexE(ga, in1);
   const v2 = gaGetIndexE(ga, in2);
   gaSetIndexE(ga, out, xor(v1, v2));
 };
-    
+
 const evaluateNot = function (ga, gateBlob) {
-  const in1 = threeBytesToInt(gateBlob.subarray(1,4));
-  const out = threeBytesToInt(gateBlob.subarray(7,10));  
+  const in1 = threeBytesToInt(gateBlob.subarray(1, 4));
+  const out = threeBytesToInt(gateBlob.subarray(7, 10));
   gaSetIndexE(ga, out, gaGetIndexE(ga, in1));
 };
 
@@ -346,7 +347,7 @@ function gaSetIndexG(ga, idx, pos, value){
 
 
 function xor(a, b, reuse) {
-  assert(a.length == b.length, 'a.length !== b.length')
+  assert(a.length == b.length, 'a.length !== b.length');
   let bytes;
   if (reuse === true){
     // in some cases the calling function will have no more use of "a"
@@ -372,19 +373,19 @@ const decrypt = encrypt;
 // Based on the the A4 method from Fig.1 and the D4 method in Fig6 of the BHKR13 paper
 // (https://eprint.iacr.org/2013/426.pdf)
 // Note that the paper doesn't prescribe a specific method to break the symmetry between A and B,
-// so we choose a circular byte shift instead of a circular bitshift as in Fig6. 
+// so we choose a circular byte shift instead of a circular bitshift as in Fig6.
 function encrypt(a, b, t, m) {
-  // double a 
+  // double a
   const a2 = a.slice();
   const leastbyte = a2[0];
-  a2.copyWithin(0,1,15);  // Logical left shift by 1 byte
+  a2.copyWithin(0, 1, 15);  // Logical left shift by 1 byte
   a2[14] = leastbyte;  // Restore old least byte as new greatest (non-pointer) byte
   // quadruple b
   const b4 = b.slice();
   const leastbytes = [b4[0], b4[1]];
-  b4.copyWithin(0,2,15);  // Logical left shift by 2 byte
+  b4.copyWithin(0, 2, 15);  // Logical left shift by 2 byte
   [b4[13], b4[14]] = leastbytes;  // Restore old least two bytes as new greatest bytes
-  
+
   const k = xor(a2, b4, true);
   const ro = randomOracle(k, t);
   const mXorK = xor(k, m, true);
@@ -415,7 +416,7 @@ function getRandom(count) {
   return rand;
 }
 
-// to save time we fill the randomPool in one call and then take 
+// to save time we fill the randomPool in one call and then take
 // randomness from that pool. Instead of making 1000s of calls to getRandomValues()
 function fillRandom(count){
   // 65536 is the max that API supports
@@ -423,7 +424,7 @@ function fillRandom(count){
   const chunkCount = Math.ceil(count/65536);
   for (let i=0; i < chunkCount; i++){
     randomChunks.push(crypto_.getRandomValues(new Uint8Array(65536)));
-  } 
+  }
   randomPool = concatTA(...randomChunks);
   randomPoolOffset = 0;
 }
@@ -456,7 +457,7 @@ function concatTA (...arr){
 // to be permuted.
 function Salsa20(key, data){
   const out = new Uint8Array(16);
-  core_salsa20(out, data, key, sigma)
+  core_salsa20(out, data, key, sigma);
   return out;
 }
 
@@ -464,25 +465,25 @@ function Salsa20(key, data){
 // and modified to output only 16 bytes
 function core_salsa20(o, p, k, c) {
   var j0  = c[ 0] & 0xff | (c[ 1] & 0xff)<<8 | (c[ 2] & 0xff)<<16 | (c[ 3] & 0xff)<<24,
-      j1  = k[ 0] & 0xff | (k[ 1] & 0xff)<<8 | (k[ 2] & 0xff)<<16 | (k[ 3] & 0xff)<<24,
-      j2  = k[ 4] & 0xff | (k[ 5] & 0xff)<<8 | (k[ 6] & 0xff)<<16 | (k[ 7] & 0xff)<<24,
-      j3  = k[ 8] & 0xff | (k[ 9] & 0xff)<<8 | (k[10] & 0xff)<<16 | (k[11] & 0xff)<<24,
-      j4  = k[12] & 0xff | (k[13] & 0xff)<<8 | (k[14] & 0xff)<<16 | (k[15] & 0xff)<<24,
-      j5  = c[ 4] & 0xff | (c[ 5] & 0xff)<<8 | (c[ 6] & 0xff)<<16 | (c[ 7] & 0xff)<<24,
-      j6  = p[ 0] & 0xff | (p[ 1] & 0xff)<<8 | (p[ 2] & 0xff)<<16 | (p[ 3] & 0xff)<<24,
-      j7  = p[ 4] & 0xff | (p[ 5] & 0xff)<<8 | (p[ 6] & 0xff)<<16 | (p[ 7] & 0xff)<<24,
-      j8  = p[ 8] & 0xff | (p[ 9] & 0xff)<<8 | (p[10] & 0xff)<<16 | (p[11] & 0xff)<<24,
-      j9  = p[12] & 0xff | (p[13] & 0xff)<<8 | (p[14] & 0xff)<<16 | (p[15] & 0xff)<<24,
-      j10 = c[ 8] & 0xff | (c[ 9] & 0xff)<<8 | (c[10] & 0xff)<<16 | (c[11] & 0xff)<<24,
-      j11 = k[16] & 0xff | (k[17] & 0xff)<<8 | (k[18] & 0xff)<<16 | (k[19] & 0xff)<<24,
-      j12 = k[20] & 0xff | (k[21] & 0xff)<<8 | (k[22] & 0xff)<<16 | (k[23] & 0xff)<<24,
-      j13 = k[24] & 0xff | (k[25] & 0xff)<<8 | (k[26] & 0xff)<<16 | (k[27] & 0xff)<<24,
-      j14 = k[28] & 0xff | (k[29] & 0xff)<<8 | (k[30] & 0xff)<<16 | (k[31] & 0xff)<<24,
-      j15 = c[12] & 0xff | (c[13] & 0xff)<<8 | (c[14] & 0xff)<<16 | (c[15] & 0xff)<<24;
+    j1  = k[ 0] & 0xff | (k[ 1] & 0xff)<<8 | (k[ 2] & 0xff)<<16 | (k[ 3] & 0xff)<<24,
+    j2  = k[ 4] & 0xff | (k[ 5] & 0xff)<<8 | (k[ 6] & 0xff)<<16 | (k[ 7] & 0xff)<<24,
+    j3  = k[ 8] & 0xff | (k[ 9] & 0xff)<<8 | (k[10] & 0xff)<<16 | (k[11] & 0xff)<<24,
+    j4  = k[12] & 0xff | (k[13] & 0xff)<<8 | (k[14] & 0xff)<<16 | (k[15] & 0xff)<<24,
+    j5  = c[ 4] & 0xff | (c[ 5] & 0xff)<<8 | (c[ 6] & 0xff)<<16 | (c[ 7] & 0xff)<<24,
+    j6  = p[ 0] & 0xff | (p[ 1] & 0xff)<<8 | (p[ 2] & 0xff)<<16 | (p[ 3] & 0xff)<<24,
+    j7  = p[ 4] & 0xff | (p[ 5] & 0xff)<<8 | (p[ 6] & 0xff)<<16 | (p[ 7] & 0xff)<<24,
+    j8  = p[ 8] & 0xff | (p[ 9] & 0xff)<<8 | (p[10] & 0xff)<<16 | (p[11] & 0xff)<<24,
+    j9  = p[12] & 0xff | (p[13] & 0xff)<<8 | (p[14] & 0xff)<<16 | (p[15] & 0xff)<<24,
+    j10 = c[ 8] & 0xff | (c[ 9] & 0xff)<<8 | (c[10] & 0xff)<<16 | (c[11] & 0xff)<<24,
+    j11 = k[16] & 0xff | (k[17] & 0xff)<<8 | (k[18] & 0xff)<<16 | (k[19] & 0xff)<<24,
+    j12 = k[20] & 0xff | (k[21] & 0xff)<<8 | (k[22] & 0xff)<<16 | (k[23] & 0xff)<<24,
+    j13 = k[24] & 0xff | (k[25] & 0xff)<<8 | (k[26] & 0xff)<<16 | (k[27] & 0xff)<<24,
+    j14 = k[28] & 0xff | (k[29] & 0xff)<<8 | (k[30] & 0xff)<<16 | (k[31] & 0xff)<<24,
+    j15 = c[12] & 0xff | (c[13] & 0xff)<<8 | (c[14] & 0xff)<<16 | (c[15] & 0xff)<<24;
 
   var x0 = j0, x1 = j1, x2 = j2, x3 = j3, x4 = j4, x5 = j5, x6 = j6, x7 = j7,
-      x8 = j8, x9 = j9, x10 = j10, x11 = j11, x12 = j12, x13 = j13, x14 = j14,
-      x15 = j15, u;
+    x8 = j8, x9 = j9, x10 = j10, x11 = j11, x12 = j12, x13 = j13, x14 = j14,
+    x15 = j15, u;
 
   for (var i = 0; i < 20; i += 2) {
     u = x0 + x12 | 0;
@@ -557,16 +558,16 @@ function core_salsa20(o, p, k, c) {
     u = x14 + x13 | 0;
     x15 ^= u<<18 | u>>>(32-18);
   }
-   x0 =  x0 +  j0 | 0;
-   x1 =  x1 +  j1 | 0;
-   x2 =  x2 +  j2 | 0;
-   x3 =  x3 +  j3 | 0;
-   x4 =  x4 +  j4 | 0;
-   x5 =  x5 +  j5 | 0;
-   x6 =  x6 +  j6 | 0;
-   x7 =  x7 +  j7 | 0;
-   x8 =  x8 +  j8 | 0;
-   x9 =  x9 +  j9 | 0;
+  x0 =  x0 +  j0 | 0;
+  x1 =  x1 +  j1 | 0;
+  x2 =  x2 +  j2 | 0;
+  x3 =  x3 +  j3 | 0;
+  x4 =  x4 +  j4 | 0;
+  x5 =  x5 +  j5 | 0;
+  x6 =  x6 +  j6 | 0;
+  x7 =  x7 +  j7 | 0;
+  x8 =  x8 +  j8 | 0;
+  x9 =  x9 +  j9 | 0;
   x10 = x10 + j10 | 0;
   x11 = x11 + j11 | 0;
   x12 = x12 + j12 | 0;

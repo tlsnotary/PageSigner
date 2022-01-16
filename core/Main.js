@@ -540,7 +540,7 @@ export class Main{
       break;
     case 'export':
       this.sendToManager({'pgsg': JSON.stringify(await this.getPGSG(data.args.dir)),
-        'name': await getSession(data.args.dir).sessionName}, 'export');
+        'name': (await getSession(data.args.dir)).sessionName}, 'export');
       break;
     case 'notarize':
       this.prepareNotarization(false);
