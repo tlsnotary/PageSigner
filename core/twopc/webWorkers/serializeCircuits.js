@@ -1,3 +1,5 @@
+/* global process*/
+
 // Serializes the circuit into a compact representation
 
 if (typeof(importScripts) === 'undefined'){

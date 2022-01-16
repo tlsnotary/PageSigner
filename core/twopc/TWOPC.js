@@ -114,8 +114,15 @@ export class TWOPC {
   }
 
   async getECDHShare(x, y){
-    const paillier = new Paillier2PC(this, x, y);
-    return await paillier.run();
+    const paillier = new Paillier2PC(x, y);
+    const step1Resp = await this.send('step1', paillier.step1());
+    const step2Promise = this.send('step2', paillier.step2(step1Resp), true);
+    // while Notary is responding to step2 we can do some more computations
+    paillier.step2async();
+    const step2Resp = await step2Promise;
+    const step3Resp = await this.send('step3', paillier.step3(step2Resp));
+    await this.send('step4', paillier.step4(step3Resp));
+    return paillier.final();
   }
 
   // pass client/server random, handshake (to derive verify_data), pms share

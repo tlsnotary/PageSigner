@@ -1,14 +1,15 @@
-/* eslint-disable no-console */
-/* eslint-disable max-classes-per-file */
+/* global bcuNode, ECSimple */
+import {ba2str, concatTA, int2ba, str2ba, ba2int, assert} from './../utils.js';
 
-var bcu
+var bcu;
 if (typeof(window) !== 'undefined'){
-  bcu = await import('./../third-party/math.js');
+  import('./../third-party/math.js').then((module) => {
+    bcu = module;
+  });
 } else {
   // we are in node. bcuNode must have been made global
-  bcu = bcuNode
+  bcu = bcuNode;
 }
-import {ba2str, concatTA, int2ba, str2ba, ba2int} from './../utils.js';
 
 function pad(str) {
   if (str.length % 2 === 1) {
@@ -17,7 +18,8 @@ function pad(str) {
   return str;
 }
 
-// eslint-disable-next-line no-unused-vars
+
+// class PaillierPubkey implements encryption and homomorphic operations
 class PaillierPubkey {
   constructor(n, g) {
     this.n = n;
@@ -46,36 +48,15 @@ class PaillierPubkey {
   }
 }
 
-// Protocol to compute EC point addition in Paillier
-//
-// we need to find xr = lambda**2 - xp - xq, where
-// lambda = (yq - yp)(xq - xp)**-1
-// (when p is prime then) a**-1 mod p == a**p-2 mod p
-// Simplifying:
-// xr == (yq**2 - 2yqyp + yp**2) (xq - xp)**2p-4 - xp - xq
-// we have 3 terms
-// A = (yq**2 - 2yqyp + yp**2)
-// B = (xq - xp)**2p-4
-// C = - xp - xq
-//
-// class Paillier2PC is the client's side part of 2PC
-// you should launch the notary side of 2PC with:
-// go build -o notary2pc && ./notary2pc
+// Protocol to compute EC point addition in Paillier as described here:
+// https://tlsnotary.org/how_it_works#section1
+// The code uses the same notation as in the link above.
 
-// TODO rename Paillier2PC into ECDH2PC  
-
-// eslint-disable-next-line no-unused-vars
+// class Paillier2PC implements the client's side of computing an EC point
+// addition in 2PC
 export class Paillier2PC {
-  // x and y are 32-byte long byte arrays: coordinates of server pubkey
-  constructor(parent, x_, y_, ) {
-    this.send = parent.send;
-    this.notary = parent.notary;
-    this.clientKey = parent.clientKey;
-    this.notaryKey = parent.notaryKey;
-    this.encryptToNotary = parent.encryptToNotary;
-    this.decryptFromNotary = parent.decryptFromNotary;
-
-    this.uid = parent.uid;
+  // x and y are 32-byte Uint8Arrays: coordinates of server pubkey
+  constructor(x, y) {
     // define secp256r1 curve
     this.secp256r1 = new ECSimple.Curve(
       0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFCn,
@@ -88,216 +69,162 @@ export class Paillier2PC {
       ),
     );
 
-    const x = ba2int(x_);
-    const y = ba2int(y_);
-    
-    this.serverPubkey = new ECSimple.ModPoint(x, y);
-
-    this.pPriv = bcu.randBetween(this.secp256r1.n - 1n, 1n);
-    // debug only delete priv by 2 so that the final client priv doesnt
-    // overflow 32 bytes - to make openssl happy
-    // remove in production
-    this.pPriv = this.pPriv / 2n;
-    this.pPrivG = this.secp256r1.multiply(this.secp256r1.g, this.pPriv);
-
-    this.share1 = this.secp256r1.multiply(this.serverPubkey, this.pPriv);
-
-
-    // var ecPubKey = secp256r1.add(qPrivG, pPrivG)
-    // var pms = secp256r1.add(share1, share2)
-    // console.log('pms is', pms)
+    this.Q_b = new ECSimple.ModPoint(ba2int(x), ba2int(y));
+    // C picks a random private key share d_c
+    this.d_c = bcu.randBetween(this.secp256r1.n - 1n, 1n);
+    // and computes a public key share Q_c
+    this.Q_c = this.secp256r1.multiply(this.secp256r1.g, this.d_c);
+    // C computes an EC point d_c * Q_b
+    const ECpoint_c = this.secp256r1.multiply(this.Q_b, this.d_c);
+    this.x_p = ECpoint_c.x;
+    this.y_p = ECpoint_c.y;
+    this.p = this.secp256r1.p;
+    // all the fields below are intermediate values which we save after each
+    // communication round with the Notary
+    // Enx_q is enrypted negative x_q
+    this.Enx_q = null;
+    this.Q_nx = null;
+    this.Q_ny = null;
+    this.Ey_q2 = null;
+    // enrypted negative 2*y_q
+    this.En2y_q = null;
+    // we call E(A*M_A+N_A) "E114"
+    this.E114 = null;
+    this.N_Amodp = null;
+    this.M_b = null;
+    this.M_A = null;
+    this.M_B = null;
+    this.s_q = null;
   }
 
   // run 2PC computation with the notary
-  async run() {
+  step1() {
+    // S sends its public key Q_b to C and C passes it to N
     const payload1 = str2ba(JSON.stringify({
-      serverX: pad(this.serverPubkey.x.toString(16)),
-      serverY: pad(this.serverPubkey.y.toString(16)),
-      share1X: pad(this.share1.x.toString(16)),
-      share1Y: pad(this.share1.y.toString(16)),
+      Q_bx: pad(this.Q_b.x.toString(16)),
+      Q_by: pad(this.Q_b.y.toString(16))
     }));
-    const step1 = JSON.parse(ba2str(await this.send('step1', payload1)));
-    const p = this.secp256r1.p;
+    return payload1;
+  }
 
-    // (party1 is the notary, party2 is the client)
+  step2(step1Resp){
+    const step1 = JSON.parse(ba2str(step1Resp));
     // -------- PHASE 1: computing term B
-
-    // party1 provides P(xq)
-    // var Pxq = publicKey.encrypt(qPrivG.x)
-    // // negative xq
-    // // 5 - 3 mod 6 == 5 + (6 -3) mod 6
-    // var Pnxq = publicKey.encrypt(secp256r1.p - qPrivG.x)
-
-    // party2:
-    // 1) compute P(A) == P(xq - xp)
-    // 2) blind with B: P(AB) == P(A)^B
-    // 3) (to prevent factorizing AB) blind with C: P(AB+C) == P(AB)*C
-    // 4) send 1) P(AB+C) and 2) C mod p
-
-    // if xp > xq then PA below is negative and we'd have to apply the mask C the size of
-    // n = 2048bits we don't want that. If we keep PA positive then the mask C size will be
-    // 256+256=512 bits for this reason we increase xp by prime (mod prime)
 
     const n = BigInt(`0x${step1.n}`, 16);
     const g = BigInt(`0x${step1.g}`, 16);
-    const Pxq = BigInt(`0x${step1.Pxq}`, 16);
-    const Pnxq = BigInt(`0x${step1.Pnxq}`, 16);
+    const Ex_q = BigInt(`0x${step1.Ex_q}`, 16);
+    this.Enx_q = BigInt(`0x${step1.Enx_q}`, 16);
+    this.Q_nx =  BigInt(`0x${step1.Q_nx}`, 16);
+    this.Q_ny =  BigInt(`0x${step1.Q_ny}`, 16);
+    this.Ey_q2 = BigInt(`0x${step1.Ey_q2}`, 16);
+    this.En2y_q = BigInt(`0x${step1.Pn2yq}`, 16);
 
+    // we expect n to be 1536 bits = 192 bytes
+    assert(int2ba(n).length == 192);
     this.pubkey = new PaillierPubkey(n, g);
 
-    const PA = this.pubkey.addCleartext(Pxq, p - this.share1.x);
-    const maskB = bcu.randBetween(2n ** 256n);
-    const PAB = this.pubkey.multiply(PA, maskB);
-    const maskC = bcu.randBetween(2n ** 512n);
-    const PABC = this.pubkey.addCleartext(PAB, maskC);
-    const Cmodp = maskC % p;
-
+    // 1.2.4
+    // if x_p > x_q then b will be negative and the size of N_b would have to be
+    // n = 2048bits in order to mask a negative b. But if we keep b positive then
+    // the size of N_b will be 256+256=512 bits. In order to keep b positive, we
+    // increase x_q by prime p and only then add -x_p, which is the same as doing:
+    // x_q + (p - x_p)
+    const Eb = this.pubkey.addCleartext(Ex_q, this.p - this.x_p);
+    // 1.2.5
+    // picks random mask M_b
+    this.M_b = bcu.randBetween(2n ** 256n);
+    // picks random mask N_b
+    const N_b = bcu.randBetween(2n ** 512n);
+    // we call E(b*M_b+N_b) E125
+    const E125 = this.pubkey.addCleartext(this.pubkey.multiply(Eb, this.M_b), N_b);
+    const N_bmodp = N_b % this.p;
+    // 1.2.6
     const payload2 = str2ba(JSON.stringify({
-      PABC: pad(PABC.toString(16)),
-      Cmodp: pad(Cmodp.toString(16)),
+      E125: pad(E125.toString(16)),
+      N_bmodp: pad(N_bmodp.toString(16)),
     }));
-    const fetch2 = this.send('step2', payload2, true);
+    return payload2;
+  }
 
-    // while fetching we can compute
-
-    // -------- PHASE 2: computing term A
-
-    // party1 provides: P(yq**2), P(-2yq) (was done in step1)
-
-    // var Pyq2 = publicKey.encrypt(bcu.modPow(qPrivG.y, 2n, secp256r1.p))
-    // var Pn2yq = publicKey.encrypt(2n * (secp256r1.p - qPrivG.y) % secp256r1.p)
-
-    // party2
-    // 1) computes P(term A) = P(yq**2) + P(-2yq)**yp + P(yp**2)
-    // 2) blind with c1 and c2 : d == P(termA * c1 mod c2)
-    // 3) send d and c2 mod p
-
-    const Pyq2 = BigInt(`0x${step1.Pyq2}`, 16);
-    const Pn2yq = BigInt(`0x${step1.Pn2yq}`, 16);
-
-    const PtermA = this.pubkey.addCleartext(
-      this.pubkey.addCiphertext(Pyq2, this.pubkey.multiply(Pn2yq, this.share1.y)),
-      bcu.modPow(this.share1.y, 2n, p),
+  async step2async(){
+    // while fetching we can compute PHASE 2: computing term A
+    // N provides: E(y_q**2), E(-2y_q) (both were received in step1 response above)
+    // 1.1.3
+    const EA = this.pubkey.addCleartext(
+      this.pubkey.addCiphertext(this.Ey_q2, this.pubkey.multiply(this.En2y_q, this.y_p)),
+      bcu.modPow(this.y_p, 2n, this.p),
     );
+    // 1.1.4
+    this.M_A = bcu.randBetween(2n ** 512n);
+    const N_A = bcu.randBetween(2n ** 1024n);
+    this.E114 = this.pubkey.addCleartext(this.pubkey.multiply(EA, this.M_A), N_A);
+    this.N_Amodp = N_A % this.p;
+    // we don't send step 1.1.5 now, because a response from N is pending
+  }
 
-    const c1 = bcu.randBetween(2n ** 512n);
-    const c2 = bcu.randBetween(2n ** 1024n);
-    const d = this.pubkey.addCleartext(this.pubkey.multiply(PtermA, c1), c2);
-    const c2modp = c2 % p;
-
-    const step2 = JSON.parse(ba2str(await fetch2));
-
-    // party1
-    // computing term B continued
-    // 1) decrypt to get AB+C
-    // 2) reduce AB+C mod p
-    // 3) subtract C to get AB mod p
-    // 4) compute ABraised = (AB)**2p-4 mod p
-    // 5) send P(ABraised)
-
-    // var DABC = privateKey.decrypt(PABC)
-    // var ABC = DABC % secp256r1.p
-    // var AB = (ABC + secp256r1.p - Cmodp) % secp256r1.p
-    // var ABraised = bcu.modPow(AB, 2n*secp256r1.p - 4n, secp256r1.p)
-    // var PABraised = publicKey.encrypt(ABraised)
-
-    // party2
-    // (remember that ABraised == (A**2p-4)(B**2p-4)
-    // in order to get (A**2p-4), we need to divide by (B**2p-4) or multiply by (B**2p-4)**-1)
-    // 1) compute P(term B) = P(ABraised) ** (B**2p-4)**-1 mod p
-    // 2) blind with a1 and a2 : b == P(termB * a1 + a2)
-    // 3) send b and a2 mod p
-
-    const PABraised = BigInt(`0x${step2.PABraised}`, 16);
-    const Braised = bcu.modPow(maskB, p - 3n, p);
-    const Binv = bcu.modInv(Braised, p);
-    const PtermB = this.pubkey.multiply(PABraised, Binv);
-    const a1 = bcu.randBetween(2n ** 512n);
-    const a2 = bcu.randBetween(2n ** 1024n);
-    const b = this.pubkey.addCleartext(this.pubkey.multiply(PtermB, a1), a2);
-    const a2modp = a2 % p;
-
+  step3(step2Resp){
+    const step2 = JSON.parse(ba2str(step2Resp));
+    // get what N sent in 1.2.10
+    const E1210 = BigInt(`0x${step2.E1210}`, 16);
+    // 1.2.11
+    const Binv = bcu.modInv(bcu.modPow(this.M_b, this.p - 3n, this.p), this.p);
+    // 1.2.12
+    const EB = this.pubkey.multiply(E1210, Binv);
+    // 1.2.13
+    this.M_B = bcu.randBetween(2n ** 512n);
+    const N_B = bcu.randBetween(2n ** 1024n);
+    const E1213 = this.pubkey.addCleartext(this.pubkey.multiply(EB, this.M_B), N_B);
+    const N_Bmodp = N_B % this.p;
+    // 1.2.14 + 1.1.5
     const payload3 = str2ba(JSON.stringify({
-      b: pad(b.toString(16)),
-      a2modp: pad(a2modp.toString(16)),
-      d: pad(d.toString(16)),
-      c2modp: pad(c2modp.toString(16)),
+      E1213: pad(E1213.toString(16)),
+      N_Bmodp: pad(N_Bmodp.toString(16)),
+      E114: pad(this.E114.toString(16)),
+      N_Amodp: pad(this.N_Amodp.toString(16)),
     }));
-    const step3 = JSON.parse(ba2str(await this.send('step3', payload3)));
+    return payload3;
+  }
 
+  step4(step3Resp){
+    const step3 = JSON.parse(ba2str(step3Resp));
     // -------- PHASE 3: computing termA*termB and term C
-
-    // party1
-    // 1) compute termB*a1*termA*c2
-    // 2) send P()
-
-    // var termBa1 = (privateKey.decrypt(b) - a2modp) % secp256r1.p
-    // var termAc2 = (privateKey.decrypt(d) - c2modp) % secp256r1.p
-    // var PtermABmasked = publicKey.encrypt(termBa1 * termAc2 % secp256r1.p)
-
-    // party2
-    // 1) compute P(termAB) = P(termABmasked) * (a1*c2)**-1
-    // 2) compute P(X) = P(termAB) + P(-xp) + P (-xq)
-    // 3) blind P(X) with x1: P(x2) = P(X+x1)
-    // 4) send P(x2) (unreduced)
-
-    const PtermABmasked = BigInt(`0x${step3.PtermABmasked}`, 16);
-    const a1c1inv = bcu.modInv((a1 * c1) % p, p);
-    const PtermAB = this.pubkey.multiply(PtermABmasked, a1c1inv);
-
-    // negative xp
-    const nxp = p - this.share1.x;
-    const PX = this.pubkey.addCleartext(
-      this.pubkey.addCiphertext(PtermAB, Pnxq),
-      nxp,
-    );
-    // PX may be up to 1027 bits long
-    const x1unreduced = bcu.randBetween(2n ** 1027n);
-    const Px2unreduced = this.pubkey.addCleartext(PX, x1unreduced);
-    // negative x1
-    const nx1 = p - (x1unreduced % p);
-
+    // get what N sent in 1.3.1 (note that E(-x_q) was already sent to us earlier
+    // in step1)
+    const E131 = BigInt(`0x${step3.E131}`, 16);
+    // 1.3.2
+    const EAB = this.pubkey.multiply(E131, bcu.modInv((this.M_B * this.M_A) % this.p, this.p));
+    // 1.3.3.
+    // nx_p is negative x_p
+    const nx_p = this.p - this.x_p;
+    // Note that the reason why 1.3.3 says "computes E(-x_p)" is to simplify the
+    // explanation. In reality, Paillier crypto allows to add a cleartext to a
+    // ciphertext without needing to first encrypt the cleartext. For this reason
+    // we don't encrypt -x_p but we add it homomorphically.
+    // 1.3.4
+    const EABC = this.pubkey.addCleartext(this.pubkey.addCiphertext(EAB, this.Enx_q),
+      nx_p);
+    // 1.3.5
+    // EABC may be up to 1027 bits long, the mask must be same length
+    const S_q = bcu.randBetween(2n ** 1027n);
+    const E135 = this.pubkey.addCleartext(EABC, S_q);
+    // 1.3.6
+    // Since N has (PMS + S_q) and we have S_q, in order to compute PMS, we will
+    // later compute the following in 2PC circuit: PMS = (PMS + S_q) - S_q,
+    // thus C's s_q must be negative
+    this.s_q = this.p - (S_q % this.p);
     const payload4 = str2ba(JSON.stringify({
-      Px2unreduced: pad(Px2unreduced.toString(16)),
+      E135: pad(E135.toString(16)),
     }));
-    const step4 = JSON.parse(ba2str(await this.send('step4', payload4)));
+    return payload4;
+  }
 
-    // party1
-
-    // var x2 = privateKey.decrypt(Px2unreduced) % secp256r1.p
-    // // now both parties have additive shares of X: x1 and nx2
-    // // x2 + nx1 == x2 - x1   == X
-
-    const x2 = BigInt(`0x${step4.x2}`, 16);
-    const qPriv = BigInt(`0x${step4.qPriv}`, 16);
-    const qPrivG = this.secp256r1.multiply(this.secp256r1.g, qPriv);
-    const share2 = this.secp256r1.multiply(this.serverPubkey, qPriv);
-
-    // TODO this must not be done here because qPriv (from which qPrivG is computed)
-    // is here only for debugging. notary should pass qPrivG after step1
-    const clientPubkey = this.secp256r1.add(qPrivG, this.pPrivG);
-    const cpubBytes = concatTA(
-      int2ba(clientPubkey.x, 32),
-      int2ba(clientPubkey.y, 32));
-
-    const clientPrivkey = this.pPriv + qPriv;
-    console.log('priv sum len is ', int2ba(clientPrivkey).length);
-    // if privkey > 32 bytes, the result will still be correct
-    // the problem may arise when (during debugging) we feed >32 bytes
-    // into openssl. It expects 32 bytes
-
-    // assert(bigint2ba(clientPrivkey).length <= 32)
-
-
-    const x = ((( 
-      bcu.modPow(share2.y + p - this.share1.y, 2n, p) * 
-      bcu.modPow(share2.x + p - this.share1.x, p - 3n, p)) % p) + 
-      (p - this.share1.x) + (p - share2.x)) % p;
-
-    const pms = (x2 + nx1) % p;
-    console.log('is sum larger than prime', (x2 + nx1) > p);
-
-    const nx1Hex = int2ba(nx1, 32); // negative share x1
-    return [nx1Hex, cpubBytes];
+  final(){
+    // N sends Q_n to C who computes Q_a = Q_c + Q_n and sends Q_a to S
+    const Q_n = new ECSimple.ModPoint(this.Q_nx, this.Q_ny);
+    const Q_a = this.secp256r1.add(Q_n, this.Q_c);
+    // cpubBytes is TLS session's client's ephemeral pubkey for ECDHE
+    const cpubBytes = concatTA(int2ba(Q_a.x, 32), int2ba(Q_a.y, 32));
+    return [int2ba(this.s_q, 32), cpubBytes];
   }
 }
