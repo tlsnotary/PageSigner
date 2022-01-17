@@ -289,7 +289,9 @@ export class TWOPC {
     ghashInputs.push(concatTA(lenA, lenC));
 
     const resp1 = await this.send('ghash_step1', await this.ghash.buildStep1());
-    this.ghash.processOTResponse(resp1);
+    if (this.ghash.isStep1ResponseExpected()){
+      this.ghash.processOTResponse(resp1);
+    }
     if (this.ghash.isStep2Needed()){
       const resp2 = await this.send('ghash_step2', await this.ghash.buildStep2());
       this.ghash.processOTResponse(resp2);

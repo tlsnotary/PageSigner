@@ -88,6 +88,11 @@ export class GHASH {
     return this.maxOddPowerNeeded > 19;
   }
 
+  // return true if we expect the notary to respond with data on Step1
+  isStep1ResponseExpected(){
+    return this.maxOddPowerNeeded > 3;
+  }
+
   // findMaxOddPower finds the max odd share that we
   findMaxOddPower(maxPowerNeeded){
     assert(maxPowerNeeded <= 1026);
