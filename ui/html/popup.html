@@ -93,12 +93,12 @@
       line-height: 20px;
       color: white;
     }
+
   </style>
 </head>
 
 
 <body>
-
   <div style='padding: 5px; word-wrap: break-word;' id='aboutWindow' hidden>
     <h1 align="center">PageSigner v3.0</h1>
     <p align="center">Email the developers: </p>
@@ -111,19 +111,31 @@
     <h3>Please allow PageSigner to access this page.</h3>   
   </div>
 
-  <div id='managerTable'>
-  <table style="width: 16em;" id='menu' hidden>
-    <tr class="border_bottom">
-      <td class="pointer" id="notarize">
-        <img class='menu_img' src="../img/icon.svg"></img>
-        <text style='padding-right: 5px;'>Notarize this page</text>
-      </td>
-      <!-- notarizeAfter is not currently in use -->
-      <td id="notarizeAfter" hidden>
-        <img style="cursor:pointer;width:12px;height:12px;position:fixed;right:0px;top:2px" title="Click this tiny cursor icon if you want to make a click on the page first. As soon as you click on the page, PageSigner will start notarizing" class='menu_img'
-          src="../img/arrow16.png"></img>
-      </td>
-
+  <div id='menu' hidden>
+    <table style="width: 16em;">
+      <tr class="border_bottom">
+        <td class="pointer" id="notarize">
+          <img class='menu_img' src="../img/icon.svg"></img>
+          <text style='padding-right: 5px;'>Notarize this page</text>
+        </td>
+      </tr>
+      <tr class="border_bottom">
+        <td class="pointer" id="notarizeNow" hidden>
+          <img class='menu_img' src="../img/icon.svg"></img>
+          <text style='padding-right: 5px;'>Notarize now</text>
+        </td>
+      </tr>
+      <tr class="border_bottom">
+        <td class="pointer" id="preview" hidden>
+          <img class='menu_img' src="../img/preview.svg"></img>
+          <text style='padding-right: 5px;'>Preview</text>
+        </td>
+      </tr>
+      <tr>
+        <td id="previewExplanation" hidden>
+          <text style='padding-right: 5px;'>Select "Preview" if you do not want to perform the notarization right now, but instead want a quick preview of what the final result will look like.</text>
+        </td>
+      </tr>
       <tr class="border_bottom">
         <td class="pointer" id="manage">
           <img class='menu_img' src="../img/files.svg"></img>
@@ -134,13 +146,15 @@
         <td class="pointer" id="import">
           <img class='menu_img' src="../img/import.svg"></img>
           <text>Import session</text>
+        </td>
       </tr>
       <tr>
         <td class="pointer" id="about">
           <img class='menu_img' src="../img/icon.svg"></img>
           <text>About</text>
+        </td>
       </tr>
-  </table>
+    </table>
   </div>
 
   <div style="width: 14em;" id='appNotInstalledChrome' class='warning' hidden>

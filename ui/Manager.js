@@ -11,7 +11,6 @@ class Manager{
     window.isManager = true;
     // isReady will be se to true after message listener is installed
     window.isReady = false;
-
   }
 
   main() {
@@ -36,8 +35,8 @@ class Manager{
     });
     window.isReady = true;
     chrome.runtime.sendMessage({
-      'destination': 'extension',
-      'message': 'refresh'
+      destination: 'extension',
+      message: 'refresh'
     });
   }
 
@@ -67,7 +66,7 @@ class Manager{
 
   addRow(args) {
     const that = this;
-    const session = args.creationTime;
+    const sid = args.creationTime;
     const tb = document.getElementById('tableBody');
     const row = tb.insertRow(tb.rows.length);
 
@@ -112,11 +111,9 @@ class Manager{
       },
       function() {
         chrome.runtime.sendMessage({
-          'destination': 'extension',
-          'message': 'export',
-          'args': {
-            'dir': session
-          }
+          destination: 'extension',
+          message: 'export',
+          sid: sid
         });
       });
     };
@@ -131,7 +128,7 @@ class Manager{
     imgRen.style.marginLeft = 10;
     imgRen.title = 'Give the session a more memorable name';
     imgRen.onclick = function(event) {
-      that.doRename(event.target, session);
+      that.doRename(event.target, sid);
     };
     iconDiv.appendChild(imgRen);
 
@@ -150,11 +147,9 @@ class Manager{
       },
       function() {
         chrome.runtime.sendMessage({
-          'destination': 'extension',
-          'message': 'delete',
-          'args': {
-            'dir': session
-          }
+          destination: 'extension',
+          message: 'delete',
+          sid: sid
         });
       });
     };
@@ -181,11 +176,9 @@ class Manager{
     input1.className = 'btn';
     input1.onclick = function() {
       chrome.runtime.sendMessage({
-        'destination': 'extension',
-        'message': 'viewdata',
-        'args': {
-          'dir': session
-        }
+        destination: 'extension',
+        message: 'showSession',
+        sid: sid
       });
     };
     input1.value = 'HTML';
@@ -196,11 +189,9 @@ class Manager{
     input2.className = 'btn';
     input2.onclick = function() {
       chrome.runtime.sendMessage({
-        'destination': 'extension',
-        'message': 'viewraw',
-        'args': {
-          'dir': session
-        }
+        destination: 'extension',
+        message: 'showDetails',
+        sid: sid
       });
     };
     input2.value = 'Details';
@@ -211,11 +202,9 @@ class Manager{
     input3.className = 'btn';
     input3.onclick = function() {
       chrome.runtime.sendMessage({
-        'destination': 'extension',
-        'message': 'raw editor',
-        'args': {
-          'dir': session
-        }
+        destination: 'extension',
+        message: 'raw editor',
+        sid: sid
       });
     };
     input3.value = 'Edit';
@@ -237,7 +226,7 @@ class Manager{
     row.appendChild(td3);
   }
 
-  doRename(t, dir) {
+  doRename(t, sid) {
     var isValid = (function() {
       var rg1 = /^[^\\/:\*\?"<>\|]+$/; // forbidden characters \ / : * ? " < > |
       var rg2 = /^\./; // cannot start with dot (.)
@@ -266,12 +255,10 @@ class Manager{
       } else if (new_name === null) return; // escape pressed
       else {
         chrome.runtime.sendMessage({
-          'destination': 'extension',
-          'message': 'rename',
-          'args': {
-            'dir': dir,
-            'newname': new_name
-          }
+          destination: 'extension',
+          message: 'rename',
+          sid: sid,
+          newname: new_name
         });
       }
     });

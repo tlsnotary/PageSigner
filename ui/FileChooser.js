@@ -25,11 +25,9 @@ export class FileChooser{
     const import_label = document.getElementById('import_label');
     import_label.classList.toggle('m-fadeOut');
     chrome.runtime.sendMessage({
-      'destination': 'extension',
-      'message': 'import',
-      'args': {
-        'data': Array.from(new Uint8Array(e.target.result))
-      }
+      destination: 'extension',
+      message: 'import',
+      data: Array.from(new Uint8Array(e.target.result))
     });
   // don't close the window, we reuse it to display html
   }

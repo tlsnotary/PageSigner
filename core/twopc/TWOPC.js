@@ -12,6 +12,12 @@ import {OTSender}    from './OTSender.js';
 import {OTReceiver}  from './OTReceiver.js';
 import {GHASH}       from './GHASH.js';
 
+// class TWOPC implement two-party computation techniques used in the TLSNotary
+// session. Paillier 2PC, Gabrled Circuits, Oblivious Transfer.
+
+// The description of each step of the TLS PRF computation, both inside the
+// garbled circuit and outside of it:
+// [REF 1] https://github.com/tlsnotary/circuits/blob/master/README
 
 export class TWOPC {
   constructor(notary, plaintextLen, circuits, progressMonitor) {
@@ -38,10 +44,18 @@ export class TWOPC {
     this.uid = Math.random().toString(36).slice(-10);
     // cs is an array of circuits, where each circuit is an object with the fields:
     // gatesBlob, gatesCount, wiresCount, notaryInputSize, clientInputSize,
-    // outputSize, andGateCount
+    // outputSize, andGateCount, outputsSizes
     this.cs = Object.keys(circuits).map(k => circuits[k]);
-    // start count of circuits with 1, push an empy element to index 0
+    // start count of circuits with 1, push an empty element to index 0
     this.cs.splice(0, 0, undefined);
+    // The output of a circuit is actually multiple concatenated values. We need
+    // to know how many bits each output value has in order to parse the output
+    this.cs[1]['outputsSizes'] = [256, 256];
+    this.cs[2]['outputsSizes'] = [256, 256];
+    this.cs[3]['outputsSizes'] = [128, 128, 32, 32, 128, 128, 128];
+    this.cs[4]['outputsSizes'] = [128, 128, 128, 96];
+    this.cs[5]['outputsSizes'] = [128];
+    this.cs[6]['outputsSizes'] = [128];
     // output is the output of the circuit as array of bytes
     this.output = Array(this.cs.length);
     // Commits are used to ensure malicious security of garbled circuits
@@ -113,8 +127,11 @@ export class TWOPC {
     }
   }
 
-  async getECDHShare(x, y){
-    const paillier = new Paillier2PC(x, y);
+  // serverEcPubkey is webserver's ephemeral pubkey from the Server Key Exchange
+  async getECDHShare(serverEcPubkey){
+    const serverX = serverEcPubkey.slice(1, 33);
+    const serverY = serverEcPubkey.slice(33, 65);
+    const paillier = new Paillier2PC(serverX, serverY);
     const step1Resp = await this.send('step1', paillier.step1());
     const step2Promise = this.send('step2', paillier.step2(step1Resp), true);
     // while Notary is responding to step2 we can do some more computations
@@ -141,25 +158,26 @@ export class TWOPC {
     }
 
     const c1Mask = getRandom(32);
-    const c1Out = await this.runCircuit([this.clientPMSShare, c1Mask], 1);
-    // unmask the output
-    const innerState1Masked = c1Out[0].slice(0, 32);
-    const innerState1 = xor(innerState1Masked, c1Mask);
+    // [REF 1] Step 2
+    const c1Out = (await this.runCircuit([this.clientPMSShare, c1Mask], 1))[0];
+    // unmask only the outputs relevant to the client
+    const pmsInnerHashState = xor(c1Out.slice(32, 64), c1Mask);
 
-    const [c2_p2, c2_p1inner] = await this.phase2(innerState1);
+    // [REF 1] Steps 3,5,7,9
+    const [c2_p2, c2_p1inner] = await this.phase2(pmsInnerHashState);
     const c2Mask = getRandom(32);
     const input2 = [c2_p1inner, c2_p2.subarray(0, 16), c2Mask];
-    const c2Out = await this.runCircuit(input2, 2);
+    // [REF 1] Step 10, 12
+    const c2Out = (await this.runCircuit(input2, 2))[0];
     // unmask the output
-    const innerState2Masked = c2Out[0].slice(0, 32);
-    const innerState2 = xor(innerState2Masked, c2Mask);
-
-    const [c3_p1inner_vd, c3_p2inner, c3_p1inner] = await this.phase3(innerState2);
-    // for readability, mask indexing starts from 1
-    const masks3 = [0, 16, 16, 4, 4, 16, 16, 16, 12].map(x => getRandom(x));
-    const input3 = [c3_p1inner, c3_p2inner, c3_p1inner_vd, ...masks3.slice(1)];
-    const c3Out = await this.runCircuit(input3, 3);
-    const [encFinished, tag, verify_data] = await this.phase4(c3Out, masks3);
+    const msInnerHashState = xor(c2Out.slice(32, 64), c2Mask);
+    // [REF 1] Steps 13,15,17,20,22
+    const [verify_data, c3_p2inner, c3_p1inner] = await this.phase3(msInnerHashState);
+    // for readability, indexing of masks starts from 1
+    const masks3 = [0, 16, 16, 4, 4, 16, 16, 16].map(x => getRandom(x));
+    const input3 = [c3_p1inner, c3_p2inner, ...masks3.slice(1)];
+    const c3Out = (await this.runCircuit(input3, 3))[0];
+    const [encFinished, tag] = await this.phase4(c3Out, masks3, verify_data);
     return [encFinished, tag, verify_data];
   }
 
@@ -174,28 +192,31 @@ export class TWOPC {
 
     const seed = concatTA(str2ba('server finished'), hshash);
     const a0 = seed;
+    // [REF 1] Step 25
     const a1inner = innerHash(this.innerState_MS, a0);
     const a1 = await this.send('c4_pre1', a1inner);
+    // [REF 1] Step 27
     const p1inner = innerHash(this.innerState_MS, concatTA(a1, seed));
 
     // for readability, mask indexing starts from 1
     const masks4 = [0, 16, 16, 16, 12].map(x => getRandom(x));
     const input4 = [p1inner, this.swkShare, this.sivShare, sf_nonce,
       ...masks4.slice(1)];
-    const outArray = await this.runCircuit(input4, 4);
-    const c4_output = outArray[0];
-    console.log('c4Output.length', c4_output.length);
-
+    // [REF 1] Step 28
+    const c4out = (await this.runCircuit(input4, 4))[0];
     let o = 0; // offset
-    const verify_dataMasked = c4_output.slice(o, o+=12);
-    const verify_data = xor(verify_dataMasked, masks4[4]);
-    const encCounterMasked = c4_output.slice(o, o+=16);
-    const encCounter = xor(encCounterMasked, masks4[3]);
-    const gctrSFMasked = c4_output.slice(o, o+=16);
-    const gctrShare = xor(gctrSFMasked, masks4[2]);
-    const H1MaskedTwice = c4_output.slice(o, o+=16);
+    // parse outputs
+    const H1MaskedTwice = c4out.slice(o, o+=16);
+    const gctrSFMasked = c4out.slice(o, o+=16);
+    const encCounterMasked = c4out.slice(o, o+=16);
+    const verify_dataMasked = c4out.slice(o, o+=12);
+    // unmask outputs
     // H1 xor-masked by notary is our share of H^1, the mask is notary's share of H^1
     const H1share = xor(H1MaskedTwice, masks4[1]);
+    const gctrShare = xor(gctrSFMasked, masks4[2]);
+    const encCounter = xor(encCounterMasked, masks4[3]);
+    const verify_data = xor(verify_dataMasked, masks4[4]);
+
     const sf = concatTA(new Uint8Array([0x14, 0x00, 0x00, 0x0c]), verify_data);
     const encSF = xor(sf, encCounter);
     assert(eq(sf_pure, encSF));
@@ -230,10 +251,10 @@ export class TWOPC {
       input5 = [].concat(input5, [this.cwkShare, this.civShare, masks5[i],
         fixedNonce, 10, counter, 10]);
     }
-    const outArray = await this.runCircuit(input5, 5);
+    const c5out = await this.runCircuit(input5, 5);
     const encCounters = [];
     for (let i=0; i < this.C5Count; i++){
-      encCounters.push(xor(outArray[i], masks5[i]));
+      encCounters.push(xor(c5out[i], masks5[i]));
     }
     return encCounters;
   }
@@ -249,7 +270,7 @@ export class TWOPC {
       masks6.push(getRandom(16));
       input6 = [].concat(input6, [this.cwkShare, this.civShare, masks6[i], nonce]);
     }
-    const outArray = await this.runCircuit(input6, 6);
+    const c6out = await this.runCircuit(input6, 6);
     const c6CommitSalt = await this.send('checkC6Commit', this.myCommit[6]);
     // the commit which notary computed on their side must be equal to our commit
     const saltedCommit = await sha256(concatTA(this.myCommit[6], c6CommitSalt));
@@ -257,7 +278,7 @@ export class TWOPC {
 
     const gctrBlocks = [];
     for (let i=0; i < this.C6Count; i++){
-      gctrBlocks.push(xor(outArray[i], masks6[i]));
+      gctrBlocks.push(xor(c6out[i], masks6[i]));
     }
     return gctrBlocks;
   }
@@ -537,7 +558,6 @@ export class TWOPC {
   }
 
   async phase2(innerStateUint8) {
-
     const innerState = new Int32Array(8);
     for (let i = 0; i < 8; i++) {
       var hex = ba2hex(innerStateUint8).slice(i * 8, (i + 1) * 8);
@@ -554,14 +574,17 @@ export class TWOPC {
     // ms = (p1+p2)[0:48]
 
     const seed = concatTA(str2ba('master secret'), this.client_random, this.server_random);
+    // [REF 1] Step 3
     const a1inner = innerHash(innerState, seed);
     const a1 = await this.send('c1_step3', a1inner);
+    // [REF 1] Step 5
     const a2inner = innerHash(innerState, a1);
     const a2 = await this.send('c1_step4', a2inner);
+    // [REF 1] Step 7
     const p2inner = innerHash(innerState, concatTA(a2, seed));
     const p2 = await this.send('c1_step5', p2inner);
+    // [REF 1] Step 9
     const p1inner = innerHash(innerState, concatTA(a1, seed));
-
     return [p2, p1inner];
   }
 
@@ -585,42 +608,43 @@ export class TWOPC {
     const seed = concatTA(str2ba('key expansion'), this.server_random, this.client_random);
     // at the same time also compute verify_data for Client Finished
     const seed_vd = concatTA(str2ba('client finished'), this.hs_hash);
-
+    // [REF 1] Step 13
     const a1inner = innerHash(this.innerState_MS, seed);
+    // [REF 1] Step 20
     const a1inner_vd = innerHash(this.innerState_MS, seed_vd);
     const resp4 = await this.send('c2_step3', concatTA(a1inner, a1inner_vd));
     const a1 = resp4.subarray(0, 32);
     const a1_vd = resp4.subarray(32, 64);
-
+    // [REF 1] Step 15
     const a2inner = innerHash(this.innerState_MS, a1);
+    // [REF 1] Step 22
     const p1inner_vd = innerHash(this.innerState_MS, concatTA(a1_vd, seed_vd));
     const resp5 = await this.send('c2_step4', concatTA(a2inner, p1inner_vd));
     const a2 = resp5.subarray(0, 32);
-
+    const verify_data = resp5.subarray(32, 44);
+    // [REF 1] Step 17
     const p1inner = innerHash(this.innerState_MS, concatTA(a1, seed));
     const p2inner = innerHash(this.innerState_MS, concatTA(a2, seed));
-
-    return [p1inner_vd, p2inner, p1inner];
+    return [verify_data, p2inner, p1inner];
   }
 
-  async phase4(outArray, masks3) {
-    const c3_output = outArray[0];
+  async phase4(c3out, masks3, verify_data) {
     let o = 0; // offset
-    const verify_dataMasked = c3_output.slice(o, o+=12);
-    const verify_data = xor(verify_dataMasked, masks3[8]);
-    const encCounterMasked = c3_output.slice(o, o+=16);
-    const encCounter = xor(encCounterMasked, masks3[7]);
-    const gctrMaskedTwice = c3_output.slice(o, o+=16);
-    const myGctrShare = xor(gctrMaskedTwice, masks3[6]);
-    const H1MaskedTwice = c3_output.slice(o, o+=16);
-    const civMaskedTwice = c3_output.slice(o, o+=4);
-    this.civShare = xor(civMaskedTwice, masks3[4]);
-    const sivMaskedTwice = c3_output.slice(o, o+=4);
-    this.sivShare = xor(sivMaskedTwice, masks3[3]);
-    const cwkMaskedTwice = c3_output.slice(o, o+=16);
-    const swkMaskedTwice = c3_output.slice(o, o+=16);
-    this.cwkShare = xor(cwkMaskedTwice, masks3[2]);
+    // parse all outputs
+    const swkMaskedTwice = c3out.slice(o, o+=16);
+    const cwkMaskedTwice = c3out.slice(o, o+=16);
+    const sivMaskedTwice = c3out.slice(o, o+=4);
+    const civMaskedTwice = c3out.slice(o, o+=4);
+    const H1MaskedTwice = c3out.slice(o, o+=16);
+    const gctrMaskedTwice = c3out.slice(o, o+=16);
+    const encCounterMasked = c3out.slice(o, o+=16);
+    // unmask all outputs
     this.swkShare = xor(swkMaskedTwice, masks3[1]);
+    this.cwkShare = xor(cwkMaskedTwice, masks3[2]);
+    this.sivShare = xor(sivMaskedTwice, masks3[3]);
+    this.civShare = xor(civMaskedTwice, masks3[4]);
+    const myGctrShare = xor(gctrMaskedTwice, masks3[6]);
+    const encCounter = xor(encCounterMasked, masks3[7]);
 
     // H1 xor-masked by notary is our (i.e. the client's) share of H^1,
     // notary's mask is his share of H^1.
@@ -640,7 +664,7 @@ export class TWOPC {
     const tagShare = this.ghash.processFinResponse(otResp, [aad, encCF, lenAlenC]);
     // notary's gctr share is already included in notaryTagShare
     const tagFromPowersOfH = xor(xor(notaryTagShare, tagShare), myGctrShare);
-    return [encCF, tagFromPowersOfH, verify_data];
+    return [encCF, tagFromPowersOfH];
   }
 
   // getClientFinishedResumed runs a circuit to obtain data needed to construct the
@@ -669,9 +693,10 @@ export class TWOPC {
     return [this.ephemeralKey, this.eValidFrom, this.eValidUntil, this.eSigByMasterKey];
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  // optionally send extra data
-  async runCircuit(inputs, cNo, extraData = new Uint8Array(0)) {
+  // runCircuit evaluates a circuit and returns the circuit's output. It exchanges
+  // OT messages in order to get it's input labels and send to notary his input labels.
+  // The notary is also evaluating this circuit on his end.
+  async runCircuit(inputs, cNo) {
     console.log('in runCircuit', cNo);
     // inputs is an array of inputs in the order in which the inputs appear in the c*.casm files.
     // The circuit expects the least bit of the input to be the first bit
@@ -688,12 +713,12 @@ export class TWOPC {
     }
     const c = this.cs[cNo];
     // how many times to repeat evaluation (> 1 only for circuits 5&7 )
-    const repeatCount = [0, 1, 1, 1, 1, this.C5Count, 1, this.C6Count][cNo];
+    const repeatCount = [0, 1, 1, 1, 1, this.C5Count, this.C6Count][cNo];
 
     // for circuit 1, there was no previous commit
     const prevCommit = cNo > 1 ? this.myCommit[cNo-1] : new Uint8Array(0);
     const otReq = this.otR.createRequest(inputBits);
-    const blob1 = await this.send(`c${cNo}_step1`, concatTA(prevCommit, otReq, extraData));
+    const blob1 = await this.send(`c${cNo}_step1`, concatTA(prevCommit, otReq));
 
     let o = 0;
     if (cNo > 1){
@@ -711,8 +736,8 @@ export class TWOPC {
     assert(blob1.length == o);
 
     const allClientLabels = this.otR.parseResponse(inputBits, hisOtResp);
-    const senderMsg = this.g.getNotaryLabels(cNo);
-    const otResp = this.otS.processRequest(hisOtReq, senderMsg);
+    const notaryLabels = this.g.getNotaryLabels(cNo);
+    const otResp = this.otS.processRequest(hisOtReq, notaryLabels);
     const clientLabels = this.g.getClientLabels(inputBits, cNo);
     const sendPromise = this.send(`c${cNo}_step2`, concatTA(otResp, clientLabels), true);
 
@@ -748,7 +773,9 @@ export class TWOPC {
           console.log('evaluator output does not match the garbled outputs');
         }
       }
-      const out = bitsToBytes(bits);
+      // reverse output bits so that the values of the output be placed in
+      // the same order as they appear in the *.casm files
+      const out = this.parseOutputBits(cNo, bits);
       this.output[cNo] = out;
       output.push(out);
     }
@@ -757,9 +784,19 @@ export class TWOPC {
 
     const cStep2Out = await sendPromise;
     this.hisSaltedCommit[cNo] = cStep2Out.subarray(0, 32);
-    const extraDataOut = cStep2Out.subarray(32);
-    output.push(extraDataOut);
     return output;
+  }
+
+  // parseOutputBits converts the output bits of the circuit number "cNo" into
+  // a slice of output values in the same order as they appear in the *.casm files
+  parseOutputBits(cNo, outBits){
+    let o = 0; //offset
+    let outBytes = new Uint8Array(0);
+    for (const outSize of this.cs[cNo]['outputsSizes']){
+      outBytes = concatTA(outBytes, bitsToBytes(outBits.slice(o, o+=outSize)));
+    }
+    assert(o == this.cs[cNo].outputSize);
+    return outBytes;
   }
 
 

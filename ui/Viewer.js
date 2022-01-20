@@ -34,13 +34,12 @@ class Viewer{
         throw 'unexpected message';
       }
       console.log('got data in viewer');
-      var hideButton = false;
-      var text = msg.data.response;
-      console.log('text size is', text.length);
+      let hideButton = false;
+      console.log('text size is', msg.response.length);
       // remove the HTTP headers
-      var http_body = text.split('\r\n\r\n').splice(1).join('\r\n\r\n');
+      let http_body = msg.response.split('\r\n\r\n').splice(1).join('\r\n\r\n');
 
-      let type = that.getType(text);
+      let type = that.getType(msg.response);
       if (['html', 'json', 'xml', 'txt'].indexOf(type) > -1) {
       // add CSP to prevent loading any resources from the page
         const csp = '<meta http-equiv=\'Content-Security-Policy\' content="default-src \'none\'; img-src data:"></meta>\r\n';
@@ -53,9 +52,11 @@ class Viewer{
           that.view_file(str2ba(http_body), msg.serverName + '.' + type);};
         document.getElementById('view file').removeAttribute('hidden');
       }
+      console.log('msg.data.sessionId', msg.sessionId);
       setTimeout(function(){
         // we need timeout because the body may not yet be available
-        new NotificationBar().show(msg.data.sessionId, msg.data.serverName, hideButton);
+        new NotificationBar().show(msg.sessionId, msg.serverName, msg.request,
+          msg.response, hideButton);
         document.body.style.marginTop = '30px';
       }, 1000);
     });
