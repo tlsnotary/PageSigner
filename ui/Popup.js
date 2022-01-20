@@ -24,8 +24,13 @@ class Popup{
     document.getElementById('notarize').addEventListener('click', function(){
       that.notarizeClicked(false);
     });
-    document.getElementById('notarizeAfter').addEventListener('click', function(){
-      that.notarizeClicked(true);
+
+    document.getElementById('notarizeNow').addEventListener('click', function(){
+      that.notarizeNowClicked(false);
+    });
+
+    document.getElementById('preview').addEventListener('click', function(){
+      that.previewClicked(false);
     });
 
     document.getElementById('manage').addEventListener('click', function() {
@@ -39,7 +44,7 @@ class Popup{
     document.getElementById('import').addEventListener('click', function() {
       chrome.runtime.sendMessage({
         destination: 'extension',
-        message: 'file picker'
+        message: 'fileChooser'
       });
       window.close();
     });
@@ -67,8 +72,25 @@ class Popup{
     });
   }
 
-  // notarizeClicked is triggered when Notarize of Notariza after click was pressed
-  notarizeClicked(isAfterClick){
+  // notarizeClicked triggers a dropdown menu when "Notarize this page" was pressed
+  notarizeClicked(){
+    const nn = document.getElementById('notarizeNow');
+    const p = document.getElementById('preview');
+    const pe = document.getElementById('previewExplanation');
+    if (nn.hidden == true){
+      nn.hidden = false;
+      p.hidden = false;
+      pe.hidden = false;
+    } else {
+      nn.hidden = true;
+      p.hidden = true;
+      pe.hidden = true;
+    }
+    return;
+  }
+
+  // notarizeNowClicked is triggered when "Notarize now" was pressed
+  notarizeNowClicked(isAfterClick){
     isAfterClick = isAfterClick || false;
     const msg = isAfterClick ? 'notarizeAfter' : 'notarize';
     if (this.is_firefox && ! this.hasPermission && this.currentUrl.startsWith('https://')){
@@ -81,7 +103,7 @@ class Popup{
       chrome.runtime.sendMessage({
         destination: 'extension',
         message: 'pendingAction',
-        args: msg
+        action: msg
       });
       browser.permissions.request({origins: [this.currentUrl]});
     }
@@ -94,6 +116,14 @@ class Popup{
     if (isAfterClick){
       window.close();
     }
+  }
+
+  previewClicked(){
+    chrome.runtime.sendMessage({
+      destination: 'extension',
+      message: 'preview'
+    });
+    window.close();
   }
 
   processMessages(data) {

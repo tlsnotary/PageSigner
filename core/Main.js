@@ -13,6 +13,7 @@ import {Socket} from './Socket.js';
 import {TLS, getExpandedKeys, decrypt_tls_responseV6} from './TLS.js';
 import {verifyNotary, getURLFetcherDoc} from './oracles.js';
 import {TLSNotarySession} from './TLSNotarySession.js';
+import {TLSprobe} from './TLSprobe.js';
 import {ProgressMonitor} from './ProgressMonitor.js';
 import {FirstTimeSetup} from './FirstTimeSetup.js';
 
@@ -81,8 +82,8 @@ export class Main{
 
     // Some preferences may not exist if we are upgrading from
     // a previous PageSigner version. Create the preferences.
-    if (await getPref('firstTimeInitCompleted') === null){
-      await addNewPreference('firstTimeInitCompleted', false);
+    if (await getPref('firstTimeInitCompletedv2') === null){
+      await addNewPreference('firstTimeInitCompletedv2', false);
       await addNewPreference('parsedCircuits', null);
     }
     if (await getPref('trustedOracle') === null){
@@ -331,8 +332,8 @@ export class Main{
   }
 
 
-  async prepareNotarization(after_click) {
-    if (!this.trustedOracleReady) {
+  async prepareNotarization(after_click = false, isPreview = false) {
+    if (!isPreview && !this.trustedOracleReady) {
       this.sendAlert({
         title: 'PageSigner error.',
         text: 'Cannot notarize because something is wrong with PageSigner server. Please try again later'
@@ -435,7 +436,7 @@ export class Main{
       oBSH_details['requestBody'] = oBR_details.requestBody;
     }
     const rv = this.getHeaders(oBSH_details);
-    this.startNotarization(rv.headers, rv.server, rv.port)
+    this.startNotarization(rv.headers, rv.server, rv.port, isPreview)
       .catch(err => {
         console.log('Notarization aborted.', err);
         console.trace();
@@ -527,26 +528,29 @@ export class Main{
     console.log('ext got msg', data);
     switch (data.message){
     case 'rename':
-      await renameSession(data.args.dir, data.args.newname);
+      await renameSession(data.sid, data.newname);
       this.sendSessions(await getAllSessions());
       break;
     case 'delete':
-      await deleteSession(data.args.dir);
+      await deleteSession(data.sid);
       this.sendSessions(await getAllSessions());
       break;
     case 'import':
       // data is js array
-      this.importPgsgAndShow(new Uint8Array(data.args.data));
+      this.importPgsgAndShow(new Uint8Array(data.data));
       break;
     case 'export':
-      this.sendToManager({'pgsg': JSON.stringify(await this.getPGSG(data.args.dir)),
-        'name': (await getSession(data.args.dir)).sessionName}, 'export');
+      this.sendToManager({'pgsg': JSON.stringify(await this.getPGSG(data.sid)),
+        'name': (await getSession(data.sid)).sessionName}, 'export');
       break;
     case 'notarize':
       this.prepareNotarization(false);
       break;
     case 'notarizeAfter':
       this.prepareNotarization(true);
+      break;
+    case 'preview':
+      this.prepareNotarization(false, true);
       break;
     case 'manage':
       this.openManager();
@@ -557,19 +561,16 @@ export class Main{
     case 'openLink1':
       chrome.tabs.create({url: 'https://www.tlsnotary.org'});
       break;
-    case 'donate link':
-      chrome.tabs.create({url: 'https://www.tlsnotary.org/#Donate'});
+    case 'showSession':
+      this.showSession(data.sid);
       break;
-    case 'viewdata':
-      this.openViewer(data.args.dir);
+    case 'showDetails':
+      this.openDetails(data.sid);
       break;
-    case 'viewraw':
-      this.openDetails(data.args.dir, false);
+    case 'showPreviewDetails':
+      this.openPreviewDetails(data.serverName, data.request, data.response);
       break;
-    case 'raw editor':
-      this.openDetails(data.args.dir, true);
-      break;
-    case 'file picker':
+    case 'fileChooser':
       this.openFileChooser();
       break;
     case 'openChromeExtensions':
@@ -582,7 +583,7 @@ export class Main{
       this.openPythonScript();
       break;
     case 'pendingAction':
-      this.pendingAction = data.args;
+      this.pendingAction = data.action;
       break;
     case 'useNotaryNoSandbox':
       this.useNotaryNoSandbox(data.IP);
@@ -592,10 +593,17 @@ export class Main{
     }
   }
 
-  async startNotarization(headers, server, port) {
+  // startNotarization starts a TLSNotary session, saves the session result
+  // and displays it to the user. If we are in the preview mode, then we send
+  // the request directly to the server and display the result.
+  async startNotarization(headers, server, port, isPreview=false) {
+    if (isPreview){
+      await this.startPreview(headers, server, port);
+      return;
+    }
     this.notarization_in_progress = true;
     this.pm.init();
-    this.isFirstTimeSetupNeeded = ! await getPref('firstTimeInitCompleted');
+    this.isFirstTimeSetupNeeded = ! await getPref('firstTimeInitCompletedv2');
     chrome.runtime.sendMessage({
       destination: 'popup',
       message: 'notarization_in_progress',
@@ -606,7 +614,7 @@ export class Main{
       console.time('setPref');
       await setPref('parsedCircuits', obj);
       console.timeEnd('setPref');
-      await setPref('firstTimeInitCompleted', true);
+      await setPref('firstTimeInitCompletedv2', true);
     }
     const circuits = await getPref('parsedCircuits');
     const session = new TLSNotarySession(
@@ -624,6 +632,18 @@ export class Main{
     this.showSession(date);
   }
 
+  // startPreview does not perfrom a TLSNotary session but simply fetches the
+  // resource from the webserver and shows the user a preview of what the
+  // notarization result will look like, were the user to initiate a notarization.
+  // This is especially useful when the the user picks which headers/resources
+  // to include in the notarization and wants to have a quick preview.
+  async startPreview(headers, server, port) {
+    const preview = new TLSprobe(server, port, headers, globals.sessionOptions);
+    const response = await preview.start();
+    console.log('response was: ', response);
+    await this.openViewer(server, headers, response);
+  }
+
   loadDefaultIcon(){
     const url = chrome.extension.getURL('ui/img/icon.png');
     chrome.browserAction.setIcon({path: url});
@@ -632,10 +652,12 @@ export class Main{
   // opens a tab showing the session. sid is a unique session id
   // creation time is sid.
   async showSession (sid){
-    await this.openViewer(sid);
+    const data = await getSession(sid);
+    const blob = await getSessionBlob(sid);
+    if (data === null) {throw('failed to get index', sid);}
+    await this.openViewer(data.serverName, blob.request, blob.response, sid);
     this.sendSessions( await getAllSessions()); // refresh manager
   }
-
 
   openPythonScript(){
     const url = chrome.extension.getURL('pagesigner.py');
@@ -885,13 +907,10 @@ export class Main{
   }
 
 
-  async openViewer(sid) {
-    const data = await getSession(sid);
-    const blob = await getSessionBlob(sid);
-    if (data === null) {throw('failed to get index', sid);}
-    const commonName = data.serverName;
-    const request = blob.request;
-    const response = blob.response;
+  // openViewer opens a new browser tab (or reuses the import tab, if importing
+  // happened), waits for the tab to fully load and sends data for the viewer
+  // to display.
+  async openViewer(serverName, request, response, sid) {
     let tabId = null;// the id of the tab that we will be sending to
 
     const url = chrome.extension.getURL('ui/html/viewer.html');
@@ -933,25 +952,32 @@ export class Main{
     }
 
     console.log('send to viewer');
-    // the tab is either an already opened import tab or a fully-loaded new viewer tab
+    // the tab is either an already opened import tab or a fully-loaded new viewer tab.
+    // if sid was not set, then this is a preview tab.
     // We already checked that the new viewer's tab DOM was loaded. Proceed to send the data
     chrome.runtime.sendMessage({
       destination: 'viewer',
       message: 'show',
       tabId: tabId,
-      data: {
-        request: request,
-        response: response,
-        sessionId: sid,
-        serverName: commonName
-      }
+      request: request,
+      response: response,
+      sessionId: sid,
+      serverName: serverName
     });
   }
 
-  async openDetails(sid, isEditor) {
+  openPreviewDetails(serverName, request, response){
+    this.doOpenDetails(serverName, request, response);
+  }
+
+  async openDetails(sid){
     const data = await getSession(sid);
     const blob = await getSessionBlob(sid);
-    const url = chrome.extension.getURL('ui/html/rawviewer.html');
+    this.doOpenDetails(data.serverName, blob.request, blob.response, sid);
+  }
+
+  async doOpenDetails(serverName, request, response, sid) {
+    const url = chrome.extension.getURL('ui/html/detailsViewer.html');
     let tabId = null; // id of the tab to which we will send the data
 
     const myTabs = [];
@@ -964,21 +990,19 @@ export class Main{
     await new Promise(function(resolve) {
       chrome.tabs.create({url: url}, async function(t){
         tabId = t.id;
-        await that.checkIfTabOpened(t, 'isRawViewer', myTabs);
+        await that.checkIfTabOpened(t, 'isDetailsViewer', myTabs);
         resolve();
       });
     });
 
     chrome.runtime.sendMessage({
-      destination: 'rawviewer',
-      message: isEditor ? 'edit' : 'show',
+      destination: 'detailsViewer',
+      message: 'show',
       tabId: tabId,
-      data: {
-        request: blob.request,
-        response: blob.response,
-        sessionId: sid,
-        serverName: data.serverName
-      }
+      request: request,
+      response: response,
+      sessionId: sid,
+      serverName: serverName
     });
   }
 

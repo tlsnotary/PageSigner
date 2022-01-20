@@ -358,8 +358,7 @@ export class TLS {
     return this.rsaSig;
   }
 
-  // TODO this description is incorrect
-  // sendClientFinished accepts encrypted Client Finished (CF), auth tag for CF, verify_data for CF.
+  // sendClientFinished accepts encrypted Client Finished (CF).
   // It then sends Client Key Exchange, Change Cipher Spec and encrypted Client Finished
   async sendClientFinished(encCF, tagCF){
     const cke_tls_record_header = new Uint8Array([0x16, 0x03, 0x03, 0x00, 0x46]); // Type: Handshake, Version: TLS 1.2, Length

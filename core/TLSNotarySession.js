@@ -27,10 +27,8 @@ export class TLSNotarySession{
     await this.twopc.init();
     await this.tls.buildAndSendClientHello();
     const serverEcPubkey = await this.tls.receiveAndParseServerHello();
-    const serverX = serverEcPubkey.slice(1, 33);
-    const serverY = serverEcPubkey.slice(33, 65);
     if ( this.pm) this.pm.update('last_stage', {'current': 3, 'total': 10});
-    const [pmsShare, cpubBytes] = await this.twopc.getECDHShare(serverX, serverY);
+    const [pmsShare, cpubBytes] = await this.twopc.getECDHShare(serverEcPubkey);
     if ( this.pm) this.pm.update('last_stage', {'current': 4, 'total': 10});
 
     await this.tls.buildClientKeyExchange(cpubBytes);

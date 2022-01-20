@@ -3,8 +3,11 @@
 export class NotificationBar{
   constructor(){}
 
-  show(sessionId, serverName, hideButton) {
+  // show shows the notification bar at the top of the page.
+  show(sessionId, serverName, request, response, hideButton) {
     hideButton = hideButton || false;
+    // if sessionId was not passed, it means we are in the preview mode
+    const isPreview = sessionId != undefined ? false : true;
 
     const table = document.createElement('table');
     table.style.position = 'fixed';
@@ -30,25 +33,40 @@ export class NotificationBar{
     img.height = 24;
     img.width = 24;
     const text = document.createElement('text');
-    text.textContent = 'PageSigner verified that this page was received from ';
     const domain = document.createElement('text');
     domain.id = 'domainName';
-    domain.textContent = serverName;
+
+    if (isPreview){
+      text.textContent = 'This is a preview of what the notarization result will look like. Press Details to preview the raw HTML data.';
+    } else {
+      text.textContent = 'PageSigner verified that this page was received from ';
+      domain.textContent = serverName;
+    }
     const button = document.createElement('button');
     button.id = 'viewRaw';
     button.textContent = 'Details';
     button.style.MozBorderRadius = '4px';
     button.style.WebkitBorderRadius = '4px';
     button.style.borderRadius = '4px';
-    button.onclick = function() {
-      chrome.runtime.sendMessage({
-        destination: 'extension',
-        message: 'viewraw',
-        args: {
-          dir: sessionId
-        }
-      });
-    };
+    if (isPreview){
+      button.onclick = function() {
+        chrome.runtime.sendMessage({
+          destination: 'extension',
+          message: 'showPreviewDetails',
+          serverName: serverName,
+          request: request,
+          response: response
+        });
+      };
+    } else {
+      button.onclick = function() {
+        chrome.runtime.sendMessage({
+          destination: 'extension',
+          message: 'showDetails',
+          sid: sessionId
+        });
+      };
+    }
     if (hideButton) {
       button.hidden = true;
     }
