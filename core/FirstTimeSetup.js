@@ -56,8 +56,8 @@ export class FirstTimeSetup{
       await window['fs'].init();
     }
     // start from the last circuits in order to give the user a quicker initial update
-    for (let n=1; n < 7; n++){
-      const i = 7-n;
+    for (let n=1; n < 8; n++){
+      const i = 8-n;
       const text = CASM.parseAndAssemble('c'+i+'.casm');
       const newobj = await new Promise(function(resolve) {
         worker.onmessage = function(event) {
@@ -68,7 +68,7 @@ export class FirstTimeSetup{
         worker.postMessage({'text': text});
       });
       obj[i] = newobj;
-      if (pm) pm.update('first_time', {'current': n, 'total': 6});
+      if (pm) pm.update('first_time', {'current': n, 'total': 7});
       await wait(100); // make sure update reaches popup
     }
     console.timeEnd('time_to_parse');

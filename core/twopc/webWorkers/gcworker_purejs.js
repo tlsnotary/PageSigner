@@ -2,15 +2,18 @@
 
 // gcworker.js is a WebWorker which performs garbling and evaluation
 // of garbled circuits.
-// This is a fixed-key-cipher garbling method from BHKR13 https://eprint.iacr.org/2013/426.pdf
+// This is a fixed-key-cipher garbling method from BHKR13
+// https://eprint.iacr.org/2013/426.pdf
 
 // eslint-disable-next-line no-undef
 var parentPort_;
 let circuit = null;
-let truthTable = null;
+let truthTables = null;
+let andGateIdx = null;
 
-// fixedKey is used by randomOracle(). We need a 32-byte key because we use Salsa20. The last 4
-// bytes will be filled with the index of the circuit's wire.
+// fixedKey is used by randomOracle(). We need a 32-byte key because we use
+// Salsa20. The last 4 bytes will be filled with the tweak, i.e. the index of
+// the circuit's wire.
 const fixedKey = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
   15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 0, 0, 0, 0]);
 // sigma is Salsa's constant "expand 32-byte k"
@@ -18,9 +21,9 @@ const sigma = new Uint8Array([101, 120, 112, 97, 110, 100, 32, 51, 50, 45, 98,
   121, 116, 101, 32, 107]);
 // randomPool will be filled with data from getRandom
 let randomPool;
-// randomPoolOffset will be moved after data was read from randomPool
+// randomPoolOffset will be shifted after data was read from randomPool
 let randomPoolOffset = 0;
-let garbledAssigment;
+let garblingAssigment, evaluationAssigment;
 var crypto_;
 
 if (typeof(importScripts) !== 'undefined') {
@@ -50,46 +53,46 @@ if (typeof(importScripts) !== 'undefined') {
 }
 
 function processMessage(obj){
-  const msg = obj.msg;
-  const data = obj.data;
-  if (msg === 'parse'){
-    circuit = data;
-    garbledAssigment = new Uint8Array(32*(circuit.wiresCount));
-    // no need to respond to this message
+  if (obj.msg === 'parse'){
+    circuit = obj.circuit;
+    garblingAssigment = new Uint8Array(32*(circuit.wiresCount));
+    evaluationAssigment = new Uint8Array(16*(circuit.wiresCount));
+    postMsg('DONE');
   }
-  else if (msg === 'setTruthTable'){
-    assert(data.byteLength == circuit.andGateCount*48);
-    truthTable = new Uint8Array(data);
+  else if (obj.msg === 'setTruthTables'){
+    assert(obj.tt.byteLength == circuit.andGateCount*48);
+    truthTables = new Uint8Array(obj.tt);
+    // no need to respond to this
   }
-  else if (msg === 'garble'){
+  else if (obj.msg === 'garble'){
     if (circuit == null){
       console.log('error: need to parse circuit before garble');
       return;
     }
-    console.time('garbling done in');
-    const reuseLabels = (data == undefined) ? undefined : data.reuseLabels;
-    const reuseIndexes = (data == undefined) ? undefined : data.reuseIndexes;
-    const reuseR = (data == undefined) ? undefined : data.reuseR;
-
-    const [truthTable, inputLabels, outputLabels, R] = garble(circuit, garbledAssigment, reuseLabels, reuseIndexes, reuseR);
-    assert (truthTable.length === circuit.andGateCount*48);
+    console.time('worker_garble');
+    const [inputLabels, truthTables, decodingTable] = garble(circuit, garblingAssigment);
     assert (inputLabels.length === circuit.clientInputSize*32 + circuit.notaryInputSize*32);
-    assert (outputLabels.length === circuit.outputSize*32);
-    const obj = {'tt': truthTable.buffer, 'il': inputLabels.buffer, 'ol': outputLabels.buffer, 'R': R};
-    console.timeEnd('garbling done in');
-    postMsg(obj, [truthTable.buffer, inputLabels.buffer, outputLabels.buffer]);
+    assert (truthTables.length === circuit.andGateCount*48);
+    assert (decodingTable.length === Math.ceil(circuit.outputSize/8));
+    const obj = {'il': inputLabels.buffer, 'tt': truthTables.buffer, 'dt': decodingTable.buffer};
+    postMsg(obj, [inputLabels.buffer, truthTables.buffer, decodingTable.buffer]);
+    console.timeEnd('worker_garble');
   }
-  else if (msg === 'evaluate'){
-    if (circuit == null || truthTable == null){
+  else if (obj.msg === 'evaluate'){
+    if (circuit == null || truthTables == null){
       console.log('error: need to parse circuit and set truth table before evaluate');
       return;
     }
-    const garbledAssigment = new Uint8Array(16*(circuit.wiresCount));
-    const inputLabels = new Uint8Array(data);
-    assert (inputLabels.length === circuit.clientInputSize*16 + circuit.notaryInputSize*16);
-    const outputLabels = evaluate(circuit, garbledAssigment, truthTable, inputLabels);
-    assert (outputLabels.length === circuit.outputSize*16);
-    postMsg(outputLabels.buffer);
+    console.time('worker_evaluate');
+    const inputSize = circuit.clientInputSize*16 + circuit.notaryInputSize*16;
+    const inputLabels = new Uint8Array(obj.il);
+    const decodingTable = new Uint8Array(obj.dt);
+    assert (inputLabels.length === inputSize);
+    assert (decodingTable.length === Math.ceil(circuit.outputSize/8));
+    const plaintext = evaluate(circuit, evaluationAssigment, inputLabels, truthTables, decodingTable);
+    assert (plaintext.length === Math.ceil(circuit.outputSize/8));
+    postMsg(plaintext.buffer);
+    console.timeEnd('worker_evaluate');
   }
   else {
     console.log('Error: unexpected message in worker');
@@ -125,39 +128,23 @@ function generateInputLabels(count, R){
   return newLabels;
 }
 
-function garble(circuit, ga, reuseLabels = new Uint8Array(0), reuseIndexes = [], R){
-
+function garble(circuit, ga){
   const inputCount = circuit.notaryInputSize + circuit.clientInputSize;
   fillRandom((inputCount+1+circuit.andGateCount)*16);
-  R = R || newR();
+  const R = newR();
 
   // generate new labels
-  const newLabels = generateInputLabels(inputCount - reuseIndexes.length, R);
+  const inputLabels = generateInputLabels(inputCount, R);
+  ga.set(inputLabels);
+  const truthTables = new Uint8Array(circuit.andGateCount*48);
 
-  // set both new and reused labels into ga
-  let reusedCount = 0;    // how many reused inputs were already put into ga
-  let newInputsCount = 0; // how many new inputs were already put into ga
-
-  for (let i = 0; i < inputCount; i++) {
-    if (reuseIndexes.includes(i)) {
-      ga.set(reuseLabels.subarray(reusedCount*32, reusedCount*32+32), i*32);
-      reusedCount += 1;
-    }
-    else {
-      ga.set(newLabels.subarray(newInputsCount*32, newInputsCount*32+32), i*32);
-      newInputsCount += 1;
-    }
-  }
-
-  const truthTable = new Uint8Array(circuit.andGateCount*48);
-
-  let andGateIdx = 0;
+  andGateIdx = 0;
   // garble gates
   for (let i = 0; i < circuit.gatesCount; i++) {
     const gateBlob = circuit.gatesBlob.subarray(i*10, i*10+10);
     const op = ['XOR', 'AND', 'INV'][gateBlob[0]];
     if (op === 'AND') {
-      garbleAnd(gateBlob, R, ga, truthTable, andGateIdx, i);
+      garbleAnd(gateBlob, R, ga, truthTables, andGateIdx, i);
       andGateIdx += 1;
     } else if (op === 'XOR') {
       garbleXor(gateBlob, R, ga);
@@ -168,8 +155,13 @@ function garble(circuit, ga, reuseLabels = new Uint8Array(0), reuseIndexes = [],
     }
   }
 
-  return [truthTable, ga.slice(0, inputCount*32), ga.slice(-circuit.outputSize*32), R];
-
+  // get decoding table: LSB of label0 for each output wire
+  const outLSBs = [];
+  for (let i = 0; i < circuit.outputSize; i++){
+    outLSBs.push(ga[ga.length-circuit.outputSize*32+i*32+15] & 1);
+  }
+  const decodingTable = bitsToBytes(outLSBs);
+  return [inputLabels, truthTables, decodingTable];
 }
 
 
@@ -185,7 +177,7 @@ const garbleAnd = function (gateBlob, R, ga, tt, andGateIdx, id) {
   const in2_0 = gaGetIndexG(ga, in2, 0);
   const in2_1 = gaGetIndexG(ga, in2, 1);
 
-  // rows is a truthtable if wire labels in a canonical order, the third
+  // rows is a truthtable in a canonical order, the third
   // item shows an index of output label
   const rows = [
     [in1_0, in2_0, 0],
@@ -239,12 +231,11 @@ const garbleXor = function (gateBlob, R, ga) {
   const out = threeBytesToInt(gateBlob.subarray(7, 10));
 
   const in1_0 = gaGetIndexG(ga, in1, 0);
-  const in1_1 = gaGetIndexG(ga, in1, 1);
   const in2_0 = gaGetIndexG(ga, in2, 0);
-  const in2_1 = gaGetIndexG(ga, in2, 1);
 
-  gaSetIndexG(ga, out, 0, xor(in1_0, in2_0));
-  gaSetIndexG(ga, out, 1, xor(xor(in1_1, in2_1), R, true));
+  const label0 = xor(in1_0, in2_0);
+  gaSetIndexG(ga, out, 0, label0);
+  gaSetIndexG(ga, out, 1, xor(label0, R, true));
 };
 
 
@@ -259,18 +250,17 @@ const garbleNot = function (gateBlob, ga) {
   gaSetIndexG(ga, out, 1, in1_0.slice());
 };
 
-function evaluate (circuit, ga, tt, inputLabels) {
+function evaluate (circuit, ga, inputLabels, truthTables, decodingTable) {
   // set input labels
   ga.set(inputLabels);
 
   // evaluate one gate at a time
   let numberOfANDGates = 0;
-  console.time('worker_evaluate');
   for (let i = 0; i < circuit.gatesCount; i++) {
     const gateBlob = circuit.gatesBlob.subarray(i*10, i*10+10);
     const op = ['XOR', 'AND', 'INV'][gateBlob[0]];
     if (op === 'AND') {
-      evaluateAnd(ga, tt, numberOfANDGates, gateBlob, i);
+      evaluateAnd(ga, truthTables, numberOfANDGates, gateBlob, i);
       numberOfANDGates += 1;
     } else if (op === 'XOR') {
       evaluateXor(ga, gateBlob);
@@ -280,9 +270,16 @@ function evaluate (circuit, ga, tt, inputLabels) {
       throw new Error(`Unrecognized gate: ${op}`);
     }
   }
-  console.timeEnd('worker_evaluate');
 
-  return ga.slice((circuit.wiresCount-circuit.outputSize)*16, circuit.wiresCount*16);
+  //decode output labels
+  // get decoding table: LSB of label0 for each output wire
+  const outLSBs = [];
+  for (let i = 0; i < circuit.outputSize; i++){
+    outLSBs.push(ga[ga.length-circuit.outputSize*16+i*16+15] & 1);
+  }
+  const encodings = bitsToBytes(outLSBs);
+  const plaintext = xor(decodingTable, encodings);
+  return plaintext;
 }
 
 const evaluateAnd = function (ga, tt, andGateIdx, gateBlob, id) {
@@ -451,6 +448,20 @@ function concatTA (...arr){
     offset += item.length;
   }
   return newArray;
+}
+
+// convert an array of 0/1 (with least bit at index 0) to Uint8Array
+function bitsToBytes(arr){
+  assert(arr.length % 8 === 0);
+  const ba = new Uint8Array(arr.length/8);
+  for (let i=0; i < ba.length; i++){
+    let sum = 0;
+    for (let j=0; j < 8; j++){
+      sum += arr[i*8+j] * (2**j);
+    }
+    ba[ba.length-1-i] = sum;
+  }
+  return ba;
 }
 
 // use Salsa20 as a random permutator. Instead of the nonce, we feed the data that needs

@@ -451,7 +451,7 @@ export function expandRange(min, max){
 }
 
 
-// split Array or Uint8Array into an array array of chunks
+// split Array or Uint8Array into an array of chunks
 export function splitIntoChunks(ba, chunkSize) {
   assert(ba instanceof Uint8Array);
   assert(ba.length % chunkSize === 0);

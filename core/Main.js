@@ -84,11 +84,22 @@ export class Main{
     // a previous PageSigner version. Create the preferences.
     if (await getPref('firstTimeInitCompletedv2') === null){
       await addNewPreference('firstTimeInitCompletedv2', false);
-      await addNewPreference('parsedCircuits', null);
+      await setPref('parsedCircuits', {});
     }
     if (await getPref('trustedOracle') === null){
       await addNewPreference('trustedOracle', {});
     }
+    // check if we need to communicate with a new version of the notary server
+    const notaryVersion = await getPref('notaryServerVersion');
+    if (notaryVersion === null){
+      await addNewPreference('notaryServerVersion', 14);
+      await setPref('trustedOracle', {});
+    } else if (notaryVersion < 14) {
+      // the notary server was upgraded
+      await setPref('notaryServerVersion', 14);
+      await setPref('trustedOracle', {});
+    }
+
     const text = await import_resource('core/third-party/certs.txt');
     await parse_certs(text);
     if (globals.useNotaryNoSandbox){

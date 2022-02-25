@@ -4,8 +4,10 @@ import WorkerPool from './WorkerPool.js';
 
 export class GCWorker extends WorkerPool{
   // class CGWorker provides convenience functions to speak to the web worker
-  constructor(numWorkers, processMonitor){
-    super(numWorkers, chrome.extension.getURL('core/twopc/webWorkers/gcworker.js'));
+  constructor(numWorkers, processMonitor, ){
+    // you can replace gcworker_wasm.js with gcworker_purejs.js on systems where
+    // WebAssembly is not available
+    super(numWorkers, chrome.extension.getURL('core/twopc/webWorkers/gcworker_wasm.js'));
     // pm is an instance of ProcessMonitor
     this.pm = processMonitor;
   }
@@ -21,11 +23,10 @@ export class GCWorker extends WorkerPool{
             resolve();
           }
           else {
-            console.log('unexpected response from worker');
             throw('unexpected response from worker');
           }
         };
-        const obj = {msg: 'parse', data: circuit_ab};
+        const obj = {msg: 'parse', circuit: circuit_ab};
         worker.postMessage(obj);
       }));
     }
@@ -44,42 +45,43 @@ export class GCWorker extends WorkerPool{
   }
 
   // pm is an instance of ProgressMonitor
-  async garbleBatch(count, obj){
+  async garbleBatch(count){
     const batch = [];
     for (let i=0; i < count; i++){
-      batch.push(obj);
+      // we dont pass any args when garbling
+      batch.push({});
     }
     const output = await this.workerPool(batch, this.garbleBatchDoWork, this.pm, 'garbling');
     return output;
   }
 
+  // batchItem is empty because we dont pass any args
   garbleBatchDoWork(batchItem, worker){
     return new Promise(function(resolve) {
       worker.onmessage = function(event) {
         worker['isResolved'] = true;
         resolve(event.data);
       };
-      worker.postMessage( {msg: 'garble', data: batchItem});
+      worker.postMessage( {msg: 'garble'});
     });
   }
 
   async evaluateBatch(batch){
-    //const output = await this.workerPool(batch, this.evaluateBatchDoWork, this.pm, 'evaluating');
-    const output = await this.workerPool(batch, this.evaluateBatchDoWork);
-    return output;
+    return await this.workerPool(batch, this.evaluateBatchDoWork);
   }
 
   evaluateBatchDoWork(batchItem, worker){
-    const ga = batchItem[0];
+    const il = batchItem[0];
     const tt = batchItem[1];
-    const obj = {msg: 'setTruthTable', data: tt.buffer};
+    const dt = batchItem[2];
+    const obj = {msg: 'setTruthTables', tt: tt.buffer};
     worker.postMessage(obj);
     return new Promise(function(resolve) {
       worker.onmessage = function(event) {
         worker['isResolved'] = true;
         resolve(event.data);
       };
-      const obj = {msg: 'evaluate', data: ga.buffer};
+      const obj = {msg: 'evaluate', il: il.buffer, dt: dt.buffer};
       worker.postMessage(obj);
     });
   }

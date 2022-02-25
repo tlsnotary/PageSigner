@@ -15,11 +15,10 @@ export async function init_db() {
       }
       if (!db.objectStoreNames.contains('preferences')) {
         const preferences = db.createObjectStore('preferences', { keyPath: 'name', autoIncrement: true });
-        preferences.add({name:'testing', value:false});
-        preferences.add({name:'verbose', value:true});
-        preferences.add({name:'firstTimeInitCompleted', value:false});
+        preferences.add({name:'firstTimeInitCompletedv2', value:false});
         preferences.add({name:'parsedCircuits', value:{}});
         preferences.add({name:'trustedOracle', value:{}});
+        preferences.add({name:'notaryServerVersion', value:14});
       }
     };
     dbReq.onsuccess = function (event) {

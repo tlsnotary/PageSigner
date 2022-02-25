@@ -378,9 +378,12 @@ export class GHASH {
       allBits = [].concat(allBits, bytesToBits(this.shares[key]).reverse());
     }
     this.lastChoiceBits = allBits;
-    // TODO rename requestMaskedOT to createRequest and
-    // rename the rest to createResponse, parseResponse
-    return this.otR.createRequest(allBits);
+    if (allBits.length == 0){
+      // no block agregation is needed
+      return new Uint8Array(0);
+    } else {
+      return this.otR.createRequest(allBits);
+    }
   }
 
   // add NOtary's XTable to our share of the tag
@@ -400,18 +403,17 @@ export class GHASH {
   getPowerShares(hisXTables, powersOfH){
     const stratKeys = sortKeys(this.lastStrategy);
     // for each strategy we have 128 values for 1st factor and 128 values for 2nd factor
-    const chunks = splitIntoChunks(hisXTables, 256*16);
+    const xTablePair = splitIntoChunks(hisXTables, 256*16);
     for (let j=0; j < stratKeys.length; j++){
       const oddPower = stratKeys[j];
       if (oddPower > this.maxOddPowerNeeded){
-        assert(chunks.length === j);
+        assert(xTablePair.length === j);
         break;
       }
       let xorSum = new Uint8Array(16).fill(0); // start with 0 sum
-      // TODO find a better name for subChunks
-      const subChunks = splitIntoChunks(chunks[j], 16);
+      const xTableRow = splitIntoChunks(xTablePair[j], 16);
       for (let i=0; i < 256; i++){
-        xorSum = xor(xorSum, subChunks[i]);
+        xorSum = xor(xorSum, xTableRow[i]);
       }
       const Cx = powersOfH[this.lastStrategy[oddPower][0]];
       const Cy = powersOfH[this.lastStrategy[oddPower][1]];
