@@ -1,0 +1,35 @@
+This folder contains files used by WebWorkers.
+
+serializeCircuits.js:
+Used on first startup to convert Bristol Fashion circuits into a compact
+binary format.
+
+gcworker_wasm.js:
+Garbler and evaluator which uses garbler.wasm for most operations. We still perform
+Salsa20 hashing in JS (because it is more performant than in wasm).
+
+gcworker_purejs.js:
+Garbler and evaluator written in pure JS (~5-10x slower than the wasm version).
+Not used by default but can serve as a drop-in replacement in cases if wasm
+cannot be loaded.
+
+garbler.wasm:
+Garbler and evaluator loaded by gcworker_wasm.js. It was compiled from Rust 
+into WebAssembly.
+
+src/:
+Rust source code for garbler.wasm. Not actually in use by the extenstion. It 
+is here just for convenience. 
+
+To compile garbler.wasm from source deterministically:
+
+cd src/
+sudo apt update && sudo apt install -y build-essential
+# the official way to install rustup is: 
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+rustup install 1.58.1
+rustup +1.58.1 target add wasm32-unknown-unknown --toolchain 1.58.1
+RUSTFLAGS='-C target-feature=+simd128' cargo +1.58.1 build --target wasm32-unknown-unknown --release
+The result in target/wasm32-unknown-unknown/release/garbler.wasm will be bit 
+identical to garbler.wasm

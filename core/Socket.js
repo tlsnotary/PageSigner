@@ -1,14 +1,16 @@
 /* global chrome*/
 
-// The only way to determine if the server is done sending data is to check that out receiving
-// buffer has nothing but complete TLS records i.e. that there is no incomplete TLS records
-// However it was observed that in cases when getting e.g. zip files, some servers first send HTTP header as one
-// TLS record followed by the body as another record(s)
-// That's why after receiving a complete TLS record we wait to get some more data
-// This extra waiting must not be done for the handshake messages to avoid adding latency and having the handshake
-// dropped by the server
-// We do not communicate directly with the server but we send messages to the helper app
-// It is the helper app which opens a TCP socket and sends/receives data
+// The only way to determine if the server is done sending data is to check
+// that the receiving buffer has nothing but complete TLS records i.e. that
+// there are no incomplete TLS records. However it was observed that in cases
+// when getting e.g. zip files, some servers first send HTTP header as one TLS
+// record followed by the body as another record(s). That's why after
+// receiving a complete TLS record we wait to get some more data.This extra
+// waiting must NOT be done for the handshake messages to avoid causing a
+// handshake timeout by the server.
+// We do not communicate directly with the server but we send messages to the
+// helper app. It is the helper app who opens a TCP socket and sends/receives
+// data.
 
 import {globals} from './globals.js';
 import {ba2str, b64decode, concatTA, b64encode, str2ba, ba2int} from './utils.js';
@@ -36,6 +38,7 @@ export class Socket {
   async connect() {
     const that = this;
     let timer;
+    // eslint-disable-next-line no-async-promise-executor
     const response = await new Promise(async function(resolve, reject) {
       // dont wait for connect for too long
       timer = setTimeout(function() {
@@ -105,6 +108,7 @@ export class Socket {
       return;
     }
     var that = this;
+    // eslint-disable-next-line no-async-promise-executor
     var response = await new Promise(async function(resolve){
       var msg = {'command': 'recv', 'uid': that.uid};
       if (globals.usePythonBackend){
@@ -130,8 +134,8 @@ export class Socket {
     }, 100);
   }
 
-  // fetchLoop has built up the recv buffer
-  // check if there are complete records in the buffer,return them if yes or wait some more if no
+  // fetchLoop has built up the recv buffer. Check if there are complete 
+  // records in the buffer, return them if yes or wait some more if no.
   recv (is_handshake = false) {
     const that = this;
     return new Promise(function(resolve, reject) {

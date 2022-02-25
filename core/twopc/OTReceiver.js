@@ -147,7 +147,6 @@ export class OTReceiver extends OTCommon{
     }
     this.receivedSoFar += choiceBits.length;
     this.expectingResponseSize = 0;
-    console.log('this.receivedSoFar', this.receivedSoFar);
     return concatTA(...decodedArr);
   }
 }
