@@ -133,8 +133,6 @@ class Popup{
       document.getElementById('menu').removeAttribute('hidden');
       var notarize = document.getElementById('notarize');
       notarize.setAttribute('hidden', true);
-      var notarizeAfter = document.getElementById('notarizeAfter');
-      notarizeAfter.setAttribute('hidden', true);
       if (this.is_edge || this.is_firefox || this.is_opera){
         const appNotInstalledFirefox = document.getElementById('appNotInstalledFirefox');
         appNotInstalledFirefox.removeAttribute('hidden');
