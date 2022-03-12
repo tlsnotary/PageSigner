@@ -42,10 +42,10 @@ export class TLSNotarySession{
     if ( this.pm) this.pm.update('last_stage', {'current': 5, 'total': 10});
 
     const encCountersForRequest = await this.twopc.getEncryptedCounters();
-    if ( this.pm) this.pm.update('last_stage', {'current': 9, 'total': 10});
+    if ( this.pm) this.pm.update('last_stage', {'current': 8, 'total': 10});
     const encRequestBlocks = this.encryptRequest(this.request, encCountersForRequest);
     const gctrBlocks = await this.twopc.getGctrBlocks();
-    if ( this.pm) this.pm.update('last_stage', {'current': 10, 'total': 10});
+    if ( this.pm) this.pm.update('last_stage', {'current': 9, 'total': 10});
     const [ghashOutputs, ghashInputsBlob] = await this.twopc.getTagFromPowersOfH(encRequestBlocks);
     await this.tls.buildAndSendRequest(gctrBlocks, ghashOutputs, encRequestBlocks);
     const serverRecords = await this.tls.receiveServerResponse();
@@ -79,7 +79,7 @@ export class TLSNotarySession{
     for (let cert of certPath){
       certs.push(new Uint8Array(cert.toSchema(true).toBER(false)));
     }
-
+    if ( this.pm) this.pm.update('last_stage', {'current': 10, 'total': 10});
     return {
       'certificates': certs,
       'notarization time': timeBytes,

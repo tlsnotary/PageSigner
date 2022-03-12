@@ -45,10 +45,8 @@ static mut ipc1: &mut [u8] = &mut [0; 0];
 // JS puts the result of salsaing.
 static mut ipc2: &mut [u8] = &mut [0; 0];
 // output points to output (for garbler it is decoding table, for evaluator it 
-// is plaintext output)
+// is encoded output)
 static mut output: &mut [u8] = &mut [0; 0];
-// decoding_table point to the decoding table (evaluator's input)
-static mut decoding_table: & [u8] = & [0; 0];
 // tt points to truth tables
 static mut tt: &mut [u8] = &mut [0; 0];
 // il points to input labels
@@ -305,7 +303,7 @@ fn bitsToBytes(bits: &Vec<u8>) -> Vec<u8> {
 #[no_mangle]
 //#[wasm_bindgen]
 // finishEvaluator is called after garbling of all AND gates has been done
-// to output the output labels
+// to output the encoded output
 pub fn finishEvaluator() {
     //panic::set_hook(Box::new(console_error_panic_hook::hook));
     
@@ -316,12 +314,11 @@ pub fn finishEvaluator() {
         let roundedUp = ((outputSize+7)/8) as usize;
         let mut bits: Vec<u8> = vec![0; roundedUp*8];
         for i in 0..outputSize as usize {
-            // get decoding table: LSB of label0 for each output wire
+            // get encoded bits: LSB of label0 for each output wire
             bits[i] = ea[ea.len() - outputSize as usize + i][15] & 1
         }
-        let outputBytes = bitsToBytes(&bits);
-        let plaintext = xorSlices(&outputBytes, &decoding_table);
-        output.copy_from_slice(&plaintext);  
+        let encodedBytes = bitsToBytes(&bits);
+        output.copy_from_slice(&encodedBytes);  
     }
 }
 
@@ -435,15 +432,6 @@ fn xor(a_: &[u8], b_: &[u8]) -> [u8; 16] {
     return c;
 }
 
-// xors arbitrary-sized slices
-fn xorSlices(a_: &[u8], b_: &[u8]) -> Vec<u8> {
-    let mut c: Vec<u8> = vec![0; a_.len()];
-    for i in 0..a_.len() {
-        c[i] = a_[i] ^ b_[i];
-    }
-    return c;
-}
-
 #[no_mangle]
 //#[wasm_bindgen]
 pub fn parseGatesBlob() {
@@ -490,8 +478,6 @@ pub fn initAll(
         total += gatesCount * 10;
         // random blob (used by garbler only)
         total += (notaryInputSize + clientInputSize + 1) * 16;
-        // decoding table
-        total += (outputSize+7)/8;
         // output
         total += (outputSize+7)/8;
         // truth tables
@@ -511,8 +497,6 @@ pub fn initAll(
         let randSize = (notaryInputSize + clientInputSize + 1) * 16;
         randBuf = from_raw_parts(o as *mut u8, randSize as usize);
         o += randSize;
-        decoding_table = from_raw_parts(o as *mut u8, ((outputSize+7)/8) as usize);
-        o += (outputSize+7)/8;
         output = from_raw_parts_mut(o as *mut u8, ((outputSize+7)/8) as usize);
         o += (outputSize+7)/8;
         tt = from_raw_parts_mut(o as *mut u8, (andGateCount * 48) as usize);

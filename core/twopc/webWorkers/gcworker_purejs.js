@@ -86,12 +86,10 @@ function processMessage(obj){
     console.time('worker_evaluate');
     const inputSize = circuit.clientInputSize*16 + circuit.notaryInputSize*16;
     const inputLabels = new Uint8Array(obj.il);
-    const decodingTable = new Uint8Array(obj.dt);
     assert (inputLabels.length === inputSize);
-    assert (decodingTable.length === Math.ceil(circuit.outputSize/8));
-    const plaintext = evaluate(circuit, evaluationAssigment, inputLabels, truthTables, decodingTable);
-    assert (plaintext.length === Math.ceil(circuit.outputSize/8));
-    postMsg(plaintext.buffer);
+    const encodedOutput = evaluate(circuit, evaluationAssigment, inputLabels, truthTables);
+    assert (encodedOutput.length === Math.ceil(circuit.outputSize/8));
+    postMsg(encodedOutput.buffer);
     console.timeEnd('worker_evaluate');
   }
   else {
@@ -250,7 +248,7 @@ const garbleNot = function (gateBlob, ga) {
   gaSetIndexG(ga, out, 1, in1_0.slice());
 };
 
-function evaluate (circuit, ga, inputLabels, truthTables, decodingTable) {
+function evaluate (circuit, ga, inputLabels, truthTables) {
   // set input labels
   ga.set(inputLabels);
 
@@ -271,15 +269,12 @@ function evaluate (circuit, ga, inputLabels, truthTables, decodingTable) {
     }
   }
 
-  //decode output labels
-  // get decoding table: LSB of label0 for each output wire
+  // get encoded outputs: LSB of label0 for each output wire
   const outLSBs = [];
   for (let i = 0; i < circuit.outputSize; i++){
     outLSBs.push(ga[ga.length-circuit.outputSize*16+i*16+15] & 1);
   }
-  const encodings = bitsToBytes(outLSBs);
-  const plaintext = xor(decodingTable, encodings);
-  return plaintext;
+  return  bitsToBytes(outLSBs);
 }
 
 const evaluateAnd = function (ga, tt, andGateIdx, gateBlob, id) {

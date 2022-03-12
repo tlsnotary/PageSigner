@@ -43,7 +43,7 @@ export class TWOPC {
     // gatesBlob, gatesCount, wiresCount, notaryInputSize, clientInputSize,
     // outputSize, andGateCount, outputsSizes. Count starts at 1
     this.cs = Object.keys(circuits).map(k => circuits[k]);
-    // start count of circuits with 1, push an empty element to index 0
+    // we start the circuit count with 1, so we push an empty element to index 0
     this.cs.splice(0, 0, undefined);
     // The output of a circuit is actually multiple concatenated values. We need
     // to know how many bits each output value has in order to parse the output
@@ -54,15 +54,24 @@ export class TWOPC {
     this.cs[5]['outputsSizes'] = [128, 128, 128, 96];
     this.cs[6]['outputsSizes'] = [128];
     this.cs[7]['outputsSizes'] = [128];
-    // output is the output of the circuit as array of bytes
+    // encodedOutput is the encoded output of the circuit (before the decoding
+    // tables are known)
+    this.encodedOutput = Array(this.cs.length);
+    // output is the plaintext output of the circuit as array of bytes (this is
+    // encodedOutput decoded with the notary's decoding table)
     this.output = Array(this.cs.length);
-    // Commits are used to ensure malicious security of garbled circuits
-    // if client's and notary's commits match, then both parties can be assured
-    // that no malicious garbling took place.
-    // hisSaltedCommit is a salted hash of the circuit's output from the notary
-    this.hisSaltedCommit = Array(this.cs.length);
-    // myCommit is a (unsalted) hash of the circuit's output
-    this.myCommit = Array(this.cs.length);
+
+    // Commitments are used to check that no malicious garbling took place.
+    // Client commits to her (salted) encoded outputs and her decoding table after
+    // which the Notary reveals his encoded outputs and his decoding table. After
+    // decoding, both parties' plaintext outputs must match.
+
+    // salt is 32-byte salt for each commitment
+    this.salt = Array(this.cs.length);
+    // encodedOutput is the encoded output of each execution of the given
+    // circuit
+    this.encodedOutput = Array(this.cs.length);
+
     // workers are GCWorker class for each circuit
     this.workers = Array(this.cs.length);
     this.preComputed = false; // will set to true after preCompute() was run
@@ -168,7 +177,6 @@ export class TWOPC {
     const c1Out = (await this.runCircuit([this.clientPMSShare, c1Mask], 1))[0];
     // unmask only the outputs relevant to the client
     const pmsInnerHashState = xor(c1Out.slice(32, 64), c1Mask);
-
     // [REF 1] Steps 3,5,7,9
     const [c2_p2, c2_p1inner] = await this.phase2(pmsInnerHashState);
     const c2Mask = getRandom(32);
@@ -187,6 +195,7 @@ export class TWOPC {
     const masks4 = [0, 16, 16, 16].map(x => getRandom(x));
     const input4 = [this.swkShare, this.cwkShare, this.sivShare, this.civShare,
       ...masks4.slice(1)];
+
     const c4Out = (await this.runCircuit(input4, 4))[0];
     const [encFinished, tag] = await this.phase5(c4Out, masks4, verify_data);
     return [encFinished, tag, verify_data];
@@ -235,7 +244,10 @@ export class TWOPC {
     const ghashSF = new GHASH(1);
     ghashSF.setOTReceiver(this.otR);
     const otReq = await ghashSF.buildFinRequest(H1share);
-    const step3resp = await this.send('c5_step3', concatTA(encSF, otReq));
+    const step3resp = await this.send('c5_step3', concatTA(
+      this.getDecommitment(5),
+      encSF,
+      otReq));
     assert(step3resp.length == 16 + 256*32);
     o = 0;
     const notaryTagShare = step3resp.slice(o, o+=16);
@@ -266,6 +278,7 @@ export class TWOPC {
         fixedNonce, 10, counter, 10]);
     }
     const c6out = await this.runCircuit(input6, 6);
+    // c6 outputs are masked by the Client.
     const encCounters = [];
     for (let i=0; i < this.C6Count; i++){
       encCounters.push(xor(c6out[i], masks6[i]));
@@ -281,12 +294,7 @@ export class TWOPC {
     let input7 = [];
     const nonce = int2ba(2, 2);
     input7 = [].concat(input7, [this.cwkShare, this.civShare, mask7, nonce]);
-
     const c7out = await this.runCircuit(input7, 7);
-    const c7CommitSalt = await this.send('checkC7Commit', this.myCommit[7]);
-    // the commit which notary computed on their side must be equal to our commit
-    const saltedCommit = await sha256(concatTA(this.myCommit[7], c7CommitSalt));
-    assert (eq(saltedCommit, this.hisSaltedCommit[7]));
     const gctrBlocks = [];
     gctrBlocks.push(xor(c7out[0], mask7));
     return gctrBlocks;
@@ -318,7 +326,10 @@ export class TWOPC {
     const lenC = int2ba(recordLen*8, 8);
     ghashInputs.push(concatTA(lenA, lenC));
 
-    const resp1 = await this.send('ghash_step1', await this.ghash.buildStep1());
+    const resp1 = await this.send('ghash_step1', concatTA(
+      // send decommitment to the previous circuit
+      this.getDecommitment(7),
+      await this.ghash.buildStep1()));
     if (this.ghash.isStep1ResponseExpected()){
       this.ghash.processOTResponse(resp1);
     }
@@ -339,9 +350,11 @@ export class TWOPC {
   // willEncrypt if set to true, will encrypt the request to notary.
   // willDecrypt if set to true, will decrypt the response from the notary.
   // downloadProgress if set to true, will update the progress monitor with
+  // noTimeout if set to true, will not timeout if the remote takes too long
+  // to respond (the caller must take care of the timeout)
   // the amount of data already downloaded.
   async send(cmd, data = new Uint8Array(0), returnPromise = false, willEncrypt = true,
-    willDecrypt = true, downloadProgress = false){
+    willDecrypt = true, downloadProgress = false, noTimeout = false){
     let to_be_sent;
     if (willEncrypt && data.length > 0){
       to_be_sent = await this.encryptToNotary(this.clientKey, data);
@@ -373,17 +386,26 @@ export class TWOPC {
 
     const that = this;
     // eslint-disable-next-line no-async-promise-executor
-    const promise = new Promise(async function(resolve) {
-      const resp = await timeout(20000, fetchPromise);
+    const promise = new Promise(async function(resolve, reject) {
       let payload;
       if (downloadProgress) {
+        // for big downloads, we will reject if we spend 10 sec without data
+        let dataLastSeen = Date.now()/1000;
+        const interval = setInterval(function(){
+          const now = Date.now()/1000;
+          if (now-dataLastSeen > 10)  {
+            reject('Timed out while while transfering data.');
+          }
+        }, 10000);
+
+        const resp = await fetchPromise;
         const reader = resp.body.getReader();
         let soFarBytes = 0;
         let chunks = [];
         // lastUpdateTime is when we last sent progress update. We don't want
-        // send the update more often than every 1 sec. Set initial value so
+        // to send the update more often than every 1 sec. Set initial value so
         // that the very first update triggers immediately.
-        let lastUpdateTime = (Date.now()/1000) + 1;
+        let lastUpdateTime = (Date.now()/1000) - 1;
         let done2;
         do {
           const {done, value} = await reader.read();
@@ -392,6 +414,7 @@ export class TWOPC {
           chunks.push(value);
           soFarBytes += value.length;
           const now = (Date.now()/1000);
+          dataLastSeen = now;
           if (now - lastUpdateTime > 1){
             if (that.pm) that.pm.update('download', {'current': soFarBytes, 'total': that.blobSize});
             lastUpdateTime = now;
@@ -403,8 +426,16 @@ export class TWOPC {
           payload.set(chunk, position);
           position += chunk.length;
         }
+        clearInterval(interval);
       }
       else {
+        let resp;
+        if (noTimeout) {
+          resp = await fetchPromise;
+        } else {
+          // for small downloads we have 20 sec total to finish
+          resp = await timeout(20000, fetchPromise);
+        }
         const ab = await resp.arrayBuffer();
         payload = new Uint8Array(ab);
       }
@@ -419,7 +450,7 @@ export class TWOPC {
       const decrypted = await that.decryptFromNotary(that.notaryKey, payload);
       resolve(decrypted);
       return;
-    }).catch(err =>{
+    }).catch(err => {
       throw(err);
     });
 
@@ -494,10 +525,9 @@ export class TWOPC {
       that.blob = that.processBlob(blob);
       await garbleAllPromise;
       let blobOut = new Uint8Array(0);
-      // proceed to upload
+      // proceed to upload truth tables
       for (let i=1; i < that.cs.length; i++){
         blobOut = concatTA(blobOut, that.g.garbledC[i].tt);
-        blobOut = concatTA(blobOut, that.g.garbledC[i].dt);
       }
       await that.sendBlobToNotary(blobOut);
       resolve();
@@ -540,24 +570,36 @@ export class TWOPC {
   }
 
   async sendBlobToNotary(blob){
-    const uploadPromise =  this.send('setBlob', blob, true, false);
+    const uploadPromise =  this.send('setBlob', blob, true, false, true, false, true);
     let uploadFinished = false;
     const that = this;
 
     // since fetch() does not implement upload progress, we continuously query
     // the server about upload progress
+
+    // make sure we are not stuck waiting forever
+    let dataLastSeen = Date.now()/1000;
+    const lastSeenInterval = setInterval(function(){
+      const now = Date.now()/1000;
+      if (now-dataLastSeen > 10)  {
+        throw('Timed out while while transfering data.');
+      }
+    }, 10000);
+
     const interval = setInterval(async function(){
       if (uploadFinished == true) {
         clearInterval(interval);
         return;
       }
       const progress = await that.send('getUploadProgress');
+      dataLastSeen = Date.now()/1000;
       const byteCount = ba2int(progress);
       if (that.pm) that.pm.update('upload', {'current': byteCount, 'total': blob.length});
       console.log('returned progress ', byteCount, blob.length);
     }, 1000);
 
     await uploadPromise;
+    clearInterval(lastSeenInterval);
     uploadFinished = true;
     if (this.pm) this.pm.update('upload', {'current': blob.length, 'total': blob.length});
   }
@@ -625,7 +667,7 @@ export class TWOPC {
     const seed = concatTA(str2ba('master secret'), this.client_random, this.server_random);
     // [REF 1] Step 3
     const a1inner = innerHash(innerState, seed);
-    const a1 = await this.send('c1_step3', a1inner);
+    const a1 = await this.send('c1_step3', concatTA(this.getDecommitment(1), a1inner));
     // [REF 1] Step 5
     const a2inner = innerHash(innerState, a1);
     const a2 = await this.send('c1_step4', a2inner);
@@ -661,7 +703,10 @@ export class TWOPC {
     const a1inner = innerHash(this.innerState_MS, seed);
     // [REF 1] Step 20
     const a1inner_vd = innerHash(this.innerState_MS, seed_vd);
-    const resp4 = await this.send('c2_step3', concatTA(a1inner, a1inner_vd));
+    const resp4 = await this.send('c2_step3', concatTA(
+      this.getDecommitment(2),
+      a1inner,
+      a1inner_vd));
     const a1 = resp4.subarray(0, 32);
     const a1_vd = resp4.subarray(32, 64);
     // [REF 1] Step 15
@@ -707,7 +752,10 @@ export class TWOPC {
     const clientFinished = concatTA(new Uint8Array([0x14, 0x00, 0x00, 0x0c]), verify_data);
     const encCF = xor(clientFinished, encCounter);
     const otReq = await this.ghash.buildFinRequest(H1share);
-    const step3resp = await this.send('c4_step3', concatTA(encCF, otReq));
+    const step3resp = await this.send('c4_step3', concatTA(
+      this.getDecommitment(4),
+      encCF,
+      otReq));
     assert(step3resp.length === 16 + 256*32);
     o = 0;
     const notaryTagShare = step3resp.slice(o, o+=16);
@@ -748,6 +796,16 @@ export class TWOPC {
     return [this.ephemeralKey, this.eValidFrom, this.eValidUntil, this.eSigByMasterKey];
   }
 
+  // getDecommitment returns a blob containing decommitment for circuit cNo.
+  // The commitment made earlier by the Client was part of the dual execution
+  // garbling protocol.
+  getDecommitment(cNo){
+    return concatTA(
+      this.encodedOutput[cNo],
+      this.g.garbledC[cNo].dt,
+      this.salt[cNo]);
+  }
+
   // runCircuit evaluates a circuit and returns the circuit's output. It exchanges
   // OT messages in order to get it's input labels and send to notary his input labels.
   // The notary is also evaluating this circuit on his end.
@@ -771,11 +829,8 @@ export class TWOPC {
     const inputBitsG = inputBitsE.slice();
     // c is circuit
     const c = this.cs[cNo];
-    // how many times to repeat evaluation (> 1 only for circuit 6 )
-    const repeatCount = [0, 1, 1, 1, 1, 1, this.C6Count, 1][cNo];
-
-    // for circuit 1, there was no previous commit
-    const prevCommit = cNo > 1 ? this.myCommit[cNo-1] : new Uint8Array(0);
+    // how many evaluation of the same circuit to execute
+    const exeCount = [0, 1, 1, 1, 1, 1, this.C6Count, 1][cNo];
 
     if (cNo==6){
       // here we remove inputs this.cwkShare and this.civShare (first 160 bits)
@@ -788,21 +843,34 @@ export class TWOPC {
       }
       inputBitsE = newInputBits;
     }
+    // some circuits may need to piggy-back on the next circuit's message (to
+    // save a round-trip) to send decommitment data.
+    let decommit = new Uint8Array(0);
+    if (cNo == 4 || cNo == 7){ decommit = this.getDecommitment(cNo-1); }
+
     const otReq = this.otR.createRequest(inputBitsE);
-    const blob1 = await this.send(`c${cNo}_step1`, concatTA(prevCommit, otReq));
+    const blob1 = await this.send(`c${cNo}_step1`, concatTA(decommit, otReq));
 
     let o = 0;
-    if (cNo > 1){
-      const prevCommitSalt = blob1.slice(o, o += 32);
-      // the hash to which the notary committed must be equal to our commit
-      const saltedCommit = await sha256(concatTA(this.myCommit[cNo-1], prevCommitSalt));
-      assert (eq(saltedCommit, this.hisSaltedCommit[cNo-1]));
-    }
-
     // all notary's labels
-    const allNotaryLabels = blob1.slice(o, o += c.notaryInputSize*16*repeatCount);
+    const allNotaryLabels = blob1.slice(o, o += c.notaryInputSize*16*exeCount);
     let hisOtResp = blob1.slice(o, o += inputBitsE.length*32);
-    const hisOtReq = blob1.slice(o, o += 1+ c.notaryInputSize/8*repeatCount);
+    const hisOtReq = blob1.slice(o, o += 1+ c.notaryInputSize/8*exeCount);
+
+    const notaryLabels = this.g.getNotaryLabels(cNo);
+    const otResp = this.otS.processRequest(hisOtReq, notaryLabels);
+    const clientLabels = this.g.getClientLabels(inputBitsG, cNo);
+    let step2Payload = concatTA(otResp, clientLabels);
+    let pre2Promise;
+    if (cNo == 6){
+      // usually we send step2Payload after the evaluation when the commitment
+      // is known. But for circuit 6 which usually has a lot of executions, it
+      // makes sense to tell Notary to start evaluation asap. We call it
+      // "pre-step2".
+      pre2Promise = this.send('c6_pre2', concatTA(step2Payload), true);
+      // zero out the data so that it doesn't get sent in step2
+      step2Payload = new Uint8Array(0);
+    }
 
     let allClientLabels;
     if (cNo == 4){
@@ -818,41 +886,52 @@ export class TWOPC {
       allClientLabels = this.processC6Labels(allClientLabels);
     }
 
-    const notaryLabels = this.g.getNotaryLabels(cNo);
-    const otResp = this.otS.processRequest(hisOtReq, notaryLabels);
-    const clientLabels = this.g.getClientLabels(inputBitsG, cNo);
-    const sendPromise = this.send(`c${cNo}_step2`, concatTA(otResp, clientLabels), true);
-
     // collect batch for evaluation
     const batch = [];
     const clBatch = splitIntoChunks(allClientLabels, c.clientInputSize*16);
     const nlBatch = splitIntoChunks(allNotaryLabels, c.notaryInputSize*16);
     const ttBatch = splitIntoChunks(this.blob[`c${cNo}_tt`], c.andGateCount * 48);
-    const dtBatch = splitIntoChunks(this.blob[`c${cNo}_dt`], Math.ceil(c.outputSize/8));
-    for (let r=0; r < repeatCount; r++){
-      batch.push([concatTA(nlBatch[r], clBatch[r]), ttBatch[r], dtBatch[r]]);
+    for (let r=0; r < exeCount; r++){
+      batch.push([concatTA(nlBatch[r], clBatch[r]), ttBatch[r]]);
     }
 
     // perform evaluation
     console.time('evaluateBatch');
-    const evalPlaintextBatch = await this.e.evaluateBatch(batch, cNo);
+    const allEncodedOutputs = await this.e.evaluateBatch(batch, cNo);
     console.timeEnd('evaluateBatch');
+    this.encodedOutput[cNo] = concatTA(...allEncodedOutputs);
+    this.salt[cNo] = getRandom(32);
 
+    // Client commits first, then Notary will reveal his encoded outputs and
+    // decoding table and then the Client will decommit.
+    const commit = await sha256(this.getDecommitment(cNo));
+    if (cNo == 6){
+      // make sure Notary responded to pre-step2
+      await pre2Promise;
+    }
+    const step2Resp = await this.send(`c${cNo}_step2`,
+      concatTA(step2Payload, commit));
+    o = 0;
+    const hisEncodedOutput = step2Resp.slice(o, o+=c.outputSize/8*exeCount);
+    const hisDecodingTable = step2Resp.slice(o, o+=c.outputSize/8*exeCount);
+    // decode his output with my decoding table
+    const hisOutput = xor(this.g.garbledC[cNo].dt, hisEncodedOutput);
+    // decode my output with his decoding table
+    const myOutput = xor(hisDecodingTable, this.encodedOutput[cNo]);
+    // compare outputs
+    assert(eq(hisOutput, myOutput));
+    // parse my output
+    const outputChunks = splitIntoChunks(myOutput, myOutput.length/exeCount);
     // process evaluation outputs
-    const output = [];
-    for (let r=0; r < repeatCount; r++){
+    const plaintextOutput = [];
+    for (let r=0; r < exeCount; r++){
       // plaintext has a padding in MSB to make it a multiple of 8 bits. We
       // decompose into bits and drop the padding
-      const bits = bytesToBits(evalPlaintextBatch[r]).slice(0, c.outputSize);
+      const bits = bytesToBits(outputChunks[r]).slice(0, c.outputSize);
       const out = this.parseOutputBits(cNo, bits);
-      this.output[cNo] = out;
-      output.push(out);
+      plaintextOutput.push(out);
     }
-    this.myCommit[cNo] = await sha256(concatTA(...output));
-
-    const cStep2Out = await sendPromise;
-    this.hisSaltedCommit[cNo] = cStep2Out.subarray(0, 32);
-    return output;
+    return plaintextOutput;
   }
 
   async processC4Labels(inputBits, hisOtResp, encryptedLabels){
@@ -931,19 +1010,10 @@ export class TWOPC {
 
 
   // eslint-disable-next-line class-methods-use-this
-  // blob contains decryption table for all consecutive circuit execution followed
-  // by truth tables for all consecutive circuit execution
+  // blob contains truth tables for all consecutive circuit execution
   processBlob(blob) {
     const obj = {};
     let offset = 0;
-    for (let i=1; i < this.cs.length; i++){
-      let decryptionTableSize = Math.ceil(this.cs[i].outputSize/8);
-      if (i === 6){
-        decryptionTableSize = this.C6Count * decryptionTableSize;
-      }
-      obj['c'+String(i)+'_dt'] = blob.subarray(offset, offset+decryptionTableSize);
-      offset += decryptionTableSize;
-    }
     for (let i=1; i < this.cs.length; i++){
       let truthTablesSize = this.cs[i].andGateCount *48;
       if (i === 6){

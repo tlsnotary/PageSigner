@@ -8,6 +8,7 @@ export class GCWorker extends WorkerPool{
     // you can replace gcworker_wasm.js with gcworker_purejs.js on systems where
     // WebAssembly is not available
     super(numWorkers, chrome.extension.getURL('core/twopc/webWorkers/gcworker_wasm.js'));
+    //super(numWorkers, chrome.extension.getURL('core/twopc/webWorkers/gcworker_purejs.js'));
     // pm is an instance of ProcessMonitor
     this.pm = processMonitor;
   }
@@ -73,7 +74,6 @@ export class GCWorker extends WorkerPool{
   evaluateBatchDoWork(batchItem, worker){
     const il = batchItem[0];
     const tt = batchItem[1];
-    const dt = batchItem[2];
     const obj = {msg: 'setTruthTables', tt: tt.buffer};
     worker.postMessage(obj);
     return new Promise(function(resolve) {
@@ -81,7 +81,7 @@ export class GCWorker extends WorkerPool{
         worker['isResolved'] = true;
         resolve(event.data);
       };
-      const obj = {msg: 'evaluate', il: il.buffer, dt: dt.buffer};
+      const obj = {msg: 'evaluate', il: il.buffer};
       worker.postMessage(obj);
     });
   }

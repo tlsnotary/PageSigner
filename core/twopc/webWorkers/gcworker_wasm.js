@@ -16,9 +16,8 @@ let truthTables = null;
 let malloc_ptr;
 // cryptographically random data
 let randOffset, randSize;
-// decoding table
-let dtOffset, dtSize;
-// output (for garbler this is decoding table, tof evaluator this is plaintext)
+// output (for garbler this is decoding table,
+// for evaluator this is encoded output)
 let outOffset, outSize;
 // truth tables
 let ttOffset, ttSize;
@@ -120,10 +119,6 @@ function processMessage(obj){
       randSize = (circuit.notaryInputSize + circuit.clientInputSize + 1)*16;
       offset += randSize;
 
-      dtOffset = offset;
-      dtSize = Math.ceil(circuit.outputSize/8);
-      offset += dtSize;
-
       outOffset = offset;
       outSize = Math.ceil(circuit.outputSize/8);
       offset += outSize;
@@ -178,15 +173,11 @@ function processMessage(obj){
       return;
     }
     const inputLabels = new Uint8Array(obj.il);
-    const decodingTable = new Uint8Array(obj.dt);
     assert (inputLabels.length === circuit.clientInputSize*16 + circuit.notaryInputSize*16);
-    assert (decodingTable.length === Math.ceil(circuit.outputSize/8));
     const ilArr = new Uint8Array(wasm.memory.buffer, ilOffset, inputLabels.length);
     ilArr.set(inputLabels);
     const ttArr = new Uint8Array(wasm.memory.buffer, ttOffset, ttSize);
     ttArr.set(truthTables);
-    const dtArr = new Uint8Array(wasm.memory.buffer, dtOffset, dtSize);
-    dtArr.set(decodingTable);
     const dataBuf = new Uint8Array(wasm.memory.buffer, malloc_ptr, 16);
     const tweak = new Uint8Array(wasm.memory.buffer, malloc_ptr+16, 4);
     wasm.startEvaluator();
@@ -195,8 +186,8 @@ function processMessage(obj){
       Salsa20(dataBuf, tweak);
     }
     wasm.finishEvaluator();
-    const plaintext = new Uint8Array(wasm.memory.buffer, outOffset, outSize).slice();
-    postMsg(plaintext.buffer);
+    const encodedOutput = new Uint8Array(wasm.memory.buffer, outOffset, outSize).slice();
+    postMsg(encodedOutput.buffer);
     truthTables == null;
   }
   else {
