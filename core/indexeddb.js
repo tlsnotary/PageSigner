@@ -18,7 +18,7 @@ export async function init_db() {
         preferences.add({name:'firstTimeInitCompletedv2', value:false});
         preferences.add({name:'parsedCircuits', value:{}});
         preferences.add({name:'trustedOracle', value:{}});
-        preferences.add({name:'notaryServerVersion', value:14});
+        preferences.add({name:'notaryServerVersion', value:16});
       }
     };
     dbReq.onsuccess = function (event) {

@@ -9,7 +9,8 @@ const rootsOfTrust = [
   'snap-07eda3ed4836f82fb',
   'snap-023d50ee97873a1f0',
   'snap-0e50af508006037dc',
-  'snap-023dda76582a6b29f'];
+  'snap-023dda76582a6b29f',
+  'snap-027ade4f1002864da'];
 // URLFetcher trusted enclave measurements, see
 // https://github.com/tlsnotary/URLFetcher
 const URLFetcherPCR0 = 'f70217239e8a1cb0f3c010b842a279e2b8d30d3700d7e4722fef22291763479a13783dc76d5219fabbd7e5aa92a7b255';

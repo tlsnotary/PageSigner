@@ -92,11 +92,11 @@ export class Main{
     // check if we need to communicate with a new version of the notary server
     const notaryVersion = await getPref('notaryServerVersion');
     if (notaryVersion === null){
-      await addNewPreference('notaryServerVersion', 14);
+      await addNewPreference('notaryServerVersion', 16);
       await setPref('trustedOracle', {});
-    } else if (notaryVersion < 14) {
+    } else if (notaryVersion < 16) {
       // the notary server was upgraded
-      await setPref('notaryServerVersion', 14);
+      await setPref('notaryServerVersion', 16);
       await setPref('trustedOracle', {});
     }
 
