@@ -1,3 +1,12 @@
+# Deprecation notice
+
+PageSigner used an old TLSNotary protocol which is unaudited, experimental, and deprecated. 
+A vulnerability was discovered in PageSigner on 19th Jul 2023 allowing the prover to create arbitrary proofs, thus the proofs created with PageSigner must not be trusted.
+
+This repository will not receive any updates and is archived for historical purposes.
+
+------------------------------------------------------------------------------------
+
 PageSigner - a cryptographically secure webpage screenshot tool.
 
 PageSigner is a Chromium extension implementing a client for the TLSNotary protocol.
